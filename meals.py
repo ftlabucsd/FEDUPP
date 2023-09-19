@@ -5,8 +5,28 @@ import seaborn as sns
 import matplotlib.patches as mpatches
 from datetime import timedelta
 
-plt.rcParams['figure.figsize'] = (15, 6)
+plt.rcParams['figure.figsize'] = (20, 6)
 
+def process_csv(path: str) -> pd.DataFrame:
+    """Preprocess the csv file for analysis
+    This function has similar functions with process_sheet
+    """
+    df = pd.read_csv(path)
+    df = df[['MM:DD:YYYY hh:mm:ss', 'Event', 'Active_Poke']].rename(
+        columns={'MM:DD:YYYY hh:mm:ss': 'Time'})
+    df = df.replace({'LeftWithPellet': 'Left', 'LeftDuringDispense': 'Left',
+                                   'RightWithPellet': 'Right', 'RightDuringDispense': 'Right'})
+    df['Time'] = pd.to_datetime(df['Time'])
+    df = df.reset_index().drop(['index'], axis='columns')
+    return df
+
+
+def pellet_flip(data: pd.DataFrame) -> pd.DataFrame:
+    data.set_index('Time', inplace=True)
+    grouped_data = data[data['Event'] == 'Pellet'].resample('20T').size().reset_index()
+    grouped_data.columns = ['Interval_Start', 'Pellet_Count']
+    
+    return grouped_data
 
 def process_sheet(path: str, sheet: str) -> pd.DataFrame:
     """Preprocess the excel sheet for analysis
@@ -22,6 +42,7 @@ def process_sheet(path: str, sheet: str) -> pd.DataFrame:
     df = df.reset_index().drop(['index'], axis='columns')
     return df
 
+
 def find_pellet_frequency(data: pd.DataFrame) -> pd.DataFrame:
     """find number of pellet in every 10 minutes
     return a new data frame records the 10 minutes pellet
@@ -33,11 +54,11 @@ def find_pellet_frequency(data: pd.DataFrame) -> pd.DataFrame:
     
     return grouped_data
 
+
 def graph_pellet_frequency(grouped_data: pd.DataFrame):
     """graph histogram for pellet frequency
     histogram analysis
     """
-    plt.figure(figsize=(20, 6))
     ax = sns.barplot(data=grouped_data, x='Interval_Start', y='Pellet_Count')
 
     # Get the x-axis positions
@@ -58,13 +79,14 @@ def graph_pellet_frequency(grouped_data: pd.DataFrame):
     plt.legend()
     plt.show()
 
+
 def find_meals(data: pd.DataFrame) -> list:
     """
     find meals in the behaviors. 5 pellets in 12 minutes is considered as a meal
     """
     meal_list = []
     pellet_count_threshold = 5
-    window_duration = timedelta(minutes=12)
+    window_duration = timedelta(minutes=10)
     start_idx = 0
 
     for idx, row in data.iterrows():
