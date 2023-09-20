@@ -86,3 +86,12 @@ def parent_directory_process(parent: str):
         files[i] = os.path.join(parent, files[i])
 
     return files
+
+
+# path = '../behavior data integrated/Bhv 5 - Ctrl/M1/Contingency Flip/FED000_071123_00.CSV'
+def get_bhv_num(path: str) -> tuple:
+    branches = path.split(sep='/')
+    num = branches[3][1]
+    bhv = branches[2][4]
+
+    return bhv, num

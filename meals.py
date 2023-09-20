@@ -28,6 +28,14 @@ def pellet_flip(data: pd.DataFrame) -> pd.DataFrame:
     
     return grouped_data
 
+
+def average_pellet(group: pd.DataFrame) -> float:
+    total_hr = (group['Interval_Start'].max()-group['Interval_Start'].min()).total_seconds() / 3600
+    total_pellet = group['Pellet_Count'].sum()
+    # print('Average pellet per hour:', total_pellet / total_hr)
+    return round(total_pellet / total_hr, 3)
+
+
 def process_sheet(path: str, sheet: str) -> pd.DataFrame:
     """Preprocess the excel sheet for analysis
     keep only useful columns and rename improper named column
@@ -55,7 +63,7 @@ def find_pellet_frequency(data: pd.DataFrame) -> pd.DataFrame:
     return grouped_data
 
 
-def graph_pellet_frequency(grouped_data: pd.DataFrame):
+def graph_pellet_frequency(grouped_data: pd.DataFrame, bhv, num):
     """graph histogram for pellet frequency
     histogram analysis
     """
@@ -72,7 +80,7 @@ def graph_pellet_frequency(grouped_data: pd.DataFrame):
     ax.set_xticklabels(hourly_labels, rotation=45, horizontalalignment='right')  # Set the tick labels to hourly format
     
     plt.axhline(y=5, color='red', linestyle='--', label='meal')
-    plt.title('Pellet Frequency', fontsize=18)
+    plt.title(f'Pellet Frequency of Group {bhv} Mice {num}', fontsize=18)
     plt.xlabel('Time', fontsize=14)
     plt.ylabel('Number of Pellet', fontsize=14)
     plt.tight_layout()
