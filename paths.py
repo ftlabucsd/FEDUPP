@@ -20,3 +20,9 @@ contigency_flip_cask = [
     '../behavior data integrated/Bhv 9 - Cask/M2/Contingency Flip/FED000_090223_04.CSV',
 ]
 
+fr1_ctrl_sheet = [
+    'B3.M1','B3.M2','B3.M3','B3.M4',
+    'B5.M1','B5.M2','B5.M3','B5.M4',
+    'B7.M2','B7.M3','B7.M4'   
+]
+
