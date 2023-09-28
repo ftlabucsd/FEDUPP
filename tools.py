@@ -95,3 +95,10 @@ def get_bhv_num(path: str) -> tuple:
     bhv = branches[2][4]
 
     return bhv, num
+
+
+# 'B3.M1'
+def get_info_from_sheet(sheet: str) -> tuple:
+    bhv = sheet[1]
+    num = sheet[-1]
+    return bhv, num
