@@ -1,5 +1,5 @@
 import pandas as pd
-
+from scipy import stats
 
 
 def count_interval(data: pd.DataFrame) -> list:
@@ -14,3 +14,12 @@ def count_interval(data: pd.DataFrame) -> list:
     
     return intervals
     
+
+def perform_T_test(listOne, listTwo, alpha=0.05):
+    t_statistic, p_value = stats.ttest_ind(listOne, listTwo)
+
+    print("P Value is ", p_value)
+    if p_value < alpha:
+        print("There is a significant difference between the two groups.")
+    else:
+        print("There is no significant difference between the two groups.")
