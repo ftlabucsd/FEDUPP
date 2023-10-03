@@ -43,7 +43,7 @@ def process_sheet(path: str, sheet: str) -> pd.DataFrame:
     reset index to start with 0
     """
     df = pd.read_excel(path, sheet_name=sheet)
-    df = df[['MM:DD:YYYY hh:mm:ss', 'Event', 'Pellet_Count', 'Cum_Sum']].rename(
+    df = df[['MM:DD:YYYY hh:mm:ss', 'Event', 'Active_Poke', 'Pellet_Count', 'Cum_Sum']].rename(
         columns={'MM:DD:YYYY hh:mm:ss': 'Time'})
     df.dropna(inplace=True)
     df['Time'] = pd.to_datetime(df['Time'])

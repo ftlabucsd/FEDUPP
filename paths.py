@@ -26,6 +26,12 @@ fr1_ctrl_sheet = [
     'B7.M2','B7.M3','B7.M4'   
 ]
 
+fr1_cask_sheet = [
+    'B4.M1', 'B4.M2', 'B4.M3', 'B4.M4',
+    'B6.M1', 'B6.M2', 'B6.M3', 'B6.M4',
+    'B8.M1', 'B8.M2', 'B8.M3'
+]
+
 fr1_cask_csvs = [
     '../behavior data integrated/Bhv 6 - Cask/M1/FR1/FED000_071023_02.CSV',
     '../behavior data integrated/Bhv 6 - Cask/M2/FR1/FED000_071023_05.CSV',
