@@ -3,7 +3,7 @@ import numpy as np
 
 def extract_features(path: str) -> tuple:
     """
-    extract current active poke, previous choice, previous active poke as X
+    extract current active poke, previous choice, previous active poke, and biasas X
     use current event as output
     """
     data = pd.read_csv(path)
@@ -23,6 +23,7 @@ def extract_features(path: str) -> tuple:
     X['Active_Poke'] = X['Active_Poke'].map(mapper)
     X['prev_event'] = X['prev_event'].map(mapper)
     X['prev_active'] = X['prev_active'].map(mapper)
+    X['bias'] = 1
     y = y.map(mapper)
     Y = []
     for each in y:

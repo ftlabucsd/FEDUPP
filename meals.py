@@ -110,7 +110,7 @@ def find_meals(data: pd.DataFrame) -> list:
     return meal_list
 
 
-def graphing_cum_count(data: pd.DataFrame, meal: list):
+def graphing_cum_count(data: pd.DataFrame, meal: list, bhv: int, num: int):
     """graph the cumulative count and percentage of pellet consumption
     use two axis and mark meals on the graph
     """
@@ -124,7 +124,7 @@ def graphing_cum_count(data: pd.DataFrame, meal: list):
     ax2.set_ylabel('Cum_Sum', fontsize=12)
     ax2.plot(data['Time'], data['Cum_Sum'], color='blue')
 
-    ax1.set_title('Pellet Count and Cumulative Sum Over Time', fontsize=18)
+    ax1.set_title(f'Pellet Count and Cumulative Sum Over Time of Group {bhv} Mice {num}', fontsize=18)
 
     for interval in meal:
         plt.axvspan(interval[0], interval[1], color='lightblue', alpha=0.8)

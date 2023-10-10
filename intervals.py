@@ -23,3 +23,19 @@ def perform_T_test(listOne, listTwo, alpha=0.05):
         print("There is a significant difference between the two groups.")
     else:
         print("There is no significant difference between the two groups.")
+
+
+def MannWhitneyUTest(listOne, listTwo, alpha=0.05):
+    """
+    Mann-Whitney U rank test on two independent samples
+    """
+    statistic, p_value = stats.mannwhitneyu(listOne, listTwo, alternative='two-sided')
+
+    print(f"U Statistic: {statistic}")
+    print(f"P-value: {p_value}")
+
+    alpha = 0.05
+    if p_value < alpha:
+        print("There is a significant difference between the two groups.")
+    else:
+        print("There is no significant difference between the two groups.")
