@@ -1,9 +1,9 @@
-from cProfile import label
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 import matplotlib.patches as mpatches
-from datetime import timedelta
+from datetime import timedelta, datetime
+import numpy as np
 
 plt.rcParams['figure.figsize'] = (20, 6)
 
@@ -90,7 +90,7 @@ def graph_pellet_frequency(grouped_data: pd.DataFrame, bhv, num):
 
 def find_meals(data: pd.DataFrame) -> list:
     """
-    find meals in the behaviors. 5 pellets in 12 minutes is considered as a meal
+    find meals in the behaviors. 5 pellets in 10 minutes is considered as a meal
     """
     meal_list = []
     pellet_count_threshold = 5
@@ -132,3 +132,10 @@ def graphing_cum_count(data: pd.DataFrame, meal: list, bhv: int, num: int):
     patch = mpatches.Patch(color='lightblue', alpha=0.8, label='Meal')
     plt.legend(handles=[patch], loc='upper left')
     plt.show()
+
+def experiment_duration(data: pd.DataFrame):
+    data['Time'] = pd.to_datetime(data['Time'])
+    duration = data.tail(1)['Time'].values[0] - data.head(1)['Time'].values[0]
+    duration_seconds = duration / np.timedelta64(1, 's')
+    duration = duration_seconds / (60 * 60 * 24)
+    return duration
