@@ -1,7 +1,7 @@
 import pandas as pd
 import numpy as np
 
-def extract_features(path: str) -> tuple:
+def extract_features(path: str, prev_event: bool, prev_active: bool) -> tuple:
     """
     extract current active poke, previous choice, previous active poke, and biasas X
     use current event as output
@@ -11,8 +11,12 @@ def extract_features(path: str) -> tuple:
                                         'RightWithPellet': 'Right', 'RightDuringDispense': 'Right'})
 
     data = data[data['Event'] != 'Pellet']
-    data['prev_event'] = data['Event'].shift(fill_value=None)
-    data['prev_active'] = data['Active_Poke'].shift(fill_value=None)
+
+    if prev_event:
+        data['prev_event'] = data['Event'].shift(fill_value=None)
+    if prev_active:
+        data['prev_active'] = data['Active_Poke'].shift(fill_value=None)
+
     if not data.empty:
         data = data.iloc[1:]
 
@@ -20,10 +24,16 @@ def extract_features(path: str) -> tuple:
     y = data['Event']
 
     mapper = {'Left': 0, 'Right': 1, 'Pellet': 2}
+
     X['Active_Poke'] = X['Active_Poke'].map(mapper)
-    X['prev_event'] = X['prev_event'].map(mapper)
-    X['prev_active'] = X['prev_active'].map(mapper)
+
+    if prev_event:
+        X['prev_event'] = X['prev_event'].map(mapper)
+    if prev_active:
+        X['prev_active'] = X['prev_active'].map(mapper)
+
     X['bias'] = 1
+    print(X.head())
     y = y.map(mapper)
     Y = []
     for each in y:

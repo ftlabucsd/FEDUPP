@@ -12,18 +12,22 @@ def process_csv(path: str) -> pd.DataFrame:
     This function has similar functions with process_sheet
     """
     df = pd.read_csv(path)
-    df = df[['MM:DD:YYYY hh:mm:ss', 'Event', 'Active_Poke']].rename(
+    df = df[['MM:DD:YYYY hh:mm:ss', 'Event', 'Active_Poke', 'Pellet_Count']].rename(
         columns={'MM:DD:YYYY hh:mm:ss': 'Time'})
     df = df.replace({'LeftWithPellet': 'Left', 'LeftDuringDispense': 'Left',
                                    'RightWithPellet': 'Right', 'RightDuringDispense': 'Right'})
     df['Time'] = pd.to_datetime(df['Time'])
     df = df.reset_index().drop(['index'], axis='columns')
+    
+    first_non_zero_index = df['Pellet_Count'].ne(0).idxmax()
+    df = df.loc[first_non_zero_index:]
+    df.reset_index(drop=True, inplace=True)
     return df
 
 
 def pellet_flip(data: pd.DataFrame) -> pd.DataFrame:
     data.set_index('Time', inplace=True)
-    grouped_data = data[data['Event'] == 'Pellet'].resample('20T').size().reset_index()
+    grouped_data = data[data['Event'] == 'Pellet'].resample('10T').size().reset_index()
     grouped_data.columns = ['Interval_Start', 'Pellet_Count']
     
     return grouped_data
@@ -104,6 +108,7 @@ def find_meals(data: pd.DataFrame) -> list:
         if (row['Pellet_Count'] - data.loc[start_idx, 'Pellet_Count'] >= 
                     pellet_count_threshold) and (time_diff <= window_duration):
             meal_list.append([meal_start, row['Time']])
+            start_idx = idx
         elif time_diff > window_duration:
             start_idx = idx
 
