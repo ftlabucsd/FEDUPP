@@ -8,12 +8,29 @@ import sys
 sys.path.append('..')
 import meals as ml
 
-def model_training(X: list, y: list, num_states: int, obs_dim: int, 
-                   num_categories: int, input_dim: int, max_iter: int) -> tuple:
+def model_training(path: str, num_states: int, obs_dim: int, num_categories: int,
+                    max_iter: int, feat: list(bool)) -> tuple:
+    """
+    The feat, feature list, is corresponding to the order:
+    [curr_active, prev_event, prev_active, meal, prev_reward]
+    """
+    if len(feat) < 5:
+        print('Missing boolean parameters for features')
+        return
     
+    # calculate input dimension
+    input_dim = 1
+    for f in feat:
+        if f == True:
+            input_dim += 1
+
+    X, y = extract_features(path, feat[0], feat[1], feat[2], feat[3], feat[4])
+
     model = ssm.HMM(num_states, obs_dim, input_dim, observations="input_driven_obs",
-                    observation_kwargs=dict(C=num_categories), transitions="standard")
+                    observation_kwargs=dict(C=num_categories), transitions="inputdriven")
+    
     log3 = model.fit(y, inputs=X, method='em', num_iters=max_iter, tolerance=10**-4)
+
     return log3, model
 
 def in_meal(meals: list, time) -> bool:
@@ -27,7 +44,8 @@ def in_meal(meals: list, time) -> bool:
     return False
 
 
-def extract_features(path: str, prev_event: bool, prev_active: bool, meal: bool) -> tuple:
+def extract_features(path: str, curr_active: bool, prev_event: bool, 
+                    prev_active: bool, meal: bool, prev_reward: bool) -> tuple:
     """
     extract current active poke, previous choice, previous active poke, and biasas X
     use current event as output
@@ -43,14 +61,23 @@ def extract_features(path: str, prev_event: bool, prev_active: bool, meal: bool)
     meals = ml.find_meals(data)
 
     data = data[data['Event'] != 'Pellet']
-
-    if prev_event:
-        data['prev_event'] = data['Event'].shift(fill_value=None)
-    if prev_active:
-        data['prev_active'] = data['Active_Poke'].shift(fill_value=None)
-    if meal:
-        data['meal'] = [in_meal(meals, each) for each in data['Time']]
-
+    
+    data['prev_event'] = data['Event'].shift(fill_value=None)
+    data['prev_active'] = data['Active_Poke'].shift(fill_value=None)
+    data['meal'] = [in_meal(meals, each) for each in data['Time']]
+    data['prev_reward'] = [data['prev_event'] == data['prev_active']]
+        
+    if not prev_event:
+        data.drop(['prev_event'], axis=1, inplace=True)
+    if not prev_active:
+        data.drop(['prev_active'], axis=1, inplace=True)
+    if not meal:
+        data.drop(['meal'], axis=1, inplace=True)
+    if not not curr_active:
+        data.drop(['Active_Poke'], axis=1, inplace=True)
+    if not prev_reward:
+        data.drop(['prev_reward'], axis=1, inplace=True)
+        
     # Extract the date and time
     data['Date'] = data['Time'].dt.date
     data['Time_of_day'] = data['Time'].dt.time
@@ -58,18 +85,15 @@ def extract_features(path: str, prev_event: bool, prev_active: bool, meal: bool)
     # second day
     unique_dates = data['Date'].unique()
     second_day = unique_dates[1]
-    third_day = unique_dates[2]
 
     # Filter rows for the second day between 7:00 a.m. and 1:00 p.m.
-    start_time = pd.to_datetime('07:00:00').time()
+    start_time = pd.to_datetime('06:00:00').time()
     end_time = pd.to_datetime('13:00:00').time()
 
     second_day_data = data[(data['Date'] == second_day) & (
         data['Time_of_day'] >= start_time) & (data['Time_of_day'] <= end_time)]
-    third_day_data = data[(data['Date'] == third_day) & (
-        data['Time_of_day'] >= start_time) & (data['Time_of_day'] <= end_time)]
 
-    selected_rows = pd.concat([second_day_data, third_day_data], axis='index')
+    selected_rows = second_day_data
     selected_rows = selected_rows.drop(
         ['Date', 'Time_of_day', 'Time', 'Pellet_Count'], axis=1)
 
@@ -79,14 +103,16 @@ def extract_features(path: str, prev_event: bool, prev_active: bool, meal: bool)
     mapper = {'Left': 0, 'Right': 1}
     true_false_mapper = {True: 1, False: 0}
 
-    X['Active_Poke'] = X['Active_Poke'].map(mapper)
-
+    if curr_active:
+        X['Active_Poke'] = X['Active_Poke'].map(mapper)
     if prev_event:
         X['prev_event'] = X['prev_event'].map(mapper)
     if prev_active:
         X['prev_active'] = X['prev_active'].map(mapper)
     if meal:
         X['meal'] = X['meal'].map(true_false_mapper)
+    if prev_reward:
+        X['prev_reward'] = X['prev_reward'].map(true_false_mapper)
 
     X['bias'] = 1
     y = y.map(mapper)
@@ -96,7 +122,7 @@ def extract_features(path: str, prev_event: bool, prev_active: bool, meal: bool)
     return X.to_numpy(), np.array(Y)
 
 
-def graph_model_parameters(model: ssm.HMM, log_array: list, prev_event=True, prev_active=True, meal=False):
+def graph_model_parameters(model: ssm.HMM, log_array: list, curr_active: bool, prev_event=True, prev_active=True, meal=False):
     """
     Graph GLM weights, transition matrix and log probability for the model
     """
@@ -104,7 +130,9 @@ def graph_model_parameters(model: ssm.HMM, log_array: list, prev_event=True, pre
     tran = model.transitions.transition_matrix
     num_states = model.K
     input_dim = model.M
-    factor_dict = ['Curr Active']
+    factor_dict = []
+    if curr_active:
+        factor_dict = ['Curr Active']
     if prev_event:
         factor_dict.append('Prev Event')
     if prev_active:
@@ -112,12 +140,11 @@ def graph_model_parameters(model: ssm.HMM, log_array: list, prev_event=True, pre
     if meal:
         factor_dict.append("Meal")
     factor_dict.append('bias')
-    print(input_dim, range(input_dim), factor_dict)
 
     # Plot parameters:
     fig = plt.figure(figsize=(18, 6), dpi=80, facecolor='w', edgecolor='k')
     plt.subplot(1, 3, 1)
-    cols = ['#ff7f00', '#4daf4a', '#377eb8']
+    cols = ['#377eb8', '#ff7f00', '#4daf4a']
     for k in range(num_states):
         plt.plot(range(input_dim), para[k][0], marker='o',
                  color=cols[k], linestyle='-',
