@@ -9,7 +9,7 @@ sys.path.append('..')
 import meals as ml
 
 def model_training(path: str, num_states: int, obs_dim: int, num_categories: int,
-                    max_iter: int, feat: list(bool)) -> tuple:
+                    max_iter: int, feat: list()) -> tuple:
     """
     The feat, feature list, is corresponding to the order:
     [curr_active, prev_event, prev_active, meal, prev_reward]
@@ -27,11 +27,11 @@ def model_training(path: str, num_states: int, obs_dim: int, num_categories: int
     X, y = extract_features(path, feat[0], feat[1], feat[2], feat[3], feat[4])
 
     model = ssm.HMM(num_states, obs_dim, input_dim, observations="input_driven_obs",
-                    observation_kwargs=dict(C=num_categories), transitions="inputdriven")
+                    observation_kwargs=dict(C=num_categories), transitions="standard")
     
     log3 = model.fit(y, inputs=X, method='em', num_iters=max_iter, tolerance=10**-4)
-
-    return log3, model
+    
+    return log3, model, X, y
 
 def in_meal(meals: list, time) -> bool:
     """
@@ -47,7 +47,7 @@ def in_meal(meals: list, time) -> bool:
 def extract_features(path: str, curr_active: bool, prev_event: bool, 
                     prev_active: bool, meal: bool, prev_reward: bool) -> tuple:
     """
-    extract current active poke, previous choice, previous active poke, and biasas X
+    extract current active poke, previous choice, previous active poke, previous reward and biasas X
     use current event as output
     """
     data = pd.read_csv(path)
@@ -65,7 +65,7 @@ def extract_features(path: str, curr_active: bool, prev_event: bool,
     data['prev_event'] = data['Event'].shift(fill_value=None)
     data['prev_active'] = data['Active_Poke'].shift(fill_value=None)
     data['meal'] = [in_meal(meals, each) for each in data['Time']]
-    data['prev_reward'] = [data['prev_event'] == data['prev_active']]
+    data['prev_reward'] = [row['prev_event'] == row['prev_active'] for idx, row in data.iterrows()]
         
     if not prev_event:
         data.drop(['prev_event'], axis=1, inplace=True)
@@ -73,7 +73,7 @@ def extract_features(path: str, curr_active: bool, prev_event: bool,
         data.drop(['prev_active'], axis=1, inplace=True)
     if not meal:
         data.drop(['meal'], axis=1, inplace=True)
-    if not not curr_active:
+    if not curr_active:
         data.drop(['Active_Poke'], axis=1, inplace=True)
     if not prev_reward:
         data.drop(['prev_reward'], axis=1, inplace=True)
@@ -122,7 +122,7 @@ def extract_features(path: str, curr_active: bool, prev_event: bool,
     return X.to_numpy(), np.array(Y)
 
 
-def graph_model_parameters(model: ssm.HMM, log_array: list, curr_active: bool, prev_event=True, prev_active=True, meal=False):
+def graph_model_parameters(model: ssm.HMM, log_array: list, feat: list):
     """
     Graph GLM weights, transition matrix and log probability for the model
     """
@@ -130,21 +130,29 @@ def graph_model_parameters(model: ssm.HMM, log_array: list, curr_active: bool, p
     tran = model.transitions.transition_matrix
     num_states = model.K
     input_dim = model.M
+
     factor_dict = []
-    if curr_active:
+    if feat[0]:
         factor_dict = ['Curr Active']
-    if prev_event:
+    if feat[1]:
         factor_dict.append('Prev Event')
-    if prev_active:
+    if feat[2]:
         factor_dict.append('Prev Active')
-    if meal:
+    if feat[3]:
         factor_dict.append("Meal")
+    if feat[4]:
+        factor_dict.append('Prev Reward')
+
     factor_dict.append('bias')
+
+    states = []
+    for i in range(1, num_states+1):
+        states.append(str(i))
 
     # Plot parameters:
     fig = plt.figure(figsize=(18, 6), dpi=80, facecolor='w', edgecolor='k')
     plt.subplot(1, 3, 1)
-    cols = ['#377eb8', '#ff7f00', '#4daf4a']
+    cols = ['#377eb8', '#ff7f00', '#4daf4a', '#fc0303']
     for k in range(num_states):
         plt.plot(range(input_dim), para[k][0], marker='o',
                  color=cols[k], linestyle='-',
@@ -165,8 +173,8 @@ def graph_model_parameters(model: ssm.HMM, log_array: list, curr_active: bool, p
             text = plt.text(j, i, str(np.around(gen_trans_mat[i, j], decimals=3)), ha="center", va="center",
                             color="k", fontsize=12)
     plt.xlim(-0.5, num_states - 0.5)
-    plt.xticks(range(0, num_states), ('1', '2', '3'), fontsize=10)
-    plt.yticks(range(0, num_states), ('1', '2', '3'), fontsize=10)
+    plt.xticks(range(0, num_states), states, fontsize=10)
+    plt.yticks(range(0, num_states), states, fontsize=10)
     plt.ylim(num_states - 0.5, -0.5)
     plt.ylabel("state t", fontsize=15)
     plt.xlabel("state t+1", fontsize=15)
@@ -187,6 +195,11 @@ def display_fitting_results(model: ssm.HMM, X, y):
     """
     pred_state, pred_choice = model.sample(len(X), input=X)
     num_state = model.K
+
+    state_list = []
+    for i in range(num_state):
+        state_list.append(f'State {i+1}')
+
     # Model Prediction vs Actual Sequence
     accuracy = accuracy_score(y, pred_choice)
 
@@ -210,18 +223,15 @@ def display_fitting_results(model: ssm.HMM, X, y):
 
     # Plot state occupancy
     plt.figure(figsize=(6, 6))
-    sns.barplot(x=['State 1', 'State 2', 'State 3'],
+    sns.barplot(x=state_list,
                 y=states_percent, width=0.6, palette='bright')
-    plt.title('State Occupancy in Three State Model', fontsize=18)
+    plt.title(f'State Occupancy in {num_state} State Model', fontsize=18)
     plt.ylabel('Occupancy Rate', fontsize=16)
     plt.show()
 
     # Overall accuracy in the model
     print('Accuracy of Predicting Mice Behavior:', accuracy)
-    print('State 1 Percentage:',
-          states_percent[0], '; Accuracy:', corr_state_acc[0])
-    print('State 2 Percentage:',
-          states_percent[1], '; Accuracy:', corr_state_acc[1])
-    print('State 3 Percentage:',
-          states_percent[2], '; Accuracy:', corr_state_acc[2])
+    for i in range(num_state):
+        print(f'State {i+1} Percentage:',
+          states_percent[i], '; Accuracy:', corr_state_acc[i])
     print('Overall Accuracy in Model:', overall_acc/len(X))
