@@ -27,7 +27,7 @@ def model_training(path: str, num_states: int, obs_dim: int, num_categories: int
     X, y = extract_features(path, feat[0], feat[1], feat[2], feat[3], feat[4])
 
     model = ssm.HMM(num_states, obs_dim, input_dim, observations="input_driven_obs",
-                    observation_kwargs=dict(C=num_categories), transitions="standard")
+                    observation_kwargs=dict(C=num_categories), transitions="inputdriven")
     
     log3 = model.fit(y, inputs=X, method='em', num_iters=max_iter, tolerance=10**-4)
     
