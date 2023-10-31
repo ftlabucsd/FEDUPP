@@ -71,7 +71,7 @@ def graph_pellet_frequency(grouped_data: pd.DataFrame, bhv, num):
     """graph histogram for pellet frequency
     histogram analysis
     """
-    ax = sns.barplot(data=grouped_data, x='Interval_Start', y='Pellet_Count')
+    ax = sns.barplot(data=grouped_data, x='Interval_Start', y='Pellet_Count', color='purple', alpha=0.5)
 
     # Get the x-axis positions
     xtick_positions = ax.get_xticks()
