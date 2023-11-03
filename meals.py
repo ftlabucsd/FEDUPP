@@ -1,3 +1,4 @@
+from re import I
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -83,6 +84,35 @@ def graph_pellet_frequency(grouped_data: pd.DataFrame, bhv, num):
     ax.set_xticks(hourly_positions)  # Set the tick positions to match the hourly intervals
     ax.set_xticklabels(hourly_labels, rotation=45, horizontalalignment='right')  # Set the tick labels to hourly format
     
+    # Locate the x-coordinates for the specified times
+    dark = []
+    temp = {}
+    for idx, tick in enumerate(hourly_labels):
+        if tick == '07:00':
+            temp['morning'] = hourly_positions[idx]
+        elif tick == '19:00':
+            temp['evening'] = hourly_positions[idx]
+        
+        if len(temp) == 2:
+            dark.append(temp)
+            temp = {}
+
+    # start at one time, but the end did not stop
+    if len(temp) == 1:
+        if 'morning' in temp.keys():
+            temp['evening'] = hourly_positions[0]
+        else:
+            temp['morning'] = len(grouped_data)-1
+        dark.append(temp)
+
+    for idx, each in enumerate(dark):
+        stamps = list(each.values())
+        if idx == 0:
+            ax.axvspan(stamps[0], stamps[1], color='grey', alpha=0.4, label='Night')
+        else:
+            ax.axvspan(stamps[0], stamps[1], color='grey', alpha=0.4)
+
+    # Add vertical grey background for the time interval between 7 p.m. and 7 a.m.
     plt.axhline(y=5, color='red', linestyle='--', label='meal')
     plt.title(f'Pellet Frequency of Group {bhv} Mice {num}', fontsize=18)
     plt.xlabel('Time', fontsize=14)
