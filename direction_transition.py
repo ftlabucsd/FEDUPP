@@ -116,7 +116,7 @@ def get_transition_info(blocks: list) -> pd.DataFrame:
 
     data_stats = pd.DataFrame(new_add, columns=[
         'Block_Index', 'Left_to_Left', 'Left_to_Right', 'Right_to_Right', 'Right_to_Left',
-        'Success_Count', 'Success_Rate','Active_Poke', 'Total_None_Pellet_Count', 'Pellet_Rate'])
+        'Success_Count', 'Success_Rate','Active_Poke', 'Pellet_Rate'])
 
     return data_stats
 

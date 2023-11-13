@@ -174,3 +174,21 @@ def experiment_duration(data: pd.DataFrame):
     duration_seconds = duration / np.timedelta64(1, 's')
     duration = duration_seconds / (60 * 60 * 24)
     return duration
+
+def calculate_deviation(grouped_data: pd.DataFrame) -> float:
+    frequency = grouped_data['Pellet_Count'].tolist()
+    avg = np.median(frequency)
+    deviation = [(each - avg)**2 for each in frequency]
+    return sum(deviation) / len(frequency)
+
+def pellet_dark(grouped_data: pd.DataFrame) -> float:
+    total = 0
+    dark_pellet = 0
+
+    for _, data in grouped_data.iterrows():  
+        if data['Pellet_Count'] > 0:
+            total += 1 
+            if data['Interval_Start'].hour >= 19 or data['Interval_Start'].hour < 7:
+                dark_pellet += 1
+    
+    return round(dark_pellet / total, 3)
