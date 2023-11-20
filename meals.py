@@ -117,6 +117,7 @@ def graph_pellet_frequency(grouped_data: pd.DataFrame, bhv, num):
     plt.title(f'Pellet Frequency of Group {bhv} Mice {num}', fontsize=18)
     plt.xlabel('Time', fontsize=14)
     plt.ylabel('Number of Pellet', fontsize=14)
+    plt.yticks(range(0, 19, 2))
     plt.tight_layout()
     plt.legend()
     plt.show()
@@ -150,6 +151,7 @@ def graphing_cum_count(data: pd.DataFrame, meal: list, bhv: int, num: int):
     use two axis and mark meals on the graph
     """
     fig, ax1 = plt.subplots()
+    
 
     ax1.set_xlabel('Time', fontsize=12)
     ax1.set_ylabel('Pellet_Count', fontsize=12)

@@ -179,6 +179,7 @@ def graph_tranition_csv(data_stats: pd.DataFrame, blocks: list, path: str):
 
     plt.title(f'Probability of Transitions in Poke Choosing and Correct Rates in Group {bhv} Mice {num}', fontsize=24)
     plt.xticks(data_stats['Block_Index'])
+    plt.yticks(range(0, 100, 20))
     fig.set_dpi(80)
     plt.grid(alpha=0.5, linestyle='--')
     plt.show()
