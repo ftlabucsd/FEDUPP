@@ -37,7 +37,6 @@ def pellet_flip(data: pd.DataFrame) -> pd.DataFrame:
 def average_pellet(group: pd.DataFrame) -> float:
     total_hr = (group['Interval_Start'].max()-group['Interval_Start'].min()).total_seconds() / 3600
     total_pellet = group['Pellet_Count'].sum()
-    # print('Average pellet per hour:', total_pellet / total_hr)
     return round(total_pellet / total_hr, 3)
 
 
@@ -151,23 +150,35 @@ def graphing_cum_count(data: pd.DataFrame, meal: list, bhv: int, num: int):
     use two axis and mark meals on the graph
     """
     fig, ax1 = plt.subplots()
-    
+    ax1.plot(data['Time'], data['Pellet_Count'], color='blue')
+    ax1.set_title(f'Pellet Count and Cumulative Sum Over Time of Group {bhv} Mice {num}', fontsize=18)
+
+    for interval in meal:
+        plt.axvspan(interval[0], interval[1], color='lightblue')
 
     ax1.set_xlabel('Time', fontsize=12)
     ax1.set_ylabel('Pellet_Count', fontsize=12)
-    ax1.plot(data['Time'], data['Pellet_Count'], color='blue')
-
     ax2 = ax1.twinx()  # Share the same x-axis as ax1
     ax2.set_ylabel('Cum_Sum', fontsize=12)
     ax2.plot(data['Time'], data['Cum_Sum'], color='blue')
 
-    ax1.set_title(f'Pellet Count and Cumulative Sum Over Time of Group {bhv} Mice {num}', fontsize=18)
+    start = None
+    end = None
+    for interval in pd.date_range(start=data['Time'].min(), end=data['Time'].max(), freq='20T'):
+        if (19 <= interval.hour or interval.hour < 7) and start == None:
+            start = interval
+            print(start)
+        elif interval.hour == 7:
+            end = interval
+            plt.axvspan(start, end, color='lightgrey', alpha=0.4)
+            start = end = None
+    if start != None and end == None:
+        plt.axvspan(start, data['Time'].max(), color='lightgrey', alpha=0.4)
+    
+    patch_meal = mpatches.Patch(color='lightblue', alpha=0.8, label='Meal')
+    patch_night = mpatches.Patch(color='lightgrey', alpha=0.3, label='Inactive')
 
-    for interval in meal:
-        plt.axvspan(interval[0], interval[1], color='lightblue', alpha=0.8)
-
-    patch = mpatches.Patch(color='lightblue', alpha=0.8, label='Meal')
-    plt.legend(handles=[patch], loc='upper left')
+    plt.legend(handles=[patch_meal, patch_night], loc='upper right')
     plt.show()
 
 def experiment_duration(data: pd.DataFrame):
