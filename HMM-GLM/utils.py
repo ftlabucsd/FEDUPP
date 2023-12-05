@@ -100,7 +100,7 @@ def extract_features(path: str, curr_active: bool, prev_event: bool,
     X = selected_rows.drop(['Event'], axis='columns')
     y = selected_rows['Event']
 
-    mapper = {'Left': 0, 'Right': 1}
+    mapper = {'Left': 1, 'Right': 0}
     true_false_mapper = {True: 1, False: 0}
 
     if curr_active:

@@ -1,9 +1,8 @@
-from re import I
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 import matplotlib.patches as mpatches
-from datetime import timedelta, datetime
+from datetime import timedelta
 import numpy as np
 
 plt.rcParams['figure.figsize'] = (20, 6)
@@ -27,7 +26,7 @@ def process_csv(path: str) -> pd.DataFrame:
 
 
 def pellet_flip(data: pd.DataFrame) -> pd.DataFrame:
-    data.set_index('Time', inplace=True)
+    data = data.set_index('Time')
     grouped_data = data[data['Event'] == 'Pellet'].resample('10T').size().reset_index()
     grouped_data.columns = ['Interval_Start', 'Pellet_Count']
     
@@ -132,11 +131,12 @@ def find_meals(data: pd.DataFrame) -> list:
     start_idx = 0
 
     for idx, row in data.iterrows():
-        meal_start = data.loc[start_idx, 'Time']
+        meal_start = data.iloc[start_idx]['Time']
         time_diff = row['Time'] - meal_start
 
-        if (row['Pellet_Count'] - data.loc[start_idx, 'Pellet_Count'] >= 
+        if (row['Pellet_Count'] - data.loc[start_idx]['Pellet_Count'] >= 
                     pellet_count_threshold) and (time_diff <= window_duration):
+            
             meal_list.append([meal_start, row['Time']])
             start_idx = idx
         elif time_diff > window_duration:
@@ -145,7 +145,7 @@ def find_meals(data: pd.DataFrame) -> list:
     return meal_list
 
 
-def graphing_cum_count(data: pd.DataFrame, meal: list, bhv: int, num: int):
+def graphing_cum_count(data: pd.DataFrame, meal: list, bhv: int, num: int, flip=False):
     """graph the cumulative count and percentage of pellet consumption
     use two axis and mark meals on the graph
     """
@@ -158,25 +158,26 @@ def graphing_cum_count(data: pd.DataFrame, meal: list, bhv: int, num: int):
 
     ax1.set_xlabel('Time', fontsize=12)
     ax1.set_ylabel('Pellet_Count', fontsize=12)
-    ax2 = ax1.twinx()  # Share the same x-axis as ax1
-    ax2.set_ylabel('Cum_Sum', fontsize=12)
-    ax2.plot(data['Time'], data['Cum_Sum'], color='blue')
+
+    if not flip:
+        ax2 = ax1.twinx()  # Share the same x-axis as ax1
+        ax2.set_ylabel('Cum_Sum', fontsize=12)
+        ax2.plot(data['Time'], data['Cum_Sum'], color='blue')
 
     start = None
     end = None
     for interval in pd.date_range(start=data['Time'].min(), end=data['Time'].max(), freq='20T'):
         if (19 <= interval.hour or interval.hour < 7) and start == None:
             start = interval
-            print(start)
         elif interval.hour == 7:
             end = interval
-            plt.axvspan(start, end, color='lightgrey', alpha=0.4)
+            plt.axvspan(start, end, color='grey', alpha=0.4)
             start = end = None
     if start != None and end == None:
-        plt.axvspan(start, data['Time'].max(), color='lightgrey', alpha=0.4)
+        plt.axvspan(start, data['Time'].max(), color='grey', alpha=0.4)
     
     patch_meal = mpatches.Patch(color='lightblue', alpha=0.8, label='Meal')
-    patch_night = mpatches.Patch(color='lightgrey', alpha=0.3, label='Inactive')
+    patch_night = mpatches.Patch(color='grey', alpha=0.5, label='Inactive')
 
     plt.legend(handles=[patch_meal, patch_night], loc='upper right')
     plt.show()
@@ -194,14 +195,9 @@ def calculate_deviation(grouped_data: pd.DataFrame) -> float:
     deviation = [(each - avg)**2 for each in frequency]
     return sum(deviation) / len(frequency)
 
-def pellet_dark(grouped_data: pd.DataFrame) -> float:
-    total = 0
-    dark_pellet = 0
-
-    for _, data in grouped_data.iterrows():  
-        if data['Pellet_Count'] > 0:
-            total += 1 
-            if data['Interval_Start'].hour >= 19 or data['Interval_Start'].hour < 7:
-                dark_pellet += 1
-    
-    return round(dark_pellet / total, 3)
+def inactive_meal(meals: list) -> float:
+    cnt = 0
+    for meal in meals:
+        if meal[0].hour >= 19 or meal[0].hour < 7:
+            cnt += 1
+    return round(cnt/len(meals), 4) 

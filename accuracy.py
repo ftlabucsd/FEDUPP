@@ -71,7 +71,7 @@ def instant_acc(sheet, parent='../behavior data integrated/Adjusted FED3 Data.xl
 
      if (df['Time'].loc[1] - df['Time'].loc[0]).total_seconds() / 3600 > 2:
           df = df[1:].reset_index()
-     
+    
      idx = 0
      for each in df.itertuples():
           idx += 1
@@ -86,7 +86,7 @@ def instant_acc(sheet, parent='../behavior data integrated/Adjusted FED3 Data.xl
 
      return result, get_bhv_num(sheet)
 
-def graph_instant_acc(data, bhv, num):
+def graph_instant_acc(data, bhv, num, lr_time):
     plt.figure(figsize=(13, 7), dpi=90)
 
     ax = sns.barplot(x=data['Time'], y=data['Accuracy'], color="skyblue", width=0.6, label='Accuracy')
@@ -126,9 +126,25 @@ def graph_instant_acc(data, bhv, num):
         else:
             ax.axvspan(stamps[0], stamps[1], color='grey', alpha=0.4)
 
-
+    lr_time = lr_time.strftime('%H:%M')
+    i = hourly_positions[hourly_labels.index(lr_time)]
+    plt.axvline(i, color='red', label='1st Learned')
     plt.xlabel('Time')
     plt.ylabel('Accuracy (%)')
     plt.title(f'Accuracy over Time of Group {bhv} Mice {num}')
     plt.legend()
     plt.show()
+
+
+def time_high_acc(grouped_data: pd.DataFrame):
+    first_time = None
+    res = False
+    time_taken = -1
+    for idx, row in grouped_data.iterrows():
+        if idx == 0: continue
+        if row['Accuracy'] >= 80 and grouped_data.loc[idx-1]['Accuracy'] >= 80:
+            res = True
+            first_time = grouped_data.loc[idx-1]['Time']
+            time_taken = (first_time - grouped_data['Time'].min()).total_seconds() / 3600
+            break
+    return first_time, time_taken if res else None

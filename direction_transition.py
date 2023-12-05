@@ -2,6 +2,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 import tools as tl
+import seaborn as sns
 
 colors = {'Left': 'red', 'Right': 'blue', 'Pellet': 'green'}
 
@@ -183,3 +184,17 @@ def graph_tranition_csv(data_stats: pd.DataFrame, blocks: list, path: str):
     fig.set_dpi(80)
     plt.grid(alpha=0.5, linestyle='--')
     plt.show()
+
+def graph_diff(diff: pd.DataFrame):
+    plt.figure(figsize=(22, 12))
+    sns.lineplot(data=diff, x='Block_Index', y='Difference')
+    plt.xticks(range(1, len(diff['Block_Index']) + 1))
+    plt.title('Difference of the Left and Right Sticking', fontsize=18)
+    plt.grid()
+    plt.show()
+
+def get_difference_key(data_stats: pd.DataFrame) -> (pd.DataFrame, bool):
+    diff = pd.DataFrame(data=data_stats[['Block_Index', 'Left_to_Left', 'Right_to_Right']])
+    diff['Left_to_Left'] -= diff['Right_to_Right']
+    diff = diff.drop(['Right_to_Right'], axis='columns').rename(columns={'Left_to_Left':'Difference'})
+    return diff, data_stats['Active_Poke'][0] == 'Left'
