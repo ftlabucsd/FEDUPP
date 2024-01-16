@@ -24,14 +24,14 @@ def model_training(path: str, num_states: int, obs_dim: int, num_categories: int
         if f == True:
             input_dim += 1
 
-    X, y = extract_features(path, feat[0], feat[1], feat[2], feat[3], feat[4])
+    X, y, original = extract_features(path, feat[0], feat[1], feat[2], feat[3], feat[4])
 
     model = ssm.HMM(num_states, obs_dim, input_dim, observations="input_driven_obs",
                     observation_kwargs=dict(C=num_categories), transitions="inputdriven")
     
     log3 = model.fit(y, inputs=X, method='em', num_iters=max_iter, tolerance=10**-4)
     
-    return log3, model, X, y
+    return log3, model, X, y, original
 
 def in_meal(meals: list, time) -> bool:
     """
@@ -61,12 +61,29 @@ def extract_features(path: str, curr_active: bool, prev_event: bool,
     meals = ml.find_meals(data)
 
     data = data[data['Event'] != 'Pellet']
+
+    # Extract the date and time
+    data['Date'] = data['Time'].dt.date
+    data['Time_of_day'] = data['Time'].dt.time
+
+    # second day
+    unique_dates = data['Date'].unique()
+    second_day = unique_dates[1]
+
+    # Filter rows for the second day between 7:00 a.m. and 2:00 p.m.
+    start_time = pd.to_datetime('06:00:00').time()
+    end_time = pd.to_datetime('14:00:00').time()
+
+    data = data[(data['Date'] == second_day) & (
+        data['Time_of_day'] >= start_time) & (data['Time_of_day'] <= end_time)]
+
+    original = data.copy()
     
     data['prev_event'] = data['Event'].shift(fill_value=None)
     data['prev_active'] = data['Active_Poke'].shift(fill_value=None)
     data['meal'] = [in_meal(meals, each) for each in data['Time']]
     data['prev_reward'] = [row['prev_event'] == row['prev_active'] for idx, row in data.iterrows()]
-        
+    
     if not prev_event:
         data.drop(['prev_event'], axis=1, inplace=True)
     if not prev_active:
@@ -77,28 +94,13 @@ def extract_features(path: str, curr_active: bool, prev_event: bool,
         data.drop(['Active_Poke'], axis=1, inplace=True)
     if not prev_reward:
         data.drop(['prev_reward'], axis=1, inplace=True)
-        
-    # Extract the date and time
-    data['Date'] = data['Time'].dt.date
-    data['Time_of_day'] = data['Time'].dt.time
-
-    # second day
-    unique_dates = data['Date'].unique()
-    second_day = unique_dates[1]
-
-    # Filter rows for the second day between 7:00 a.m. and 1:00 p.m.
-    start_time = pd.to_datetime('06:00:00').time()
-    end_time = pd.to_datetime('13:00:00').time()
-
-    second_day_data = data[(data['Date'] == second_day) & (
-        data['Time_of_day'] >= start_time) & (data['Time_of_day'] <= end_time)]
-
-    selected_rows = second_day_data
+    
+    selected_rows = data
     selected_rows = selected_rows.drop(
         ['Date', 'Time_of_day', 'Time', 'Pellet_Count'], axis=1)
 
-    X = selected_rows.drop(['Event'], axis='columns')
-    y = selected_rows['Event']
+    X = selected_rows.drop(['Event'], axis='columns')[1:]
+    y = selected_rows['Event'][1:]
 
     mapper = {'Left': 1, 'Right': 0}
     true_false_mapper = {True: 1, False: 0}
@@ -119,7 +121,7 @@ def extract_features(path: str, curr_active: bool, prev_event: bool,
     Y = []
     for each in y:
         Y.append([each])
-    return X.to_numpy(), np.array(Y)
+    return X.to_numpy(), np.array(Y), original
 
 
 def graph_model_parameters(model: ssm.HMM, log_array: list, feat: list):

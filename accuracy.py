@@ -137,6 +137,7 @@ def graph_instant_acc(data, bhv, num, lr_time):
 
 
 def time_high_acc(grouped_data: pd.DataFrame):
+    # return 1st time we have 2 continuous hours with >=80% accuracy
     first_time = None
     res = False
     time_taken = -1
