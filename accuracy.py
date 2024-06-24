@@ -4,52 +4,88 @@ import seaborn as sns
 from matplotlib.dates import DateFormatter, HourLocator, date2num
 from tools import get_bhv_num
 
-def read_excel_by_sheet(sheet, parent='../behavior data integrated/Adjusted FED3 Data.xlsx'):
+def read_excel_by_sheet(sheet, parent='../behavior data integrated/Adjusted FED3 Data.xlsx', 
+                        hundredize=True, convert_time=True, remove_trival=True):
+    """
+    Read excel file with certain sheet name. Replace all RightWithPellet and LeftWithPellet to 
+    Right and left. It will automatically convert accuracy to 0-100 scale and remove data at the
+    beginning if the percent correct is 0 (start with first non-zero data).
+
+    Parameters:
+    parent: excel file path
+    sheet: sheet name
+    hundredize: whether converting accuracy from 0-1 to 0-100
+    convert_time: whether converting time column to datetime format for processing
+    remove_trivial: whether removing no-pellet region at the beginning. The first entry would
+        become first pellet behavior
+    """
     df = pd.read_excel(parent, sheet_name=sheet)
 
     df = df[['MM:DD:YYYY hh:mm:ss', 'Event', 'Active_Poke',
          'Cum_Sum', 'Percent_Correct']].rename(columns={'MM:DD:YYYY hh:mm:ss': 'Time'}).fillna(0)
     
     df = df.replace({'RightWithPellet': 'Right', 'LeftWithPellet': 'Left'})
-    df['Percent_Correct'] *= 100
-    df['Time'] = pd.to_datetime(df['Time'])
-    mask = (df['Percent_Correct'] != 0) & (df['Cum_Sum'] != 0)
-    df = df[mask]
+
+    if hundredize:
+        df['Percent_Correct'] *= 100
+    if convert_time:
+        df['Time'] = pd.to_datetime(df['Time'])
+    if remove_trival:
+        mask = (df['Percent_Correct'] != 0) & (df['Cum_Sum'] != 0)
+        df = df[mask]
 
     return df
 
-def graph_cumulative_acc(mice, group):
-     plt.figure(figsize=(15, 6), dpi=90)
+def graph_cumulative_acc(mice: list, group: int):
+    """
+    Graph the line plot for cumulative accuracy of certain group of mice
 
-     cnt = 1
-     for each in mice:
-          sns.lineplot(data=each, x='Time', y='Percent_Correct', label=f'M{cnt}')
-          cnt += 1
-     plt.grid()
-     plt.title(f'Changes in Correction Rate for Control Group {group}', fontsize=24)
-     plt.xlabel('Time', fontsize=16)
-     plt.ylabel('Correct Rate', fontsize=16)
-     plt.yticks(range(0, 110, 10))
-     plt.legend()
-     legend = plt.legend(title='Mice', fontsize=10)
-     legend.get_title().set_fontsize(12)
-     plt.show()
+    Parameters:
+    mice: list of data pd.Dataframe data of mice in the group
+    group: group number to display on the output plot
+    """
+    plt.figure(figsize=(15, 6), dpi=90)
 
-def cumulative_pellets_meals(data, bhv, num):
-     plt.figure(figsize=(15, 6), dpi=90)
+    cnt = 1
+    for each in mice:
+        sns.lineplot(data=each, x='Time', y='Percent_Correct', label=f'M{cnt}')
+        cnt += 1
+    plt.grid()
+    plt.title(f'Changes in Correction Rate for Control Group {group}', fontsize=24)
+    plt.xlabel('Time', fontsize=16)
+    plt.ylabel('Correct Rate', fontsize=16)
+    plt.yticks(range(0, 110, 10))
+    plt.legend()
+    legend = plt.legend(title='Mice', fontsize=10)
+    legend.get_title().set_fontsize(12)
+    plt.show()
 
-     sns.lineplot(data=data, x='Time', y='Cum_Sum', label='M1')
+def cumulative_pellets_meals(data: pd.DataFrame, bhv: int, num: int):
+    """
+    Graph the cumulative pellet counts for the mice from certain group
 
-     plt.grid()
-     plt.title(f'Cumulative Sum of Pellet for Control Group {bhv} Mice {num}', fontsize=22)
-     plt.xlabel('Time', fontsize=16)
-     plt.ylabel('Cumulative Percentage', fontsize=16)
-     plt.legend()
-     legend = plt.legend(title='Mice', fontsize=10)
-     legend.get_title().set_fontsize(12)
-     plt.show()
+    Parameters:
+    data: input dataframe of certain mice
+    bhv: the group number of the mice
+    num: the index of mice
+    """
+    plt.figure(figsize=(15, 6), dpi=90)
+
+    sns.lineplot(data=data, x='Time', y='Cum_Sum', label='M1')
+
+    plt.grid()
+    plt.title(f'Cumulative Sum of Pellet for Control Group {bhv} Mice {num}', fontsize=22)
+    plt.xlabel('Time', fontsize=16)
+    plt.ylabel('Cumulative Percentage', fontsize=16)
+    plt.legend()
+    legend = plt.legend(title='Mice', fontsize=10)
+    legend.get_title().set_fontsize(12)
+    plt.show()
 
 def calculate_accuracy(group):
+    """
+    Calculate the percent correct(0-100) in a interval of getting correct poke
+    """
     total_events = len(group)
     matching_events = group[group['Event'] == group['Active_Poke']]
     matching_count = len(matching_events)
@@ -60,31 +96,28 @@ def calculate_accuracy(group):
         return (matching_count / total_events) * 100
 
 def instant_acc(sheet, parent='../behavior data integrated/Adjusted FED3 Data.xlsx'):
-     df = pd.read_excel(parent, sheet_name=sheet)
-     df = df.replace({'RightWithPellet': 'Right', 'LeftWithPellet': 'Left'})
-     df = df[['MM:DD:YYYY hh:mm:ss', 'Event', 'Active_Poke', 'Cum_Sum']].rename(
-          columns={'MM:DD:YYYY hh:mm:ss':'Time'}).fillna(0)
-     
-     # remove pellets, over-consumption of pellets
-     df = df[df['Event'] != 'Pellet'].reset_index()
-     df['Time'] = pd.to_datetime(df['Time'])
-
-     if (df['Time'].loc[1] - df['Time'].loc[0]).total_seconds() / 3600 > 2:
-          df = df[1:].reset_index()
+    df = read_excel_by_sheet(sheet, parent, hundredize=False,
+                             convert_time=True, remove_trival=False)
     
-     idx = 0
-     for each in df.itertuples():
-          idx += 1
-          if each[-1] > 1:
-               break
-     df = df[:idx]
-     
-     # Resample the data to hourly intervals and apply the accuracy calculation function
-     df.set_index('Time', inplace=True)
-     result = df.resample('1H').apply(calculate_accuracy).reset_index().rename(columns={0: 'Accuracy'})
-     result['Time'] = pd.to_datetime(result['Time'])
+    # remove pellets, over-consumption of pellets
+    df = df[df['Event'] != 'Pellet'].reset_index()
 
-     return result, get_bhv_num(sheet)
+    if (df['Time'].loc[1] - df['Time'].loc[0]).total_seconds() / 3600 > 2:
+        df = df[1:].reset_index()
+
+    idx = 0
+    for each in df.itertuples():
+        idx += 1
+        if each[-1] > 1:
+            break
+    df = df[:idx]
+    
+    # Resample the data to hourly intervals and apply the accuracy calculation function
+    df.set_index('Time', inplace=True)
+    result = df.resample('1H').apply(calculate_accuracy).reset_index().rename(columns={0: 'Accuracy'})
+    result['Time'] = pd.to_datetime(result['Time'])
+
+    return result, get_bhv_num(sheet)
 
 def graph_instant_acc(data, bhv, num, lr_time):
     plt.figure(figsize=(13, 7), dpi=90)
