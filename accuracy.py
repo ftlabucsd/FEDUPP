@@ -1,40 +1,10 @@
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
-from matplotlib.dates import DateFormatter, HourLocator, date2num
-from tools import get_bhv_num
-
-def read_excel_by_sheet(sheet, parent='../behavior data integrated/Adjusted FED3 Data.xlsx', 
-                        hundredize=True, convert_time=True, remove_trival=True):
-    """
-    Read excel file with certain sheet name. Replace all RightWithPellet and LeftWithPellet to 
-    Right and left. It will automatically convert accuracy to 0-100 scale and remove data at the
-    beginning if the percent correct is 0 (start with first non-zero data).
-
-    Parameters:
-    parent: excel file path
-    sheet: sheet name
-    hundredize: whether converting accuracy from 0-1 to 0-100
-    convert_time: whether converting time column to datetime format for processing
-    remove_trivial: whether removing no-pellet region at the beginning. The first entry would
-        become first pellet behavior
-    """
-    df = pd.read_excel(parent, sheet_name=sheet)
-
-    df = df[['MM:DD:YYYY hh:mm:ss', 'Event', 'Active_Poke',
-         'Cum_Sum', 'Percent_Correct']].rename(columns={'MM:DD:YYYY hh:mm:ss': 'Time'}).fillna(0)
-    
-    df = df.replace({'RightWithPellet': 'Right', 'LeftWithPellet': 'Left'})
-
-    if hundredize:
-        df['Percent_Correct'] *= 100
-    if convert_time:
-        df['Time'] = pd.to_datetime(df['Time'])
-    if remove_trival:
-        mask = (df['Percent_Correct'] != 0) & (df['Cum_Sum'] != 0)
-        df = df[mask]
-
-    return df
+from preprocessing import read_excel_by_sheet, read_csv_clean
+from tools import get_bhv_num, get_session_time
+import numpy as np
+from datetime import datetime
 
 def graph_cumulative_acc(mice: list, group: int):
     """
@@ -60,6 +30,7 @@ def graph_cumulative_acc(mice: list, group: int):
     legend.get_title().set_fontsize(12)
     plt.show()
 
+
 def cumulative_pellets_meals(data: pd.DataFrame, bhv: int, num: int):
     """
     Graph the cumulative pellet counts for the mice from certain group
@@ -82,6 +53,7 @@ def cumulative_pellets_meals(data: pd.DataFrame, bhv: int, num: int):
     legend.get_title().set_fontsize(12)
     plt.show()
 
+
 def calculate_accuracy(group):
     """
     Calculate the percent correct(0-100) in a interval of getting correct poke
@@ -95,29 +67,77 @@ def calculate_accuracy(group):
     else:
         return (matching_count / total_events) * 100
 
-def instant_acc(sheet, parent='../behavior data integrated/Adjusted FED3 Data.xlsx'):
-    df = read_excel_by_sheet(sheet, parent, hundredize=False,
-                             convert_time=True, remove_trival=False)
+
+def instant_acc(sheet=None, parent='../behavior data integrated/Adjusted FED3 Data.xlsx', path=None, csv=False):
+    if csv:
+        df = read_csv_clean(path=path)
+    else:
+        df = read_excel_by_sheet(sheet, parent, hundredize=False,
+                                convert_time=True, remove_trival=False)
     
-    # remove pellets, over-consumption of pellets
     df = df[df['Event'] != 'Pellet'].reset_index()
 
+    # remove possible enomaly value
     if (df['Time'].loc[1] - df['Time'].loc[0]).total_seconds() / 3600 > 2:
         df = df[1:].reset_index()
 
-    idx = 0
-    for each in df.itertuples():
-        idx += 1
-        if each[-1] > 1:
-            break
-    df = df[:idx]
+    # check pellet over-consumption
+    if not csv: # only check when dealing with excel
+        idx = 0
+        for each in df.itertuples():
+            idx += 1
+            if each[-1] > 1:
+                break
+        df = df[:idx]
     
     # Resample the data to hourly intervals and apply the accuracy calculation function
+    duration = get_session_time(df)
     df.set_index('Time', inplace=True)
-    result = df.resample('1H').apply(calculate_accuracy).reset_index().rename(columns={0: 'Accuracy'})
+    
+    # choose interval based on total duration
+    if duration < 50:
+        result = df.resample('1h').apply(calculate_accuracy).reset_index().rename(columns={0: 'Accuracy'})
+    elif 50 <= duration < 100:
+        result = df.resample('2h').apply(calculate_accuracy).reset_index().rename(columns={0: 'Accuracy'})
+    elif 100 <= duration < 300:
+        result = df.resample('4h').apply(calculate_accuracy).reset_index().rename(columns={0: 'Accuracy'})
+    else:
+        result = df.resample('10h').apply(calculate_accuracy).reset_index().rename(columns={0: 'Accuracy'})
+        
     result['Time'] = pd.to_datetime(result['Time'])
+    
+    if csv:
+        return result
 
     return result, get_bhv_num(sheet)
+
+
+def find_night_index(hourly_labels:list):
+    intervals = []
+    in_interval = False
+    interval_start_index = None
+
+    for i, time_str in enumerate(hourly_labels):
+        current_time = datetime.strptime(time_str, '%H:%M')
+
+        # Determine if the current time is within the night interval (7pm to 7am)
+        if current_time.hour >= 19 or current_time.hour < 7:
+            if not in_interval:
+                # We are starting a new interval
+                in_interval = True
+                interval_start_index = i
+        else:
+            if in_interval:
+                # We are ending the current interval
+                in_interval = False
+                intervals.append([interval_start_index, i - 1])
+    
+    # If the last time in the list is within the interval, close it
+    if in_interval:
+        intervals.append([interval_start_index, len(hourly_labels) - 1])
+    
+    return intervals
+
 
 def graph_instant_acc(data, bhv, num, lr_time):
     plt.figure(figsize=(13, 7), dpi=90)
@@ -132,45 +152,32 @@ def graph_instant_acc(data, bhv, num, lr_time):
     ax.set_xticklabels(hourly_labels, rotation=45, horizontalalignment='right')  # Set the tick labels to hourly format
     
     # Locate the x-coordinates for the specified times
-    dark = []
-    temp = {}
-    for idx, tick in enumerate(hourly_labels):
-        if len(temp) != 0 and tick == '07:00':
-            temp['morning'] = hourly_positions[idx]
-        elif tick == '19:00':
-            temp['evening'] = hourly_positions[idx]
-        
-        if len(temp) == 2:
-            dark.append(temp)
-            temp = {}
-
-    # start at one time, but the end did not stop
-    if len(temp) == 1:
-        # if 'morning' in temp.keys():
-        #     temp['evening'] = hourly_positions[0]
-        # else:
-        temp['morning'] = len(data)-1
-        dark.append(temp)
-
+    dark = find_night_index(hourly_labels)
+    
     for idx, each in enumerate(dark):
-        stamps = list(each.values())
         if idx == 0:
-            ax.axvspan(stamps[0], stamps[1], color='grey', alpha=0.4, label='Night')
+            ax.axvspan(each[0], each[1], color='grey', alpha=0.4, label='Night')
         else:
-            ax.axvspan(stamps[0], stamps[1], color='grey', alpha=0.4)
+            ax.axvspan(each[0], each[1], color='grey', alpha=0.4)
 
-    lr_time = lr_time.strftime('%H:%M')
-    i = hourly_positions[hourly_labels.index(lr_time)]
-    plt.axvline(i, color='red', label='1st Learned')
+    if lr_time != None:
+        lr_time = lr_time.strftime('%H:%M')
+        i = hourly_positions[hourly_labels.index(lr_time)]
+        plt.axvline(i, color='red', label='1st Learned')
     plt.xlabel('Time')
     plt.ylabel('Accuracy (%)')
-    plt.title(f'Accuracy over Time of Group {bhv} Mice {num}')
+    if bhv == None:
+        plt.title('Accuracy over Time')
+    else:
+        plt.title(f'Accuracy over Time of Group {bhv} Mice {num}')
     plt.legend()
     plt.show()
 
 
 def time_high_acc(grouped_data: pd.DataFrame):
-    # return 1st time we have 2 continuous hours with >=80% accuracy
+    """
+    return 1st time we have 2 continuous hours with >=80% accuracy
+    """ 
     first_time = None
     res = False
     time_taken = -1
@@ -182,3 +189,29 @@ def time_high_acc(grouped_data: pd.DataFrame):
             time_taken = (first_time - grouped_data['Time'].min()).total_seconds() / 3600
             break
     return first_time, time_taken if res else None
+
+
+def graph_avg_corr_rate(ctrl:list, exp:list, width=0.4, exp_group_name=None):
+    ctrl_mean = np.mean(ctrl)
+    cask_mean = np.mean(exp)
+    ctrl_err = np.std(ctrl) / np.sqrt(len(ctrl))
+    cask_err = np.std(exp) / np.sqrt(len(exp))
+    
+    exp_name = 'Experiment' if exp_group_name==None else exp_group_name
+    groups = ['Control', exp_name]
+    
+    plt.figure(figsize=(7, 7))
+    plt.bar([1, 2], [ctrl_mean, cask_mean], yerr=[ctrl_err, cask_err], capsize=12, tick_label=groups, 
+            width=width, color=['lightblue', 'yellow'], alpha=0.8, zorder=1, label=['Control', 'CASK'])
+
+    x1 = [1] * len(ctrl)
+    x2 = [2] * len(exp)
+    plt.scatter(x1, ctrl, marker='o', color='blue', zorder=2) 
+    plt.scatter(x2, exp, marker='x', color='orange', zorder=2)
+
+    plt.xlabel('Groups', fontsize=14)
+    plt.ylabel('Correct Rate (%)', fontsize=14)
+    plt.title(f'Average Correct Rate of Control and {exp_name} Groups in FR1', fontsize=16)
+
+    plt.legend()
+    plt.show()

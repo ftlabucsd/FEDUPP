@@ -4,25 +4,9 @@ import seaborn as sns
 import matplotlib.patches as mpatches
 from datetime import timedelta
 import numpy as np
+from accuracy import find_night_index
 
 plt.rcParams['figure.figsize'] = (20, 6)
-
-def process_csv(path: str) -> pd.DataFrame:
-    """Preprocess the csv file for analysis
-    This function has similar functions with process_sheet
-    """
-    df = pd.read_csv(path)
-    df = df[['MM:DD:YYYY hh:mm:ss', 'Event', 'Active_Poke', 'Pellet_Count']].rename(
-        columns={'MM:DD:YYYY hh:mm:ss': 'Time'})
-    df = df.replace({'LeftWithPellet': 'Left', 'LeftDuringDispense': 'Left',
-                                   'RightWithPellet': 'Right', 'RightDuringDispense': 'Right'})
-    df['Time'] = pd.to_datetime(df['Time'])
-    df = df.reset_index().drop(['index'], axis='columns')
-    
-    first_non_zero_index = df['Pellet_Count'].ne(0).idxmax()
-    df = df.loc[first_non_zero_index:]
-    df.reset_index(drop=True, inplace=True)
-    return df
 
 
 def pellet_flip(data: pd.DataFrame) -> pd.DataFrame:
@@ -39,28 +23,13 @@ def average_pellet(group: pd.DataFrame) -> float:
     return round(total_pellet / total_hr, 3)
 
 
-def process_sheet(path: str, sheet: str) -> pd.DataFrame:
-    """Preprocess the excel sheet for analysis
-    keep only useful columns and rename improper named column
-    drop null value and convert time to datetime format
-    reset index to start with 0
-    """
-    df = pd.read_excel(path, sheet_name=sheet)
-    df = df[['MM:DD:YYYY hh:mm:ss', 'Event', 'Active_Poke', 'Pellet_Count', 'Cum_Sum']].rename(
-        columns={'MM:DD:YYYY hh:mm:ss': 'Time'})
-    df.dropna(inplace=True)
-    df['Time'] = pd.to_datetime(df['Time'])
-    df = df.reset_index().drop(['index'], axis='columns')
-    return df
-
-
 def find_pellet_frequency(data: pd.DataFrame) -> pd.DataFrame:
     """find number of pellet in every 10 minutes
     return a new data frame records the 10 minutes pellet
     """
-    data = data.drop(['Pellet_Count', 'Cum_Sum'], axis='columns')
+    data = data.drop(['Pellet_Count'], axis='columns')
     data.set_index('Time', inplace=True)
-    grouped_data = data[data['Event'] == 'Pellet'].resample('10T').size().reset_index()
+    grouped_data = data[data['Event'] == 'Pellet'].resample('10min').size().reset_index()
     grouped_data.columns = ['Interval_Start', 'Pellet_Count']
     
     return grouped_data
@@ -83,36 +52,20 @@ def graph_pellet_frequency(grouped_data: pd.DataFrame, bhv, num):
     ax.set_xticklabels(hourly_labels, rotation=45, horizontalalignment='right')  # Set the tick labels to hourly format
     
     # Locate the x-coordinates for the specified times
-    dark = []
-    temp = {}
-    for idx, tick in enumerate(hourly_labels):
-        if tick == '07:00':
-            temp['morning'] = hourly_positions[idx]
-        elif tick == '19:00':
-            temp['evening'] = hourly_positions[idx]
-        
-        if len(temp) == 2:
-            dark.append(temp)
-            temp = {}
-
-    # start at one time, but the end did not stop
-    if len(temp) == 1:
-        if 'morning' in temp.keys():
-            temp['evening'] = hourly_positions[0]
-        else:
-            temp['morning'] = len(grouped_data)-1
-        dark.append(temp)
+    dark = find_night_index(hourly_labels)
 
     for idx, each in enumerate(dark):
-        stamps = list(each.values())
         if idx == 0:
-            ax.axvspan(stamps[0], stamps[1], color='grey', alpha=0.4, label='Night')
+            ax.axvspan(6*each[0], 6*(1+each[1]), color='grey', alpha=0.4, label='Night')
         else:
-            ax.axvspan(stamps[0], stamps[1], color='grey', alpha=0.4)
+            ax.axvspan(6*each[0], 6*(1+each[1]), color='grey', alpha=0.4)
 
     # Add vertical grey background for the time interval between 7 p.m. and 7 a.m.
     plt.axhline(y=5, color='red', linestyle='--', label='meal')
-    plt.title(f'Pellet Frequency of Group {bhv} Mice {num}', fontsize=18)
+    if bhv == None or num == None:
+        plt.title(f'Pellet Frequency', fontsize=18)
+    else:
+        plt.title(f'Pellet Frequency of Group {bhv} Mice {num}', fontsize=18)
     plt.xlabel('Time', fontsize=14)
     plt.ylabel('Number of Pellet', fontsize=14)
     plt.yticks(range(0, 19, 2))
@@ -150,8 +103,11 @@ def graphing_cum_count(data: pd.DataFrame, meal: list, bhv: int, num: int, flip=
     use two axis and mark meals on the graph
     """
     fig, ax1 = plt.subplots()
-    ax1.plot(data['Time'], data['Pellet_Count'], color='blue')
-    ax1.set_title(f'Pellet Count and Cumulative Sum Over Time of Group {bhv} Mice {num}', fontsize=18)
+    ax1.plot(data['Time'], data['Cum_Sum'], color='blue')
+    if bhv == None or num == None:
+        ax1.set_title(f'Pellet Count and Cumulative Sum Over Time', fontsize=18)
+    else:
+        ax1.set_title(f'Pellet Count and Cumulative Sum Over Time of Group {bhv} Mice {num}', fontsize=18)
 
     for interval in meal:
         plt.axvspan(interval[0], interval[1], color='lightblue')
@@ -166,7 +122,7 @@ def graphing_cum_count(data: pd.DataFrame, meal: list, bhv: int, num: int, flip=
 
     start = None
     end = None
-    for interval in pd.date_range(start=data['Time'].min(), end=data['Time'].max(), freq='20T'):
+    for interval in pd.date_range(start=data['Time'].min(), end=data['Time'].max(), freq='20min'):
         if (19 <= interval.hour or interval.hour < 7) and start == None:
             start = interval
         elif interval.hour == 7:
@@ -182,6 +138,7 @@ def graphing_cum_count(data: pd.DataFrame, meal: list, bhv: int, num: int, flip=
     plt.legend(handles=[patch_meal, patch_night], loc='upper right')
     plt.show()
 
+
 def experiment_duration(data: pd.DataFrame):
     data['Time'] = pd.to_datetime(data['Time'])
     duration = data.tail(1)['Time'].values[0] - data.head(1)['Time'].values[0]
@@ -189,11 +146,13 @@ def experiment_duration(data: pd.DataFrame):
     duration = duration_seconds / (60 * 60 * 24)
     return duration
 
+
 def calculate_deviation(grouped_data: pd.DataFrame) -> float:
-    frequency = grouped_data['Pellet_Count'].tolist()
+    frequency = grouped_data['Cum_Sum'].tolist()
     avg = np.median(frequency)
     deviation = [(each - avg)**2 for each in frequency]
     return sum(deviation) / len(frequency)
+
 
 def inactive_meal(meals: list) -> float:
     cnt = 0
@@ -201,3 +160,28 @@ def inactive_meal(meals: list) -> float:
         if meal[0].hour >= 19 or meal[0].hour < 7:
             cnt += 1
     return round(cnt/len(meals), 4) 
+
+
+def graph_average_pellet(ctrl_pellet_avg:list, exp_pellet_avg:list, exp_name=None):
+    exp_name = 'Experiment' if exp_name == None else exp_name
+    
+    # Create DataFrames for each group
+    data_ctrl = pd.DataFrame({'Group': 'Control', 'Value': ctrl_pellet_avg})
+    data_cask = pd.DataFrame({'Group': exp_name, 'Value': exp_pellet_avg})
+
+    # Concatenate the two DataFrames
+    data = pd.concat([data_ctrl, data_cask])
+
+    plt.figure(figsize=(8, 6))
+    sns.set(style="whitegrid")
+
+    # Create the bar plot with error bars
+    sns.barplot(x="Group", y="Value", data=data, palette="pastel",
+                    errorbar="sd", capsize=0.2, width=0.5, errcolor='0.4')
+
+    plt.title('Average Pellets Per Hour for FR1', fontsize=16)
+    plt.xlabel('Groups')
+    plt.ylabel('Average Pellets')
+    plt.show()
+
+    

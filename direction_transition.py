@@ -3,33 +3,20 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 import tools as tl
 import seaborn as sns
+from preprocessing import csv_read_clean, excel_read_clean
 
 colors = {'Left': 'red', 'Right': 'blue', 'Pellet': 'green'}
 
 
-def csv_read_clean(path: str) -> pd.DataFrame:
-    to_clean = pd.read_csv(path)
-    cleaned = to_clean[['MM:DD:YYYY hh:mm:ss', 'Event', 'Active_Poke']].rename(
-        columns={'MM:DD:YYYY hh:mm:ss': 'Time_Stamp'})
-
-    cleaned = cleaned.replace({'LeftWithPellet': 'Left', 'LeftDuringDispense': 'Left',
-                                'RightWithPellet': 'Right', 'RightDuringDispense': 'Right'})
-
-    cleaned['Time_Stamp'] = pd.to_datetime(cleaned['Time_Stamp'])
-    return cleaned
-
-def excel_read_clean(path: str, sheet: str) -> pd.DataFrame:
-    to_clean = pd.read_excel(path, sheet_name=sheet)
-    cleaned = to_clean[['MM:DD:YYYY hh:mm:ss', 'Event', 'Active_Poke']].rename(
-        columns={'MM:DD:YYYY hh:mm:ss': 'Time_Stamp'})
-
-    cleaned = cleaned.replace({'LeftWithPellet': 'Left', 'LeftDuringDispense': 'Left',
-                                'RightWithPellet': 'Right', 'RightDuringDispense': 'Right'})
-
-    cleaned['Time_Stamp'] = pd.to_datetime(cleaned['Time_Stamp'])
-    return cleaned
-
 def split_data_to_blocks(data_dropped: pd.DataFrame) -> list:
+    """Split dataframe into blocks of same active poke
+
+    Args:
+        data_dropped (pd.DataFrame): behavior data
+
+    Returns:
+        list: list of blocks (number of switches of active poke)
+    """
     data_dropped = data_dropped.dropna()
     curr_poke = data_dropped['Active_Poke'][0]
     blocks = []
@@ -46,6 +33,14 @@ def split_data_to_blocks(data_dropped: pd.DataFrame) -> list:
 
 
 def count_transitions(sub_frame: pd.DataFrame) -> dict:
+    """Count transitions in a block
+
+    Args:
+        sub_frame (pd.DataFrame): the data of each block
+
+    Returns:
+        dict: dictionary that contains 5 info we need
+    """
     transitions = {
         'Left_to_Left': 0,
         'Left_to_Right': 0,
@@ -72,6 +67,14 @@ def count_transitions(sub_frame: pd.DataFrame) -> dict:
     return transitions
 
 def count_pellet(sub_frame: pd.DataFrame) -> int:
+    """Count number of occurrence of pellets
+
+    Args:
+        sub_frame (pd.DataFrame): data of each block
+
+    Returns:
+        int: number of pellets
+    """
     pellet_count = 0
     
     for _, row in sub_frame.iterrows():
@@ -84,10 +87,21 @@ def count_pellet(sub_frame: pd.DataFrame) -> int:
 
 
 def remove_pellet(block: pd.DataFrame) -> pd.DataFrame:
-    block = block[block['Event'] != 'Pellet']
-    return block
+    return block[block['Event'] != 'Pellet']
+
 
 def get_transition_info(blocks: list) -> pd.DataFrame:
+    """Get related statistics about each block
+    
+    Return a data frame with columns Block_Index, Left_to_Left, Left_to_Right,
+    Right_to_Right, Right_to_Left, Success_Count, Success_Rate, Active_Poke, Pellet_Rate
+    
+    Args:
+        blocks (list): list of all blocks
+
+    Returns:
+        pd.DataFrame: stats
+    """
     new_add = []
 
     for i, block in enumerate(blocks):
@@ -122,7 +136,7 @@ def get_transition_info(blocks: list) -> pd.DataFrame:
     return data_stats
 
 
-def graph_tranition_csv(data_stats: pd.DataFrame, blocks: list, path: str):
+def graph_tranition_stats(data_stats: pd.DataFrame, blocks: list, path: str):
     fig, ax = plt.subplots(figsize=(22, 12))
     bhv, num = tl.get_bhv_num(path)
 
@@ -154,8 +168,8 @@ def graph_tranition_csv(data_stats: pd.DataFrame, blocks: list, path: str):
     block_start_index = 1
 
     for block_df in blocks:
-        if not block_df.empty and 'Time_Stamp' in block_df:
-            first_timestamp = pd.to_datetime(block_df['Time_Stamp'].iloc[0])
+        if not block_df.empty and 'Time' in block_df:
+            first_timestamp = pd.to_datetime(block_df['Time'].iloc[0])
             if 19 <= first_timestamp.hour or first_timestamp.hour < 7:
                 night_blocks.append(block_start_index)
         block_start_index += 1

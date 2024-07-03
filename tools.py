@@ -32,14 +32,6 @@ def count_error_rate(data: pd.DataFrame) -> tuple:
     return rateL, rateR
 
 
-def preprocess_dataframe(data: pd.DataFrame) -> pd.DataFrame:
-    data = data[['Event', 'Active_Poke']]
-
-    data = data.replace({'LeftWithPellet': 'Left', 'LeftDuringDispense': 'Left',
-                         'RightWithPellet': 'Right', 'RightDuringDispense': 'Right'})
-
-    return data
-
 
 def parent_directory_process(parent: str):
     files = os.listdir(path=parent)
@@ -62,3 +54,18 @@ def get_bhv_num(path_or_sheet: str) -> tuple:
         bhv = branches[2][4]
 
     return bhv, num
+
+
+def get_session_time(data: pd.DataFrame) -> float:
+    """Return session time of a mice data in hours
+
+    Args:
+        data (pd.DataFrame): behaviorial data
+
+    Returns:
+        float: duraion in hours
+    """
+    
+    diff = data['Time'].loc[len(data)-1] - data['Time'].loc[0]
+    
+    return diff.total_seconds() / 3600
