@@ -28,9 +28,23 @@ def list_files(root:str, direct_access=True):
     return sorted(file_paths)
 
 
-contigency_flip_ctrl = list_files(root='/home/ftlab/Desktop/For_Andy/behavior data integrated/CASK/reversal/ctrl', direct_access=False)
+def find_condition(root:str, fr1:bool):
+    condition = 'FR1' if fr1 else 'Reversal'
+    dirs = os.listdir(root)
+    files = []
+    for dir in dirs:
+        dir = os.path.join(root, dir)
+        if os.path.isdir(dir):
+            condition_path = os.path.join(root, dir, condition)
+            files.append(os.path.join(condition_path, os.listdir(condition_path)[0]))
+            
+    return files       
+    
 
-contigency_flip_cask = list_files(root='/home/ftlab/Desktop/For_Andy/behavior data integrated/CASK/reversal/cask', direct_access=False)
+
+# contigency_flip_ctrl = list_files(root='/home/ftlab/Desktop/For_Andy/behavior data integrated/CASK/reversal/ctrl', direct_access=False)
+
+# contigency_flip_cask = list_files(root='/home/ftlab/Desktop/For_Andy/behavior data integrated/CASK/reversal/cask', direct_access=False)
 
 fr1_ctrl_sheet = [
     'B3.M1','B3.M2','B3.M3','B3.M4',
@@ -44,10 +58,10 @@ fr1_cask_sheet = [
     'B8.M1', 'B8.M2', 'B8.M3'
 ]
 
-fr1_cask_csvs = list_files(root='/home/ftlab/Desktop/For_Andy/behavior data integrated/CASK/FR1/cask', direct_access=False)
+# fr1_cask_csvs = list_files(root='/home/ftlab/Desktop/For_Andy/behavior data integrated/CASK/FR1/cask', direct_access=False)
 
-fr1_ivsa = list_files(root='/home/ftlab/Desktop/For_Andy/behavior data integrated/CD1 IVSA/FR1', direct_access=False)
-reversal_ivsa = list_files(root='/home/ftlab/Desktop/For_Andy/behavior data integrated/CD1 IVSA/Reversal', direct_access=False)
+fr1_ivsa = find_condition(root='/home/ftlab/Desktop/For_Andy/behavior data integrated/CD1 IVSA/', fr1=True)
+reversal_ivsa = find_condition(root='/home/ftlab/Desktop/For_Andy/behavior data integrated/CD1 IVSA/', fr1=False)
 
 fr1_fent = list_files(root='/home/ftlab/Desktop/For_Andy/behavior data integrated/mPFC/Fentanyl Tx/FR1', direct_access=True)
 reversal_fent = list_files(root='/home/ftlab/Desktop/For_Andy/behavior data integrated/mPFC/Fentanyl Tx/Reversal', direct_access=True)

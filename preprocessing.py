@@ -35,19 +35,22 @@ def read_excel_by_sheet(sheet, parent='../behavior data integrated/Adjusted FED3
     return df
 
 
-def read_csv_clean(path, remove_trivial=True):
+def read_csv_clean(path:str, remove_trivial=True, processed=False):
     """
     Read csv file
     """
-    df = pd.read_csv(path)
-
-    df = df[['MM:DD:YYYY hh:mm:ss', 'Event', 'Active_Poke', 'Pellet_Count']].rename(columns={
-        'MM:DD:YYYY hh:mm:ss': 'Time'}).dropna()
-    df['Cum_Sum'] = df['Pellet_Count'] / max(df['Pellet_Count'])
+    if path.startswith('.'): return None
     
-    df = df.replace({'LeftWithPellet': 'Left', 'LeftDuringDispense': 'Left',
-                    'RightWithPellet': 'Right', 'RightDuringDispense': 'Right'})
-
+    df = pd.read_csv(path)
+    
+    if not processed:
+        df = df[['MM:DD:YYYY hh:mm:ss', 'Event', 'Active_Poke', 'Pellet_Count']].rename(columns={
+            'MM:DD:YYYY hh:mm:ss': 'Time'}).dropna()
+        
+        df = df.replace({'LeftWithPellet': 'Left', 'LeftDuringDispense': 'Left',
+                        'RightWithPellet': 'Right', 'RightDuringDispense': 'Right'})
+    
+        df['Cum_Sum'] = df['Pellet_Count'] / max(df['Pellet_Count'])
     df['Time'] = pd.to_datetime(df['Time'])
     df = df.reset_index().drop(['index'], axis='columns')
     
@@ -88,3 +91,24 @@ def calculate_accuracy_by_row(df:pd.DataFrame, convert_large=True):
         
     df['Percent_Correct'] = acc
     return df
+
+
+def prep_pellet_count(path: str):
+    df = read_csv_clean(path) 
+    base = 0
+    reach_base = False
+    prev = -1
+
+    for idx, row in df.iterrows():
+        if reach_base or prev > row['Pellet_Count']:
+            if not reach_base:
+                reach_base = True
+                base = prev
+            df.at[idx, 'Pellet_Count'] = row['Pellet_Count'] + base
+        else:
+            prev = row['Pellet_Count']
+
+    df.to_csv(path, index=False)
+    # return df
+        
+    

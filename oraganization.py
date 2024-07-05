@@ -11,7 +11,7 @@ def organize_files(root_folder):
         os.makedirs(fr1_folder)
     if not os.path.exists(reversal_folder):
         os.makedirs(reversal_folder)
-    
+
     for subdir, _, files in os.walk(root_folder):
         for file in files:
             file_path = os.path.join(subdir, file)
@@ -53,13 +53,47 @@ def concatenate_csv_files(files:list, output_file:str):
     print(f'Concatenated file saved as {output_file}')
     
     
+def fr1_rev_split(directory):
+    for root, _, files in os.walk(directory):
+        # Remove small files
+        for file in files:
+            filepath = os.path.join(root, file)
+            if os.path.getsize(filepath) < 7800:  # File size less than 8kb
+                os.remove(filepath)
+                print(f"Deleted {filepath} due to insufficient size.")
+
+        # Now process remaining CSV files
+        for file in files:
+            filepath = os.path.join(root, file)
+            if os.path.exists(filepath) and (file.endswith('csv') or file.endswith('CSV')): 
+                df = pd.read_csv(filepath)
+                session_type = df['Session_type'].iloc[0]
+                if 'FR1' in session_type:
+                    new_folder = os.path.join(root, 'FR1')
+                elif 'Rev' in session_type:
+                    new_folder = os.path.join(root, 'Reversal')
+                else:
+                    continue
+
+                # Create folder if it does not exist
+                new_path = os.path.join(new_folder, file)
+                os.makedirs(new_folder, exist_ok=True)
+                # Move the file
+                shutil.move(filepath, new_path)
+                print(f"Moved {filepath} to {new_path}")
+ 
+
+    
+    
 
 # root_folder = '/home/ftlab/Desktop/For_Andy/behavior data integrated/CD1 IVSA'
 # organize_files(root_folder)
 
 
-file1 = '/home/ftlab/Desktop/For_Andy/behavior data integrated/mPFC/Fentanyl Tx/Mouse_3/Contingency_Flip/FED000_042924_01.CSV'
-file2 = '/home/ftlab/Desktop/For_Andy/behavior data integrated/mPFC/Fentanyl Tx/Mouse_3/Contingency_Flip/FED000_043024_00.CSV'
-file3 = '/home/ftlab/Desktop/For_Andy/behavior data integrated/mPFC/Vehicle Tx/Mouse_6/Contingency_Flip/FED000_050124_01.CSV'
-output = '/home/ftlab/Desktop/For_Andy/behavior data integrated/mPFC/Fentanyl Tx/Reversal/M3.CSV'
-concatenate_csv_files([file1, file2], output)
+# file1 = '/home/ftlab/Desktop/For_Andy/behavior data integrated/mPFC/Fentanyl Tx/Mouse_3/Contingency_Flip/FED000_042924_01.CSV'
+# file2 = '/home/ftlab/Desktop/For_Andy/behavior data integrated/mPFC/Fentanyl Tx/Mouse_3/Contingency_Flip/FED000_043024_00.CSV'
+# file3 = '/home/ftlab/Desktop/For_Andy/behavior data integrated/mPFC/Vehicle Tx/Mouse_6/Contingency_Flip/FED000_050124_01.CSV'
+# output = '/home/ftlab/Desktop/For_Andy/behavior data integrated/mPFC/Fentanyl Tx/Reversal/M3.CSV'
+# concatenate_csv_files([file1, file2], output)
+
+fr1_rev_split('/home/ftlab/Desktop/For_Andy/behavior data integrated/CD1 IVSA')
