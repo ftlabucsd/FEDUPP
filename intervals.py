@@ -2,6 +2,7 @@ import pandas as pd
 from scipy import stats
 import matplotlib.pyplot as plt
 import seaborn as sns
+from tools import get_bhv_num
 
 
 def count_interval(data: pd.DataFrame) -> list:
@@ -37,27 +38,32 @@ def clean_and_interval(data: pd.DataFrame) -> pd.DataFrame:
     return data
 
 
-def get_bhv_num(path: str) -> tuple:
-    branches = path.split(sep='/')
+# def get_bhv_num(path: str) -> tuple:
+#     branches = path.split(sep='/')
     
-    num = branches[2][1]
-    bhv = branches[1][4]
+#     num = branches[2][1]
+#     bhv = branches[1][4]
 
-    return bhv, num
+#     return bhv, num
 
 
 def graph_pellet_interval(path: str):
     data = pd.read_csv(path)
     data = clean_and_interval(data)
-    bhv, idx = get_bhv_num(path)
+    
+    info = get_bhv_num(path)
     plt.figure(figsize=(15, 5))
 
     sns.set_palette('bright')
     sns.set_style('darkgrid')
 
-    sns.lineplot(data=data, x='Time', y='Interval', alpha=0.9)
+    sns.lineplot(data=data, x='Time', y='Interval', alpha=0.8)
 
-    plt.title(f'Interval Between Pellets for Group {bhv} Mice {idx}', fontsize=18)
+    if len(info) == 2:
+        plt.title(f'Interval Between Pellets for Group {info[0]} Mouse {info[1]}', fontsize=18)
+    else:
+        plt.title(f'Interval Between Pellets for Mouse {info}', fontsize=18)
+
     plt.xlabel('Time')
     plt.ylabel('Interval (minutes)')
     plt.show()

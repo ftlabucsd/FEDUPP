@@ -2,37 +2,6 @@ import pandas as pd
 import os
 
 
-
-def count_error_rate(data: pd.DataFrame) -> tuple:
-    error_R = 0
-    error_L = 0
-    total_R = 0
-    total_L = 0
-
-    for idx, row in data.iterrows():
-        active_poke = row['Active_Poke']
-        event = row['Event']
-
-        if active_poke == 'Left':   # left active
-            if event != 'Pellet':   # pellet and correct are overlapping
-                total_L += 1
-
-            if event == 'Right':
-                error_L += 1
-        else:       # right active
-            if event != 'Pellet':
-                total_R += 1
-
-            if event == 'Left':
-                error_R += 1
-
-    rateL = round(error_L / total_L, 2)
-    rateR = round(error_R / total_R, 2)
-
-    return rateL, rateR
-
-
-
 def parent_directory_process(parent: str):
     files = os.listdir(path=parent)
     files.remove('.DS_Store')
@@ -43,17 +12,32 @@ def parent_directory_process(parent: str):
     return files
 
 
-# path = '../behavior data integrated/Bhv 5 - Ctrl/M1/Contingency Flip/FED000_071123_00.CSV'
+# /home/ftlab/Desktop/For_Andy/behavior data integrated/CASK/reversal/ctrl/B5M1.CSV
 def get_bhv_num(path_or_sheet: str) -> tuple:
     if len(path_or_sheet) < 8:
         bhv = path_or_sheet[1]
         num = path_or_sheet[-1]
-    else:
-        branches = path_or_sheet.split(sep='/')
-        num = branches[3][1]
-        bhv = branches[2][4]
+        return bhv, num
 
-    return bhv, num
+    elif 'CASK' in path_or_sheet:
+        branches = path_or_sheet.split(sep='/')
+        M = branches[-1].index('M')
+        dot = branches[-1].index('.')
+        num = branches[-1][M+1:dot]
+        bhv = branches[-1][1:M]
+        return bhv, num
+
+    elif 'IVSA' in path_or_sheet:
+        branches = path_or_sheet.split(sep='/')
+        num = branches[-3][:2]
+        return num
+    
+    elif 'mPFC' in path_or_sheet:
+        branches = path_or_sheet.split(sep='/')
+        dot = branches[-1].index('.')
+        num = branches[-1][1:dot]
+        return num
+
 
 
 def get_session_time(data: pd.DataFrame) -> float:

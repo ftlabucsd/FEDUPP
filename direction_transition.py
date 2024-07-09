@@ -3,7 +3,6 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 import tools as tl
 import seaborn as sns
-from preprocessing import csv_read_clean, excel_read_clean
 
 colors = {'Left': 'red', 'Right': 'blue', 'Pellet': 'green'}
 
@@ -48,7 +47,7 @@ def count_transitions(sub_frame: pd.DataFrame) -> dict:
         'Right_to_Left': 0,
         'success_count' : 0,
     }
-    
+
     prev_event = None
     
     for _, row in sub_frame.iterrows():
@@ -63,7 +62,7 @@ def count_transitions(sub_frame: pd.DataFrame) -> dict:
             transitions['success_count'] += 1
 
         prev_event = event
-    
+
     return transitions
 
 def count_pellet(sub_frame: pd.DataFrame) -> int:
@@ -138,8 +137,6 @@ def get_transition_info(blocks: list) -> pd.DataFrame:
 
 def graph_tranition_stats(data_stats: pd.DataFrame, blocks: list, path: str):
     fig, ax = plt.subplots(figsize=(22, 12))
-    bhv, num = tl.get_bhv_num(path)
-
 
     ax.plot(data_stats['Block_Index'], data_stats['Left_to_Left'],
             marker='o', label='Left-Left', color='black')
@@ -191,8 +188,13 @@ def graph_tranition_stats(data_stats: pd.DataFrame, blocks: list, path: str):
 
     ax = plt.gca()
     ax.add_artist(legend)
+    
+    info = tl.get_bhv_num(path)
+    if len(info) == 2:
+        plt.title(f'Probability of Transitions in Poke Choosing and Correct Rates in Group {info[0]} Mouse {info[1]}', fontsize=24)
+    else:
+        plt.title(f'Probability of Transitions in Poke Choosing and Correct Rates of Mouse {info}', fontsize=24)
 
-    plt.title(f'Probability of Transitions in Poke Choosing and Correct Rates in Group {bhv} Mice {num}', fontsize=24)
     plt.xticks(data_stats['Block_Index'])
     plt.yticks(range(0, 100, 20))
     fig.set_dpi(80)
@@ -207,8 +209,24 @@ def graph_diff(diff: pd.DataFrame):
     plt.grid()
     plt.show()
 
+
 def get_difference_key(data_stats: pd.DataFrame) -> (pd.DataFrame, bool):
     diff = pd.DataFrame(data=data_stats[['Block_Index', 'Left_to_Left', 'Right_to_Right']])
     diff['Left_to_Left'] -= diff['Right_to_Right']
     diff = diff.drop(['Right_to_Right'], axis='columns').rename(columns={'Left_to_Left':'Difference'})
     return diff, data_stats['Active_Poke'][0] == 'Left'
+
+
+def learning_score_grad(diff: pd.DataFrame, left_start = True) -> float:
+    ans = 0
+    curr_expect = not left_start
+
+    for idx, row in diff.iterrows():
+        if idx == 0: continue
+        grad = row['Difference'] - diff.loc[idx - 1]['Difference']
+        if curr_expect:
+            ans += grad
+        else:
+            ans -= grad
+        curr_expect = not curr_expect
+    return ans

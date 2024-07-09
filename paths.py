@@ -42,9 +42,9 @@ def find_condition(root:str, fr1:bool):
     
 
 
-# contigency_flip_ctrl = list_files(root='/home/ftlab/Desktop/For_Andy/behavior data integrated/CASK/reversal/ctrl', direct_access=False)
+contigency_flip_ctrl = list_files(root='/home/ftlab/Desktop/For_Andy/behavior data integrated/CASK/reversal/ctrl', direct_access=False)
 
-# contigency_flip_cask = list_files(root='/home/ftlab/Desktop/For_Andy/behavior data integrated/CASK/reversal/cask', direct_access=False)
+contigency_flip_cask = list_files(root='/home/ftlab/Desktop/For_Andy/behavior data integrated/CASK/reversal/cask', direct_access=False)
 
 fr1_ctrl_sheet = [
     'B3.M1','B3.M2','B3.M3','B3.M4',
@@ -58,7 +58,7 @@ fr1_cask_sheet = [
     'B8.M1', 'B8.M2', 'B8.M3'
 ]
 
-# fr1_cask_csvs = list_files(root='/home/ftlab/Desktop/For_Andy/behavior data integrated/CASK/FR1/cask', direct_access=False)
+fr1_cask_csvs = list_files(root='/home/ftlab/Desktop/For_Andy/behavior data integrated/CASK/FR1/cask', direct_access=False)
 
 fr1_ivsa = find_condition(root='/home/ftlab/Desktop/For_Andy/behavior data integrated/CD1 IVSA/', fr1=True)
 reversal_ivsa = find_condition(root='/home/ftlab/Desktop/For_Andy/behavior data integrated/CD1 IVSA/', fr1=False)

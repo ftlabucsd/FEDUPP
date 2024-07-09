@@ -6,6 +6,7 @@ from tools import get_bhv_num, get_session_time
 import numpy as np
 from datetime import datetime
 
+
 def graph_cumulative_acc(mice: list, group: int):
     """
     Graph the line plot for cumulative accuracy of certain group of mice
@@ -167,9 +168,9 @@ def graph_instant_acc(data, bhv, num, lr_time):
     plt.xlabel('Time')
     plt.ylabel('Accuracy (%)')
     if bhv == None:
-        plt.title('Accuracy over Time')
+        plt.title(f'Accuracy over of Mouse {num}')
     else:
-        plt.title(f'Accuracy over Time of Group {bhv} Mice {num}')
+        plt.title(f'Accuracy over Time of Group {bhv} Mouse {num}')
     plt.legend()
     plt.show()
 
@@ -215,3 +216,126 @@ def graph_avg_corr_rate(ctrl:list, exp:list, width=0.4, exp_group_name=None):
 
     plt.legend()
     plt.show()
+    
+    
+def count_error_rate(data: pd.DataFrame, overall_accuracy=False) -> tuple:
+    error_R = 0
+    error_L = 0
+    total_R = 0
+    total_L = 0
+
+    for _, row in data.iterrows():
+        active_poke = row['Active_Poke']
+        event = row['Event']
+
+        if active_poke == 'Left':   # left active
+            if event != 'Pellet':   # pellet and correct are overlapping
+                total_L += 1
+
+            if event == 'Right':
+                error_L += 1
+        else:       # right active
+            if event != 'Pellet':
+                total_R += 1
+
+            if event == 'Left':
+                error_R += 1
+
+    rateL = 0 if total_L == 0 else round(error_L / total_L, 2)
+    rateR = 0 if total_R == 0 else round(error_R / total_R, 2)
+    
+    if not overall_accuracy:
+        return rateL, rateR
+    else:
+        rateOverall = round((error_L+error_R) / (total_L+total_R), 2)
+        return rateL, rateR, rateOverall
+    
+    
+def draw_left_right_error(left_rate:list, right_rate:list, groups:list, 
+                          bar_width=0.2, err_width=12, dpi=100, verbose=False):
+    # Calculate averages and standard deviation
+    left_averages = [np.mean(sublist) for sublist in left_rate]
+    right_averages = [np.mean(sublist) for sublist in right_rate]
+    left_std = [np.std(data, ddof=1) / np.sqrt(len(data)) for data in left_rate]
+    right_std = [np.std(data, ddof=1) / np.sqrt(len(data))for data in right_rate]
+    
+    if verbose:
+        print(f'Left Average: {left_averages}')
+        print(f'Right Average: {right_averages}')
+        print(f'Left Standard Deviation: {left_std}')
+        print(f'Right Standard Deviation: {right_std}')
+        
+    x = np.arange(len(groups))
+    fig, ax = plt.subplots(dpi=dpi)
+    fig.set_size_inches(12, 7)
+
+    ax.bar(x[0] - bar_width/2, left_averages[0], bar_width, label='Ctrl Left Mean',
+                    color='blue', alpha=0.6, yerr=left_std[0], capsize=err_width, zorder=1)
+    x_values = np.full(len(left_rate[0]), x[0] - bar_width/2)
+    ax.scatter(x_values, left_rate[0], marker='o', zorder=2,
+            color='#1405eb', label='Ctrl Left')
+
+    ax.bar(x[0] + bar_width/2, right_averages[0], bar_width, label='Ctrl Right Mean',
+                    color='lightblue', alpha=0.6, yerr=right_std[0], capsize=err_width, zorder=1)
+    x_values = np.full(len(right_rate[0]), x[0] + bar_width/2)
+    ax.scatter(x_values, right_rate[0], marker='x', zorder=2,
+            color='#397bed', label='Ctrl Right')
+
+    ax.bar(x[1] - bar_width/2, left_averages[1], bar_width, label=f'{groups[1]} Left Mean',
+                    color='orange', alpha=0.6, yerr=left_std[1], capsize=err_width, zorder=1)
+    x_values = np.full(len(left_rate[1]), x[1] - bar_width/2)
+    ax.scatter(x_values, left_rate[1], marker='o',zorder=2,
+            color='#f28211', label='Exp Left')
+
+    ax.bar(x[1] + bar_width/2, right_averages[1], bar_width, label=f'{groups[1]} Right Mean',
+                    color='yellow', alpha=0.6, yerr=right_std[1], capsize=err_width, zorder=1)
+    x_values = np.full(len(right_rate[1]), x[1] + bar_width/2)
+    ax.scatter(x_values, right_rate[1], marker='x', zorder=2,
+            color='#ccbb00', label='Exp Right')
+
+    ax.set_xlabel('Groups', fontsize=14)
+    ax.set_ylabel('Averages', fontsize=14)
+    ax.set_title(f'Average Error Rate of Control and {groups[1]} Groups in Flipping', fontsize=20)
+    ax.set_xticks(x)
+    ax.set_xticklabels(groups)
+
+    ax.legend()
+    plt.show()
+    
+    
+def draw_mean_error_rate(ctrl:list, exp:list, groups:list, dpi=100, bar_width=0.3, err_width=12, verbose=True):
+    ctrl_averages = np.mean(ctrl)
+    exp_averages = np.mean(exp)
+    ctrl_std = np.std(ctrl, ddof=1)
+    exp_std = np.std(exp, ddof=1)
+    
+    if verbose:
+        print(f'{groups[0]} Average: {ctrl_averages}')
+        print(f'{groups[1]} Average: {exp_averages}')
+        print(f'{groups[0]} Standard Deviation: {ctrl_std}')
+        print(f'{groups[1]} Standard Deviation: {exp_std}')
+
+    fig, ax = plt.subplots(dpi=dpi)
+    fig.set_size_inches(8, 7) 
+    x = [0.5, 1]
+    
+    ax.bar(x=x[0], height=ctrl_averages, width=bar_width, color='blue', label=groups[0], 
+           zorder=1, alpha=0.6, yerr=ctrl_std, capsize=err_width)
+    
+    x_values = np.full(len(ctrl), x[0])
+    ax.scatter(x_values, ctrl, marker='o', zorder=2, color='#1405eb')
+    
+    ax.bar(x=x[1], height=exp_averages, width=bar_width, color='orange', label=groups[1],
+           zorder=1, alpha=0.6, yerr=exp_std, capsize=err_width)
+    x_values = np.full(len(exp), x[1])
+    ax.scatter(x_values, exp, marker='o', zorder=2, color='#f28211')
+
+    ax.set_xlabel('Groups', fontsize=14)
+    ax.set_ylabel('Averages', fontsize=14)
+    ax.set_title(f'Average Error Rate of in Reversal Task', fontsize=20)
+    ax.set_xticks(x)
+    ax.set_xticklabels(groups)
+
+    ax.legend()
+    plt.show()
+    

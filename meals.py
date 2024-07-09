@@ -11,7 +11,7 @@ plt.rcParams['figure.figsize'] = (20, 6)
 
 def pellet_flip(data: pd.DataFrame) -> pd.DataFrame:
     data = data.set_index('Time')
-    grouped_data = data[data['Event'] == 'Pellet'].resample('10T').size().reset_index()
+    grouped_data = data[data['Event'] == 'Pellet'].resample('10min').size().reset_index()
     grouped_data.columns = ['Interval_Start', 'Pellet_Count']
     
     return grouped_data
@@ -62,10 +62,10 @@ def graph_pellet_frequency(grouped_data: pd.DataFrame, bhv, num):
 
     # Add vertical grey background for the time interval between 7 p.m. and 7 a.m.
     plt.axhline(y=5, color='red', linestyle='--', label='meal')
-    if bhv == None or num == None:
-        plt.title(f'Pellet Frequency', fontsize=18)
+    if bhv == None:
+        plt.title(f'Pellet Frequency of Mouse {num}', fontsize=18)
     else:
-        plt.title(f'Pellet Frequency of Group {bhv} Mice {num}', fontsize=18)
+        plt.title(f'Pellet Frequency of Group {bhv} Mouse {num}', fontsize=18)
     plt.xlabel('Time', fontsize=14)
     plt.ylabel('Number of Pellet', fontsize=14)
     plt.yticks(range(0, 19, 2))
@@ -156,6 +156,8 @@ def calculate_deviation(grouped_data: pd.DataFrame) -> float:
 
 
 def inactive_meal(meals: list) -> float:
+    if len(meals) == 0:
+        return 0
     cnt = 0
     for meal in meals:
         if meal[0].hour >= 19 or meal[0].hour < 7:

@@ -90,10 +90,10 @@ def fr1_rev_split(directory):
 # organize_files(root_folder)
 
 
-# file1 = '/home/ftlab/Desktop/For_Andy/behavior data integrated/mPFC/Fentanyl Tx/Mouse_3/Contingency_Flip/FED000_042924_01.CSV'
-# file2 = '/home/ftlab/Desktop/For_Andy/behavior data integrated/mPFC/Fentanyl Tx/Mouse_3/Contingency_Flip/FED000_043024_00.CSV'
-# file3 = '/home/ftlab/Desktop/For_Andy/behavior data integrated/mPFC/Vehicle Tx/Mouse_6/Contingency_Flip/FED000_050124_01.CSV'
-# output = '/home/ftlab/Desktop/For_Andy/behavior data integrated/mPFC/Fentanyl Tx/Reversal/M3.CSV'
-# concatenate_csv_files([file1, file2], output)
+file1 = '/home/ftlab/Desktop/For_Andy/behavior data integrated/mPFC/Fentanyl Tx/Reversal/FED000_042924_01.CSV'
+file2 = '/home/ftlab/Desktop/For_Andy/behavior data integrated/mPFC/Fentanyl Tx/Reversal/FED000_043024_00.CSV'
+file3 = '/home/ftlab/Desktop/For_Andy/behavior data integrated/mPFC/Vehicle Tx/Mouse_6/Contingency_Flip/FED000_050124_01.CSV'
+output = '/home/ftlab/Desktop/For_Andy/behavior data integrated/mPFC/Fentanyl Tx/Reversal/M3.CSV'
+concatenate_csv_files([file1, file2], output)
 
-fr1_rev_split('/home/ftlab/Desktop/For_Andy/behavior data integrated/CD1 IVSA')
+# fr1_rev_split('/home/ftlab/Desktop/For_Andy/behavior data integrated/CD1 IVSA')

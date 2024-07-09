@@ -35,7 +35,7 @@ def read_excel_by_sheet(sheet, parent='../behavior data integrated/Adjusted FED3
     return df
 
 
-def read_csv_clean(path:str, remove_trivial=True, processed=False):
+def read_csv_clean(path:str, remove_trivial=True):
     """
     Read csv file
     """
@@ -43,7 +43,7 @@ def read_csv_clean(path:str, remove_trivial=True, processed=False):
     
     df = pd.read_csv(path)
     
-    if not processed:
+    if 'Time' not in df.columns:
         df = df[['MM:DD:YYYY hh:mm:ss', 'Event', 'Active_Poke', 'Pellet_Count']].rename(columns={
             'MM:DD:YYYY hh:mm:ss': 'Time'}).dropna()
         
@@ -94,7 +94,7 @@ def calculate_accuracy_by_row(df:pd.DataFrame, convert_large=True):
 
 
 def prep_pellet_count(path: str):
-    df = read_csv_clean(path) 
+    df = pd.read_csv(path) 
     base = 0
     reach_base = False
     prev = -1
@@ -108,7 +108,7 @@ def prep_pellet_count(path: str):
         else:
             prev = row['Pellet_Count']
 
-    df.to_csv(path, index=False)
+    df.to_csv(path[:-4]+'_1.csv', index=False)
     # return df
         
     
