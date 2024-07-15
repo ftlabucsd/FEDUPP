@@ -35,9 +35,17 @@ def read_excel_by_sheet(sheet, parent='../behavior data integrated/Adjusted FED3
     return df
 
 
-def read_csv_clean(path:str, remove_trivial=True):
-    """
-    Read csv file
+def read_csv_clean(path:str, remove_trivial=True, cumulative_accuracy=False, convert_large=False) -> pd.DataFrame:
+    """Read csv file and clean it
+
+    Args:
+        path (str): path of the csv file
+        remove_trivial (bool, optional): remove rows until the first pellet. Defaults to True.
+        cumulative_accuracy (bool, optional): whether calcualate cumulative accuracy for each row. Defaults to False.
+        convert_large (bool, optional): whether convert accuracy to 0-100 scale from 0-1 scale. Defaults to False.
+
+    Returns:
+        pd.DataFrame: cleaned data
     """
     if path.startswith('.'): return None
     
@@ -59,6 +67,9 @@ def read_csv_clean(path:str, remove_trivial=True):
         df = df.loc[first_non_zero_index:]
         df.reset_index(drop=True, inplace=True)
     
+    if cumulative_accuracy:
+        df = calculate_accuracy_by_row(df, convert_large)
+    
     return df
 
 
@@ -69,31 +80,26 @@ def calculate_accuracy_by_row(df:pd.DataFrame, convert_large=True):
         df (pd.DataFrame): data from cleaned csv
         convert_large (bool): whether convert accuracy from 0-1 scale to 0-100 scale
     """
-    acc = []
-    match = []
+    if df['Active_Poke'].nunique() > 1:
+        raise RuntimeError("Cumulative Accuracy only valids for FR1 data")\
+            
+    active_poke = df['Active_Poke'].loc[0]
+    df['Percent_Correct'] = df[f'{active_poke}_Poke_Count'] / (df['Left_Poke_Count']+df['Right_Poke_Count'])
     
-    for idx in range(len(df)):
-        actual = df['Event'][:idx].to_list()
-        target = df['Active_Poke'][:idx].to_list()
-        
-        for x,y in zip(actual, target):
-            if x != 'Pellet':
-                match.append(1 if x == y else 0)
-        matched = sum(match)
-        
-        if matched == 0:
-            acc.append(0)
-        else:
-            acc.append(round(matched / len(match), 2))
     
     if convert_large:
-        acc = [100*val for val in acc]
+        df['Percent_Correct'] *= 100
         
-    df['Percent_Correct'] = acc
     return df
 
 
 def prep_pellet_count(path: str):
+    """when combining two csv files, making the pellet count column increasing
+    instead of go to 0 for the new file.
+
+    Args:
+        path (str): path of combined csv files
+    """
     df = pd.read_csv(path) 
     base = 0
     reach_base = False

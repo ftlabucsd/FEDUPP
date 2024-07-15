@@ -70,6 +70,20 @@ def calculate_accuracy(group):
 
 
 def instant_acc(sheet=None, parent='../behavior data integrated/Adjusted FED3 Data.xlsx', path=None, csv=False):
+    """Calculate instant accuracy
+
+    Calculate accuracy in intervals of 1h, 2h, 4h and 8h depends on session duration 
+    and read in excel or csv files
+    
+    Args:
+        sheet (str, optional): sheet name in parent excel file. Defaults to None.
+        parent (str, optional): excel file path. Defaults to '../behavior data integrated/Adjusted FED3 Data.xlsx'.
+        path (str, optional): csv file path. Defaults to None.
+        csv (bool, optional): whether reading a csv or excel. Defaults to False.
+
+    Returns:
+        data frame organzed by time, and (optional) group and index of the mouse in the data 
+    """
     if csv:
         df = read_csv_clean(path=path)
     else:
@@ -114,6 +128,14 @@ def instant_acc(sheet=None, parent='../behavior data integrated/Adjusted FED3 Da
 
 
 def find_night_index(hourly_labels:list):
+    """Find pairs of indices that is between 7 pm and 7 am
+
+    Args:
+        hourly_labels (list): list of times in format of 'hour:minute'
+
+    Returns:
+        list: list contains pairs of indices in the night
+    """
     intervals = []
     in_interval = False
     interval_start_index = None
@@ -140,7 +162,17 @@ def find_night_index(hourly_labels:list):
     return intervals
 
 
-def graph_instant_acc(data, bhv, num, lr_time):
+def graph_instant_acc(data:pd.DataFrame, bhv:object, num:str, lr_time:str):
+    """PLot instant accuracy
+   
+    Plot bar graph with instant accuracy calculate from function instant_acc.
+
+    Args:
+        data (pd.DataFrame): data from instant_acc
+        bhv (str): group number
+        num (str): mouse number
+        lr_time (str): time in string of first time we get 80% accuracy for two hours
+    """
     plt.figure(figsize=(13, 7), dpi=90)
 
     ax = sns.barplot(x=data['Time'], y=data['Accuracy'], color="skyblue", width=0.6, label='Accuracy')
@@ -151,10 +183,10 @@ def graph_instant_acc(data, bhv, num, lr_time):
     hourly_positions = [pos for pos, label in zip(xtick_positions, data['Time']) if label.minute == 0]
     ax.set_xticks(hourly_positions)  # Set the tick positions to match the hourly intervals
     ax.set_xticklabels(hourly_labels, rotation=45, horizontalalignment='right')  # Set the tick labels to hourly format
-    
+
     # Locate the x-coordinates for the specified times
     dark = find_night_index(hourly_labels)
-    
+
     for idx, each in enumerate(dark):
         if idx == 0:
             ax.axvspan(each[0], each[1], color='grey', alpha=0.4, label='Night')
@@ -165,6 +197,7 @@ def graph_instant_acc(data, bhv, num, lr_time):
         lr_time = lr_time.strftime('%H:%M')
         i = hourly_positions[hourly_labels.index(lr_time)]
         plt.axvline(i, color='red', label='1st Learned')
+
     plt.xlabel('Time')
     plt.ylabel('Accuracy (%)')
     if bhv == None:
@@ -177,7 +210,9 @@ def graph_instant_acc(data, bhv, num, lr_time):
 
 def time_high_acc(grouped_data: pd.DataFrame):
     """
-    return 1st time we have 2 continuous hours with >=80% accuracy
+    return 1st time we have 2 continuous hours with >=80% accuracy and time taken 
+    to reach this time (1st time 80% - start time)
+    If there is no stamp achieved two continuous >=80% accuracy, return None for both
     """ 
     first_time = None
     res = False
@@ -193,14 +228,24 @@ def time_high_acc(grouped_data: pd.DataFrame):
 
 
 def graph_avg_corr_rate(ctrl:list, exp:list, width=0.4, exp_group_name=None):
+    """
+    Graph average correct rate
+
+    Args:
+        ctrl (list): data of control group
+        exp (list): data of experiment group
+        width (float): width of plotted bars
+        exp_group_name (str, Optional): name of the experiment group, name with treatments usually.
+
+    """
     ctrl_mean = np.mean(ctrl)
     cask_mean = np.mean(exp)
     ctrl_err = np.std(ctrl) / np.sqrt(len(ctrl))
     cask_err = np.std(exp) / np.sqrt(len(exp))
-    
+
     exp_name = 'Experiment' if exp_group_name==None else exp_group_name
     groups = ['Control', exp_name]
-    
+
     plt.figure(figsize=(7, 7))
     plt.bar([1, 2], [ctrl_mean, cask_mean], yerr=[ctrl_err, cask_err], capsize=12, tick_label=groups, 
             width=width, color=['lightblue', 'yellow'], alpha=0.8, zorder=1, label=['Control', 'CASK'])
@@ -219,6 +264,17 @@ def graph_avg_corr_rate(ctrl:list, exp:list, width=0.4, exp_group_name=None):
     
     
 def count_error_rate(data: pd.DataFrame, overall_accuracy=False) -> tuple:
+    """Find error rate in a data
+
+    Find error rate in left active and right active period as well as overall error rate
+    
+    Args:
+        data (pd.DataFrame): data cleaned from csv file
+        overall_accuracy (bool, optional): whether calculate overall accuracy. Defaults to False.
+
+    Returns:
+        tuple: left error rate, right error rate, (overall error rate)
+    """
     error_R = 0
     error_L = 0
     total_R = 0
@@ -252,8 +308,19 @@ def count_error_rate(data: pd.DataFrame, overall_accuracy=False) -> tuple:
     
     
 def draw_left_right_error(left_rate:list, right_rate:list, groups:list, 
-                          bar_width=0.2, err_width=12, dpi=100, verbose=False):
-    # Calculate averages and standard deviation
+                          bar_width=0.2, err_width=12, dpi=100, verbose=True):
+    """Draw left and right error rate by experiment groups
+
+    Args:
+        left_rate (list): error rate in left active periods
+        right_rate (list): error rate in right active periods
+        groups (list): group names for two groups
+        bar_width (float, optional): bar width of bar plot. Defaults to 0.2.
+        err_width (int, optional): error bar width onthe bar. Defaults to 12.
+        dpi (int, optional): dot per inch, higher dpi gives images with higher resolution. Defaults to 100.
+        verbose (bool, optional): whether printing out information used in plotting. Defaults to False.
+    """
+    # Calculate averages and standard error
     left_averages = [np.mean(sublist) for sublist in left_rate]
     right_averages = [np.mean(sublist) for sublist in right_rate]
     left_std = [np.std(data, ddof=1) / np.sqrt(len(data)) for data in left_rate]
@@ -269,9 +336,10 @@ def draw_left_right_error(left_rate:list, right_rate:list, groups:list,
     fig, ax = plt.subplots(dpi=dpi)
     fig.set_size_inches(12, 7)
 
+    # graph one bar and scatters
     ax.bar(x[0] - bar_width/2, left_averages[0], bar_width, label='Ctrl Left Mean',
                     color='blue', alpha=0.6, yerr=left_std[0], capsize=err_width, zorder=1)
-    x_values = np.full(len(left_rate[0]), x[0] - bar_width/2)
+    x_values = np.full(len(left_rate[0]), x[0] - bar_width/2) # fix all y values with one x value to be vertical along the bar
     ax.scatter(x_values, left_rate[0], marker='o', zorder=2,
             color='#1405eb', label='Ctrl Left')
 
@@ -301,15 +369,28 @@ def draw_left_right_error(left_rate:list, right_rate:list, groups:list,
 
     ax.legend()
     plt.show()
-    
+
     
 def draw_mean_error_rate(ctrl:list, exp:list, groups:list, dpi=100, bar_width=0.3, err_width=12, verbose=True):
+    """Draw overall error rate by experiment groups
+
+    Args:
+        ctrl (list): error rate in control group
+        exp (list): error rate in experiment group
+        groups (list): group names for two groups
+        bar_width (float, optional): bar width of bar plot. Defaults to 0.2.
+        err_width (int, optional): error bar width onthe bar. Defaults to 12.
+        dpi (int, optional): dot per inch, higher dpi gives images with higher resolution. Defaults to 100.
+        verbose (bool, optional): whether printing out information used in plotting. Defaults to False.
+    """
     ctrl_averages = np.mean(ctrl)
     exp_averages = np.mean(exp)
     ctrl_std = np.std(ctrl, ddof=1)
     exp_std = np.std(exp, ddof=1)
     
     if verbose:
+        print(f'{groups[0]} Size: {len(ctrl)}')
+        print(f'{groups[1]} Size: {len(exp)}')
         print(f'{groups[0]} Average: {ctrl_averages}')
         print(f'{groups[1]} Average: {exp_averages}')
         print(f'{groups[0]} Standard Deviation: {ctrl_std}')

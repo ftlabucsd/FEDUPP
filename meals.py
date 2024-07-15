@@ -10,6 +10,14 @@ plt.rcParams['figure.figsize'] = (20, 6)
 
 
 def pellet_flip(data: pd.DataFrame) -> pd.DataFrame:
+    """return a dataframe with 10-min interval and pellet count in this interval
+
+    Args:
+        data (pd.DataFrame): raw dataframe processed with pipeline
+
+    Returns:
+        pd.DataFrame: data with 10-min interval and pellet count
+    """
     data = data.set_index('Time')
     grouped_data = data[data['Event'] == 'Pellet'].resample('10min').size().reset_index()
     grouped_data.columns = ['Interval_Start', 'Pellet_Count']
@@ -18,6 +26,14 @@ def pellet_flip(data: pd.DataFrame) -> pd.DataFrame:
 
 
 def average_pellet(group: pd.DataFrame) -> float:
+    """return average hour pellet count in a session
+
+    Args:
+        group (pd.DataFrame): data processed by pellet flip
+
+    Returns:
+        float: average pellet count
+    """
     total_hr = (group['Interval_Start'].max()-group['Interval_Start'].min()).total_seconds() / 3600
     total_pellet = group['Pellet_Count'].sum()
     return round(total_pellet / total_hr, 3)
@@ -98,7 +114,7 @@ def find_meals(data: pd.DataFrame) -> list:
     return meal_list
 
 
-def graphing_cum_count(data: pd.DataFrame, meal: list, bhv: int, num: int, flip=False):
+def graphing_cum_count(data: pd.DataFrame, meal: list, bhv, num, flip=False):
     """
     graph the cumulative count and cumulative percentage of pellet consumption
     use two axis and mark meals on the graph
@@ -141,6 +157,14 @@ def graphing_cum_count(data: pd.DataFrame, meal: list, bhv: int, num: int, flip=
 
 
 def experiment_duration(data: pd.DataFrame):
+    """Return the duration of the experiment in unit of days
+
+    Args:
+        data (pd.DataFrame): behavior data
+
+    Returns:
+        float: durations
+    """
     data['Time'] = pd.to_datetime(data['Time'])
     duration = data.tail(1)['Time'].values[0] - data.head(1)['Time'].values[0]
     duration_seconds = duration / np.timedelta64(1, 's')
@@ -155,7 +179,17 @@ def calculate_deviation(grouped_data: pd.DataFrame) -> float:
     return sum(deviation) / len(frequency)
 
 
-def inactive_meal(meals: list) -> float:
+def active_meal(meals: list) -> float:
+    """Find meals in the active period of mice (7pm-7am)
+    If the start of the meal is in the active period, we count
+    it as one
+
+    Args:
+        meals (list): list of meals time intervals
+
+    Returns:
+        float: percentage of meals in the active state
+    """
     if len(meals) == 0:
         return 0
     cnt = 0
@@ -166,6 +200,13 @@ def inactive_meal(meals: list) -> float:
 
 
 def graph_average_pellet(ctrl_pellet_avg:list, exp_pellet_avg:list, exp_name=None):
+    """Plot bar graphs of average pellet for control and experiment groups
+
+    Args:
+        ctrl_pellet_avg (list): control data
+        exp_pellet_avg (list): experiment data
+        exp_name (_type_, optional): Name of the experiment group. Defaults to None.
+    """
     exp_name = 'Experiment' if exp_name == None else exp_name
     
     # Create DataFrames for each group

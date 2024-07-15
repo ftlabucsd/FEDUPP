@@ -41,11 +41,6 @@ def find_condition(root:str, fr1:bool):
     return files       
     
 
-
-contigency_flip_ctrl = list_files(root='/home/ftlab/Desktop/For_Andy/behavior data integrated/CASK/reversal/ctrl', direct_access=False)
-
-contigency_flip_cask = list_files(root='/home/ftlab/Desktop/For_Andy/behavior data integrated/CASK/reversal/cask', direct_access=False)
-
 fr1_ctrl_sheet = [
     'B3.M1','B3.M2','B3.M3','B3.M4',
     'B5.M1','B5.M2','B5.M3','B5.M4',
@@ -58,6 +53,11 @@ fr1_cask_sheet = [
     'B8.M1', 'B8.M2', 'B8.M3'
 ]
 
+
+contigency_flip_ctrl = list_files(root='/home/ftlab/Desktop/For_Andy/behavior data integrated/CASK/reversal/ctrl', direct_access=False)
+contigency_flip_cask = list_files(root='/home/ftlab/Desktop/For_Andy/behavior data integrated/CASK/reversal/cask', direct_access=False)
+
+
 fr1_cask_csvs = list_files(root='/home/ftlab/Desktop/For_Andy/behavior data integrated/CASK/FR1/cask', direct_access=False)
 
 fr1_ivsa = find_condition(root='/home/ftlab/Desktop/For_Andy/behavior data integrated/CD1 IVSA/', fr1=True)
@@ -68,3 +68,20 @@ reversal_fent = list_files(root='/home/ftlab/Desktop/For_Andy/behavior data inte
 
 fr1_veh = list_files(root='/home/ftlab/Desktop/For_Andy/behavior data integrated/mPFC/Vehicle Tx/FR1', direct_access=True)
 reversal_veh = list_files(root='/home/ftlab/Desktop/For_Andy/behavior data integrated/mPFC/Vehicle Tx/Reversal', direct_access=True)
+
+fr1_ivsa_ctrl = []
+fr1_ivsa_exp = []
+reversal_ivsa_ctrl = []
+reversal_ivsa_exp = []
+
+for i in fr1_ivsa:
+    if i.split('/')[-3][:2] in ['41', '43', '44', '45', '50', '51', '52', '53']:
+        fr1_ivsa_ctrl.append(i)
+    else:
+        fr1_ivsa_exp.append(i)
+
+for i in reversal_ivsa:
+    if i.split('/')[-3][:2] in ['41', '43', '44', '45', '50', '51', '52', '53']:
+        fr1_ivsa_ctrl.append(i)
+    else:
+        fr1_ivsa_exp.append(i)

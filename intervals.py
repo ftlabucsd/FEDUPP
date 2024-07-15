@@ -6,6 +6,14 @@ from tools import get_bhv_num
 
 
 def count_interval(data: pd.DataFrame) -> list:
+    """Get intervals in minutes between each two actions in a list
+
+    Args:
+        data (pd.DataFrame): behavior data
+
+    Returns:
+        list: list of intervals
+    """
     intervals = []
     
     for i in range(1, len(data)):
@@ -18,40 +26,37 @@ def count_interval(data: pd.DataFrame) -> list:
     return intervals
 
 
-def clean_and_interval(data: pd.DataFrame) -> pd.DataFrame:
+def clean_and_interval(path: str) -> pd.DataFrame:
     """Add interval column to the data
 
     Interval column means the time interval between current action and previous action
     in terms of minutes
     
     Args:
-        data (pd.DataFrame): _description_
+        data (pd.DataFrame): raw readed data
 
     Returns:
-        pd.DataFrame: _description_
+        pd.DataFrame: data with interval column
     """
+    data = pd.read_csv(path)
     data = data[['MM:DD:YYYY hh:mm:ss', 'Event']].rename(columns={'MM:DD:YYYY hh:mm:ss' : 'Time'})
     data = data[data['Event'] == 'Pellet'].reset_index().drop('index', axis='columns')
     data['Time'] = pd.to_datetime(data['Time'])
+    
+    # calculate time
     data['Interval'] = data['Time'].diff().fillna(pd.Timedelta(seconds=0))
     data['Interval'] = data['Interval'].dt.total_seconds() / 60
     return data
 
 
-# def get_bhv_num(path: str) -> tuple:
-#     branches = path.split(sep='/')
-    
-#     num = branches[2][1]
-#     bhv = branches[1][4]
-
-#     return bhv, num
-
-
 def graph_pellet_interval(path: str):
-    data = pd.read_csv(path)
-    data = clean_and_interval(data)
+    """Graph Intervals of actions with respect to time
+
+    Args:
+        path (str): filepath of csv
+    """
+    data = clean_and_interval(path)
     
-    info = get_bhv_num(path)
     plt.figure(figsize=(15, 5))
 
     sns.set_palette('bright')
@@ -59,6 +64,7 @@ def graph_pellet_interval(path: str):
 
     sns.lineplot(data=data, x='Time', y='Interval', alpha=0.8)
 
+    info = get_bhv_num(path)
     if len(info) == 2:
         plt.title(f'Interval Between Pellets for Group {info[0]} Mouse {info[1]}', fontsize=18)
     else:
@@ -69,16 +75,16 @@ def graph_pellet_interval(path: str):
     plt.show()
     
 
-def perform_T_test(ctrl:list, exp:list, test_side:str, alpha=0.05, paired=False):
+def perform_T_test(ctrl:list, exp:list, test_side='two-sided', alpha=0.05, paired=False):
     """Perform T tests on control and experiment groups
 
     Args:
         ctrl (list): data from control group
         exp (list): data from experiment group
         test_side (str): the alternative hypothesis 
-                two-sided -> not equal
-                greater -> exp mean > ctrl mean
-                less -> exp mean < ctrl mean
+                two-sided: not equal
+                greater: exp mean > ctrl mean
+                less: exp mean < ctrl mean
         alpha (float, optional): significance level of the test. Defaults to 0.05.
         paired (bool): if true, it means two groups are paired data, while false means 
             two independent sets. Defaults to 
@@ -102,16 +108,16 @@ def perform_T_test(ctrl:list, exp:list, test_side:str, alpha=0.05, paired=False)
         print("There is no significant difference between the two groups.")
 
 
-def MannWhitneyUTest(ctrl, exp, test_side:str, alpha=0.05):
-    """Perform T tests on control and experiment groups
+def MannWhitneyUTest(ctrl, exp, test_side='two-sided', alpha=0.05):
+    """Perform Mann-Whitney U rank test on control and experiment groups
 
     Args:
         ctrl (list): data from control group
         exp (list): data from experiment group
         test_side (str): the alternative hypothesis 
-                two-sided -> not equal
-                greater -> exp mean > ctrl mean
-                less -> exp mean < ctrl mean
+                two-sided: not equal
+                greater: exp mean > ctrl mean
+                less: exp mean < ctrl mean
         alpha (float, optional): significance level of the test. Defaults to 0.05.
         paired (bool): if true, it means two groups are paired data, while false means 
             two independent sets. Defaults to 
