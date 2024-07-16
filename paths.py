@@ -82,6 +82,6 @@ for i in fr1_ivsa:
 
 for i in reversal_ivsa:
     if i.split('/')[-3][:2] in ['41', '43', '44', '45', '50', '51', '52', '53']:
-        fr1_ivsa_ctrl.append(i)
+        reversal_ivsa_ctrl.append(i)
     else:
-        fr1_ivsa_exp.append(i)
+        reversal_ivsa_exp.append(i)
