@@ -7,7 +7,7 @@ import numpy as np
 from datetime import datetime
 
 
-def graph_cumulative_acc(mice: list, group: int):
+def graph_cumulative_acc(mice: list, group=None):
     """
     Graph the line plot for cumulative accuracy of certain group of mice
 
@@ -22,7 +22,11 @@ def graph_cumulative_acc(mice: list, group: int):
         sns.lineplot(data=each, x='Time', y='Percent_Correct', label=f'M{cnt}')
         cnt += 1
     plt.grid()
-    plt.title(f'Changes in Correction Rate for Control Group {group}', fontsize=24)
+    if isinstance(group, str):
+        plt.title(f'Changes in Correction Rate for {group} Group', fontsize=24)
+    elif isinstance(group, int):
+        plt.title(f'Changes in Correction Rate for Group {group}', fontsize=24)
+
     plt.xlabel('Time', fontsize=16)
     plt.ylabel('Correct Rate', fontsize=16)
     plt.yticks(range(0, 110, 10))

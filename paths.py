@@ -7,14 +7,18 @@ def list_files(root:str, direct_access=True):
     if direct_access:
         files = os.listdir(root)
         try:
-            files.remove('.DS_Store')
+            for item in files:
+                if item.startswith('.'):
+                    files.remove(item)
         except:
             pass      
         file_paths = [os.path.join(root, file) for file in files]
     else:
-        for root, dirs, files in os.walk(root):
+        for root, _, files in os.walk(root):
             try:
-                files.remove('.DS_Store')
+                for item in files:
+                    if item.startswith('.'):
+                        files.remove(item)            
             except:
                 pass
             

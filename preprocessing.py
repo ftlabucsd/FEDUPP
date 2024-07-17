@@ -92,30 +92,5 @@ def calculate_accuracy_by_row(df:pd.DataFrame, convert_large=True):
         df['Percent_Correct'] *= 100
         
     return df
-
-
-def prep_pellet_count(path: str):
-    """when combining two csv files, making the pellet count column increasing
-    instead of go to 0 for the new file.
-
-    Args:
-        path (str): path of combined csv files
-    """
-    df = pd.read_csv(path) 
-    base = 0
-    reach_base = False
-    prev = -1
-
-    for idx, row in df.iterrows():
-        if reach_base or prev > row['Pellet_Count']:
-            if not reach_base:
-                reach_base = True
-                base = prev
-            df.at[idx, 'Pellet_Count'] = row['Pellet_Count'] + base
-        else:
-            prev = row['Pellet_Count']
-
-    df.to_csv(path[:-4]+'_1.csv', index=False)
-    # return df
         
     

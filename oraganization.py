@@ -83,6 +83,41 @@ def fr1_rev_split(directory):
                 print(f"Moved {filepath} to {new_path}")
  
 
+def prep_pellet_count(path: str):
+    """when combining two csv files, making the pellet count column increasing
+    instead of go to 0 for the new file.
+
+    Args:
+        path (str): path of combined csv files
+    """
+    df = pd.read_csv(path) 
+    base_pellet = 0
+    base_left = 0
+    base_right = 0
+    reach_base = False
+    prev_pellet = -1
+    prev_left = -1
+    prev_right = -1
+
+
+    for idx, row in df.iterrows():
+        if reach_base or prev_pellet > row['Pellet_Count']:
+            if not reach_base:
+                reach_base = True
+                base_pellet = prev_pellet
+                base_left = prev_left
+                base_right = prev_right
+            df.at[idx, 'Pellet_Count'] = row['Pellet_Count'] + base_pellet
+            df.at[idx, 'Left_Poke_Count'] = row['Left_Poke_Count'] + base_left
+            df.at[idx, 'Right_Poke_Count'] = row['Right_Poke_Count'] + base_right
+
+        else:
+            prev_pellet = row['Pellet_Count']
+            prev_right = row['Right_Poke_Count']
+            prev_left = row['Left_Poke_Count']
+    print(base_left, base_right ,base_pellet)
+    df.to_csv(path[:-4]+'_1.CSV', index=False)
+    # return df
     
     
 
@@ -90,10 +125,14 @@ def fr1_rev_split(directory):
 # organize_files(root_folder)
 
 
-file1 = '/home/ftlab/Desktop/For_Andy/behavior data integrated/mPFC/Fentanyl Tx/Reversal/FED000_042924_01.CSV'
-file2 = '/home/ftlab/Desktop/For_Andy/behavior data integrated/mPFC/Fentanyl Tx/Reversal/FED000_043024_00.CSV'
+file1 = '/home/ftlab/Desktop/For_Andy/behavior data integrated/mPFC/Fentanyl Tx/Mouse_2/FR1/FED000_042924_01.CSV'
+file2 = '/home/ftlab/Desktop/For_Andy/behavior data integrated/mPFC/Fentanyl Tx/Mouse_2/FR1FED000_043024_00.CSV'
 file3 = '/home/ftlab/Desktop/For_Andy/behavior data integrated/mPFC/Vehicle Tx/Mouse_6/Contingency_Flip/FED000_050124_01.CSV'
-output = '/home/ftlab/Desktop/For_Andy/behavior data integrated/mPFC/Fentanyl Tx/Reversal/M3.CSV'
-concatenate_csv_files([file1, file2], output)
 
+root = '/home/ftlab/Desktop/For_Andy/mPFC/Vehicle Tx/Mouse_10/FR1/'
+output = '/home/ftlab/Desktop/For_Andy/behavior data integrated/mPFC/Vehicle Tx/FR1/M10.CSV'
+files = [os.path.join(root, each) for each in os.listdir(root)]
+# concatenate_csv_files(files, output)
+# prep_pellet_count(output)
+# prep_pellet_count('/home/ftlab/Desktop/For_Andy/behavior data integrated/mPFC/Vehicle Tx/FR1/M10_1.CSV')
 # fr1_rev_split('/home/ftlab/Desktop/For_Andy/behavior data integrated/CD1 IVSA')
