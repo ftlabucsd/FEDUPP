@@ -52,8 +52,9 @@ def read_csv_clean(path:str, remove_trivial=True, cumulative_accuracy=False, con
     df = pd.read_csv(path)
     
     if 'Time' not in df.columns:
-        df = df[['MM:DD:YYYY hh:mm:ss', 'Event', 'Active_Poke', 'Pellet_Count']].rename(columns={
-            'MM:DD:YYYY hh:mm:ss': 'Time'}).dropna()
+        df = df[['MM:DD:YYYY hh:mm:ss', 'Event', 'Active_Poke', 'Pellet_Count', 
+                 'Left_Poke_Count', 'Right_Poke_Count']].rename(columns={
+                'MM:DD:YYYY hh:mm:ss': 'Time'}).dropna()
         
         df = df.replace({'LeftWithPellet': 'Left', 'LeftDuringDispense': 'Left',
                         'RightWithPellet': 'Right', 'RightDuringDispense': 'Right'})
