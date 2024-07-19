@@ -83,7 +83,7 @@ def calculate_accuracy_by_row(df:pd.DataFrame, convert_large=True):
     """
     if df['Active_Poke'].nunique() > 1:
         raise RuntimeError("Cumulative Accuracy only valids for FR1 data")\
-            
+    
     active_poke = df['Active_Poke'].loc[0]
     df['Percent_Correct'] = df[f'{active_poke}_Poke_Count'] / (df['Left_Poke_Count']+df['Right_Poke_Count'])
     

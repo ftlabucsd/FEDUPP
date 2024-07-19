@@ -198,34 +198,85 @@ def active_meal(meals: list) -> float:
             cnt += 1
     return round(cnt/len(meals), 4) 
 
-
-def graph_average_pellet(ctrl_pellet_avg:list, exp_pellet_avg:list, exp_name=None):
+def graph_average_pellet(ctrl:list, exp:list, bar_width=0.2, err_width=14, dpi=100, exp_name=None, verbose=True):
     """Plot bar graphs of average pellet for control and experiment groups
 
     Args:
         ctrl_pellet_avg (list): control data
         exp_pellet_avg (list): experiment data
         exp_name (_type_, optional): Name of the experiment group. Defaults to None.
+        bar_width (float, optional): bar width of bar plot. Defaults to 0.2.
+        err_width (int, optional): error bar width onthe bar. Defaults to 12.
+        dpi (int, optional): dot per inch, higher dpi gives images with higher resolution. Defaults to 100.
+        verbose (bool, optional): whether printing out information used in plotting. Defaults to False.
     """
+    ctrl_averages = np.mean(ctrl)
+    exp_averages = np.mean(exp)
+    ctrl_std = np.std(ctrl, ddof=1)
+    exp_std = np.std(exp, ddof=1)
+    
     exp_name = 'Experiment' if exp_name == None else exp_name
     
-    # Create DataFrames for each group
-    data_ctrl = pd.DataFrame({'Group': 'Control', 'Value': ctrl_pellet_avg})
-    data_cask = pd.DataFrame({'Group': exp_name, 'Value': exp_pellet_avg})
+    if verbose:
+        print(f'Control Size: {len(ctrl)}')
+        print(f'{exp_name} Size: {len(exp)}')
+        print(f'Control Average: {ctrl_averages}')
+        print(f'{exp_name} Average: {exp_averages}')
+        print(f'Control Standard Deviation: {ctrl_std}')
+        print(f'{exp_name} Standard Deviation: {exp_std}')
 
-    # Concatenate the two DataFrames
-    data = pd.concat([data_ctrl, data_cask])
+    fig, ax = plt.subplots(dpi=dpi)
+    fig.set_size_inches(6, 6)
+    x = [0.5, 1]
+    
+    ax.bar(x=x[0], height=ctrl_averages, width=bar_width, color='blue', label='Control',
+           zorder=1, alpha=0.6, yerr=ctrl_std, capsize=err_width)
+    
+    x_values = np.full(len(ctrl), x[0])
+    ax.scatter(x_values, ctrl, marker='o', zorder=2, color='#1405eb')
+    
+    ax.bar(x=x[1], height=exp_averages, width=bar_width, color='orange', label=exp_name,
+           zorder=1, alpha=0.6, yerr=exp_std, capsize=err_width)
+    x_values = np.full(len(exp), x[1])
+    ax.scatter(x_values, exp, marker='o', zorder=2, color='#f28211')
 
-    plt.figure(figsize=(8, 6))
-    sns.set(style="whitegrid")
+    ax.set_xlabel('Groups', fontsize=14)
+    ax.set_ylabel('Averages', fontsize=14)
+    ax.set_title(f'Average Error Rate of in Reversal Task', fontsize=20)
+    ax.set_xticks(x)
+    ax.set_xticklabels(['Control', exp_name])
 
-    # Create the bar plot with error bars
-    sns.barplot(x="Group", y="Value", data=data, palette="pastel",
-                    errorbar="sd", capsize=0.2, width=0.5, errcolor='0.4')
-
-    plt.title('Average Pellets Per Hour for FR1', fontsize=16)
-    plt.xlabel('Groups')
-    plt.ylabel('Average Pellets')
+    ax.legend()
     plt.show()
+
+
+# def graph_average_pellet(ctrl_pellet_avg:list, exp_pellet_avg:list, exp_name=None):
+#     """Plot bar graphs of average pellet for control and experiment groups
+
+#     Args:
+#         ctrl_pellet_avg (list): control data
+#         exp_pellet_avg (list): experiment data
+#         exp_name (_type_, optional): Name of the experiment group. Defaults to None.
+#     """
+#     exp_name = 'Experiment' if exp_name == None else exp_name
+    
+#     # Create DataFrames for each group
+#     data_ctrl = pd.DataFrame({'Group': 'Control', 'Value': ctrl_pellet_avg})
+#     data_cask = pd.DataFrame({'Group': exp_name, 'Value': exp_pellet_avg})
+
+#     # Concatenate the two DataFrames
+#     data = pd.concat([data_ctrl, data_cask])
+
+#     plt.figure(figsize=(8, 6))
+#     sns.set(style="whitegrid")
+
+#     # Create the bar plot with error bars
+#     sns.barplot(x="Group", y="Value", data=data, palette="pastel",
+#                     errorbar="sd", capsize=0.2, width=0.5, errcolor='0.4')
+
+#     plt.title('Average Pellets Per Hour for FR1', fontsize=16)
+#     plt.xlabel('Groups')
+#     plt.ylabel('Average Pellets')
+#     plt.show()
 
     

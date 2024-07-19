@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 import tools as tl
 import seaborn as sns
+import numpy as np
 
 colors = {'Left': 'red', 'Right': 'blue', 'Pellet': 'green'}
 
@@ -136,6 +137,15 @@ def get_transition_info(blocks: list) -> pd.DataFrame:
 
 
 def graph_tranition_stats(data_stats: pd.DataFrame, blocks: list, path: str):
+    """Graph Statistics of each block in transition
+    
+    Visualize proportion of each transition, the accuracy and active poke of each block
+
+    Args:
+        data_stats (pd.DataFrame): calculated statistics from the data
+        blocks (list): list of pd.DataFrame that is splitted from the complete data
+        path (str): path of original file path to get display info
+    """
     fig, ax = plt.subplots(figsize=(22, 12))
 
     ax.plot(data_stats['Block_Index'], data_stats['Left_to_Left'],
@@ -201,13 +211,22 @@ def graph_tranition_stats(data_stats: pd.DataFrame, blocks: list, path: str):
     plt.grid(alpha=0.5, linestyle='--')
     plt.show()
 
-def graph_diff(diff: pd.DataFrame):
-    plt.figure(figsize=(22, 12))
-    sns.lineplot(data=diff, x='Block_Index', y='Difference')
-    plt.xticks(range(1, len(diff['Block_Index']) + 1))
-    plt.title('Difference of the Left and Right Sticking', fontsize=18)
-    plt.grid()
-    plt.show()
+
+def block_cumulative_acc(blocks:list, normalize=False) -> list:
+    acc_by_block = [] # each element is [block length, block accuracy]
+    acc_count_by_block = []
+    prev = 0
+    
+    for block in blocks:
+        ans = block['Active_Poke'].to_numpy()
+        val = block['Event']
+        block_corr = np.sum(ans == val)
+        if normalize:
+            acc_count_by_block.append((prev+block_corr))
+        else:
+            acc_count_by_block.append(prev+block_corr)
+        prev += block_corr
+    return acc_count_by_block
 
 
 def get_difference_key(data_stats: pd.DataFrame) -> (pd.DataFrame, bool):
@@ -224,6 +243,7 @@ def learning_score_grad(diff: pd.DataFrame, left_start = True) -> float:
     for idx, row in diff.iterrows():
         if idx == 0: continue
         grad = row['Difference'] - diff.loc[idx - 1]['Difference']
+        print(grad)
         if curr_expect:
             ans += grad
         else:
