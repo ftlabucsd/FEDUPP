@@ -118,6 +118,7 @@ def prep_pellet_count(path: str):
     print(base_left, base_right ,base_pellet)
     df.to_csv(path[:-4]+'_1.CSV', index=False)
     # return df
+
     
     
 
@@ -134,5 +135,5 @@ output = '/home/ftlab/Desktop/For_Andy/behavior data integrated/mPFC/Vehicle Tx/
 files = [os.path.join(root, each) for each in os.listdir(root)]
 # concatenate_csv_files(files, output)
 # prep_pellet_count(output)
-# prep_pellet_count('/home/ftlab/Desktop/For_Andy/behavior data integrated/mPFC/Vehicle Tx/FR1/M10_1.CSV')
+prep_pellet_count('/home/ftlab/Desktop/For_Andy/behavior data integrated/mPFC/Vehicle Tx/FR1/M10.CSV')
 # fr1_rev_split('/home/ftlab/Desktop/For_Andy/behavior data integrated/CD1 IVSA')
