@@ -242,7 +242,7 @@ def graph_average_pellet(ctrl:list, exp:list, bar_width=0.2, err_width=14, dpi=1
 
     ax.set_xlabel('Groups', fontsize=14)
     ax.set_ylabel('Averages', fontsize=14)
-    ax.set_title(f'Average Error Rate of in Reversal Task', fontsize=20)
+    ax.set_title(f'Average Pellet of Control and {exp_name} Groups', fontsize=20)
     ax.set_xticks(x)
     ax.set_xticklabels(['Control', exp_name])
 

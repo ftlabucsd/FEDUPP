@@ -17,7 +17,7 @@ def get_bhv_num(path_or_sheet: str) -> tuple:
     if len(path_or_sheet) < 8:
         bhv = path_or_sheet[1]
         num = path_or_sheet[-1]
-        return bhv, num
+        return [bhv, num]
 
     elif 'CASK' in path_or_sheet:
         branches = path_or_sheet.split(sep='/')
@@ -25,18 +25,18 @@ def get_bhv_num(path_or_sheet: str) -> tuple:
         dot = branches[-1].index('.')
         num = branches[-1][M+1:dot]
         bhv = branches[-1][1:M]
-        return bhv, num
+        return [bhv, num]
 
     elif 'IVSA' in path_or_sheet:
         branches = path_or_sheet.split(sep='/')
         num = branches[-3][:2]
-        return num
+        return [num]
     
     elif 'mPFC' in path_or_sheet:
         branches = path_or_sheet.split(sep='/')
         dot = branches[-1].index('.')
         num = branches[-1][1:dot]
-        return num
+        return [num]
 
 
 

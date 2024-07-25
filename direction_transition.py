@@ -203,7 +203,7 @@ def graph_tranition_stats(data_stats: pd.DataFrame, blocks: list, path: str):
     if len(info) == 2:
         plt.title(f'Probability of Transitions in Poke Choosing and Correct Rates in Group {info[0]} Mouse {info[1]}', fontsize=24)
     else:
-        plt.title(f'Probability of Transitions in Poke Choosing and Correct Rates of Mouse {info}', fontsize=24)
+        plt.title(f'Probability of Transitions in Poke Choosing and Correct Rates of Mouse {info[0]}', fontsize=24)
 
     plt.xticks(data_stats['Block_Index'])
     plt.yticks(range(0, 100, 20))
@@ -243,7 +243,6 @@ def learning_score_grad(diff: pd.DataFrame, left_start = True) -> float:
     for idx, row in diff.iterrows():
         if idx == 0: continue
         grad = row['Difference'] - diff.loc[idx - 1]['Difference']
-        print(grad)
         if curr_expect:
             ans += grad
         else:

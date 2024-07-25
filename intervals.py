@@ -68,7 +68,7 @@ def graph_pellet_interval(path: str):
     if len(info) == 2:
         plt.title(f'Interval Between Pellets for Group {info[0]} Mouse {info[1]}', fontsize=18)
     else:
-        plt.title(f'Interval Between Pellets for Mouse {info}', fontsize=18)
+        plt.title(f'Interval Between Pellets for Mouse {info[0]}', fontsize=18)
 
     plt.xlabel('Time')
     plt.ylabel('Interval (minutes)')

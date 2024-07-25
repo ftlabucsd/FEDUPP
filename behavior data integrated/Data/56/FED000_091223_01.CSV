@@ -1,0 +1,4 @@
+MM:DD:YYYY hh:mm:ss, Device_Number, Battery_Voltage, Motor_Turns, Session_Type, Event, Active_Poke, Left_Poke_Count, Right_Poke_Count, Pellet_Count, Retrieval_Time
+9/12/2023 17:00:37,0,4.07,0,1,Poke,Left,1,0,0,nan
+9/12/2023 17:00:43,0,4.14,2,1,Pellet,Left,1,0,1,1
+9/12/2023 17:00:45,0,4.09,0,1,Poke,Left,1,1,1,nan

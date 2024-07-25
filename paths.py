@@ -42,7 +42,21 @@ def find_condition(root:str, fr1:bool):
             condition_path = os.path.join(root, dir, condition)
             files.append(os.path.join(condition_path, os.listdir(condition_path)[0]))
             
-    return files       
+    return files 
+
+
+def remove_ivsa_bad_data(files:list, control:bool):
+    if control:
+        bad = ['43', '52', '45']
+    else:
+        bad = ['46', '49']
+    
+    ans = []
+    for file in files:
+        index = file.split('/')[-3][:2]
+        if index not in bad:
+            ans.append(file)
+    return ans
     
 
 fr1_ctrl_sheet = [
@@ -57,21 +71,23 @@ fr1_cask_sheet = [
     'B8.M1', 'B8.M2', 'B8.M3'
 ]
 
+# root = '/home/ftlab/Desktop/For_Andy'
+root = '/Users/yaomingyang/Desktop/FED3-data'
 
-contigency_flip_ctrl = list_files(root='/home/ftlab/Desktop/For_Andy/behavior data integrated/CASK/reversal/ctrl', direct_access=False)
-contigency_flip_cask = list_files(root='/home/ftlab/Desktop/For_Andy/behavior data integrated/CASK/reversal/cask', direct_access=False)
+contigency_flip_ctrl = list_files(root=f'{root}/behavior data integrated/CASK/reversal/ctrl', direct_access=False)
+contigency_flip_cask = list_files(root=f'{root}/behavior data integrated/CASK/reversal/cask', direct_access=False)
 
 
-fr1_cask_csvs = list_files(root='/home/ftlab/Desktop/For_Andy/behavior data integrated/CASK/FR1/cask', direct_access=False)
+fr1_cask_csvs = list_files(root=f'{root}/behavior data integrated/CASK/FR1/cask', direct_access=False)
 
-fr1_ivsa = find_condition(root='/home/ftlab/Desktop/For_Andy/behavior data integrated/CD1 IVSA/', fr1=True)
-reversal_ivsa = find_condition(root='/home/ftlab/Desktop/For_Andy/behavior data integrated/CD1 IVSA/', fr1=False)
+fr1_ivsa = find_condition(root=f'{root}/behavior data integrated/CD1 IVSA/', fr1=True)
+reversal_ivsa = find_condition(root=f'{root}/behavior data integrated/CD1 IVSA/', fr1=False)
 
-fr1_fent = list_files(root='/home/ftlab/Desktop/For_Andy/behavior data integrated/mPFC/Fentanyl Tx/FR1', direct_access=True)
-reversal_fent = list_files(root='/home/ftlab/Desktop/For_Andy/behavior data integrated/mPFC/Fentanyl Tx/Reversal', direct_access=True)
+fr1_fent = list_files(root=f'{root}/behavior data integrated/mPFC/Fentanyl Tx/FR1', direct_access=True)
+reversal_fent = list_files(root=f'{root}/behavior data integrated/mPFC/Fentanyl Tx/Reversal', direct_access=True)
 
-fr1_veh = list_files(root='/home/ftlab/Desktop/For_Andy/behavior data integrated/mPFC/Vehicle Tx/FR1', direct_access=True)
-reversal_veh = list_files(root='/home/ftlab/Desktop/For_Andy/behavior data integrated/mPFC/Vehicle Tx/Reversal', direct_access=True)
+fr1_veh = list_files(root=f'{root}/behavior data integrated/mPFC/Vehicle Tx/FR1', direct_access=True)
+reversal_veh = list_files(root=f'{root}/behavior data integrated/mPFC/Vehicle Tx/Reversal', direct_access=True)
 
 fr1_ivsa_ctrl = []
 fr1_ivsa_exp = []
@@ -89,3 +105,8 @@ for i in reversal_ivsa:
         reversal_ivsa_ctrl.append(i)
     else:
         reversal_ivsa_exp.append(i)
+
+fr1_ivsa_ctrl = remove_ivsa_bad_data(fr1_ivsa_ctrl, True)
+fr1_ivsa_exp = remove_ivsa_bad_data(fr1_ivsa_exp, False)
+reversal_ivsa_ctrl = remove_ivsa_bad_data(reversal_ivsa_ctrl, True)
+reversal_ivsa_exp = remove_ivsa_bad_data(reversal_ivsa_exp, False)
