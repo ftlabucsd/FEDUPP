@@ -126,14 +126,14 @@ def prep_pellet_count(path: str):
 # organize_files(root_folder)
 
 
-file1 = '/home/ftlab/Desktop/For_Andy/behavior data integrated/mPFC/Fentanyl Tx/Mouse_2/FR1/FED000_042924_01.CSV'
-file2 = '/home/ftlab/Desktop/For_Andy/behavior data integrated/mPFC/Fentanyl Tx/Mouse_2/FR1FED000_043024_00.CSV'
+file1 = '/Users/yaomingyang/Desktop/FED3-data/behavior data integrated/mPFC/Fentanyl Tx/FR1/FED000_042224_13.CSV'
+file2 = '/Users/yaomingyang/Desktop/FED3-data/behavior data integrated/mPFC/Fentanyl Tx/FR1/FED000_042824_00.CSV'
 file3 = '/home/ftlab/Desktop/For_Andy/behavior data integrated/mPFC/Vehicle Tx/Mouse_6/Contingency_Flip/FED000_050124_01.CSV'
 
-root = '/home/ftlab/Desktop/For_Andy/mPFC/Vehicle Tx/Mouse_10/FR1/'
-output = '/home/ftlab/Desktop/For_Andy/behavior data integrated/mPFC/Vehicle Tx/FR1/M10.CSV'
-files = [os.path.join(root, each) for each in os.listdir(root)]
-# concatenate_csv_files(files, output)
+root = '/home/ftlab/Desktop/For_Andy/mPFC/Fentanyl Tx/Mouse_10/FR1/'
+output = '/Users/yaomingyang/Desktop/FED3-data/behavior data integrated/mPFC/Fentanyl Tx/FR1/M2.CSV'
+files = [file1, file2]
+concatenate_csv_files(files, output)
 # prep_pellet_count(output)
-prep_pellet_count('/home/ftlab/Desktop/For_Andy/behavior data integrated/mPFC/Vehicle Tx/FR1/M10.CSV')
+prep_pellet_count('/Users/yaomingyang/Desktop/FED3-data/behavior data integrated/mPFC/Fentanyl Tx/FR1/M2.CSV')
 # fr1_rev_split('/home/ftlab/Desktop/For_Andy/behavior data integrated/CD1 IVSA')

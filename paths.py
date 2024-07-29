@@ -5,11 +5,12 @@ def list_files(root:str, direct_access=True):
     file_paths = []
     
     if direct_access:
-        files = os.listdir(root)
+        temp = os.listdir(root)
+        files = []
         try:
-            for item in files:
-                if item.startswith('.'):
-                    files.remove(item)
+            for item in temp:
+                if not item.startswith('.'):
+                    files.append(item)
         except:
             pass      
         file_paths = [os.path.join(root, file) for file in files]
@@ -40,16 +41,25 @@ def find_condition(root:str, fr1:bool):
         dir = os.path.join(root, dir)
         if os.path.isdir(dir):
             condition_path = os.path.join(root, dir, condition)
-            files.append(os.path.join(condition_path, os.listdir(condition_path)[0]))
-            
+            subs = os.listdir(condition_path)
+            for sub in subs:
+                if not sub.startswith('.'):
+                    files.append(os.path.join(condition_path, sub))
+
     return files 
 
 
-def remove_ivsa_bad_data(files:list, control:bool):
-    if control:
-        bad = ['43', '52', '45']
+def remove_ivsa_bad_data(files:list, control:bool, fr1:bool):
+    if fr1:
+        if control:
+            bad = ['43', '52', '45']
+        else:
+            bad = ['46', '49']
     else:
-        bad = ['46', '49']
+        if control:
+            bad = ['43', '52']
+        else:
+            return files
     
     ans = []
     for file in files:
@@ -106,7 +116,7 @@ for i in reversal_ivsa:
     else:
         reversal_ivsa_exp.append(i)
 
-fr1_ivsa_ctrl = remove_ivsa_bad_data(fr1_ivsa_ctrl, True)
-fr1_ivsa_exp = remove_ivsa_bad_data(fr1_ivsa_exp, False)
-reversal_ivsa_ctrl = remove_ivsa_bad_data(reversal_ivsa_ctrl, True)
-reversal_ivsa_exp = remove_ivsa_bad_data(reversal_ivsa_exp, False)
+fr1_ivsa_ctrl = remove_ivsa_bad_data(fr1_ivsa_ctrl, True, True)
+fr1_ivsa_exp = remove_ivsa_bad_data(fr1_ivsa_exp, False, True)
+reversal_ivsa_ctrl = remove_ivsa_bad_data(reversal_ivsa_ctrl, True, False)
+reversal_ivsa_exp = remove_ivsa_bad_data(reversal_ivsa_exp, False, False)

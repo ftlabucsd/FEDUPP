@@ -1,12 +1,14 @@
 import pandas as pd
 import numpy as np
-import ssm
 from sklearn.metrics import accuracy_score
 import seaborn as sns
 import matplotlib.pyplot as plt
 import sys
+
+import ssm
 sys.path.append('..')
 import meals as ml
+
 
 def model_training(path: str, num_states: int, obs_dim: int, num_categories: int,
                     max_iter: int, feat: list()) -> tuple:
