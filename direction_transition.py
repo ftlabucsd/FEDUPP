@@ -201,9 +201,9 @@ def graph_tranition_stats(data_stats: pd.DataFrame, blocks: list, path: str):
     
     info = tl.get_bhv_num(path)
     if len(info) == 2:
-        plt.title(f'Probability of Transitions in Poke Choosing and Correct Rates in Group {info[0]} Mouse {info[1]}', fontsize=24)
+        plt.title(f'Probability of Transitions in Poke Choosing and Accuracy in Group {info[0]} Mouse {info[1]}', fontsize=24)
     else:
-        plt.title(f'Probability of Transitions in Poke Choosing and Correct Rates of Mouse {info[0]}', fontsize=24)
+        plt.title(f'Probability of Transitions in Poke Choosing and Accuracy Rates of Mouse {info[0]}', fontsize=24)
 
     plt.xticks(data_stats['Block_Index'])
     plt.yticks(range(0, 100, 20))
@@ -212,20 +212,31 @@ def graph_tranition_stats(data_stats: pd.DataFrame, blocks: list, path: str):
     plt.show()
 
 
-def block_cumulative_acc(blocks:list, normalize=False) -> list:
+def block_cumulative_acc(blocks:list, normalize=False, grad=False) -> list:
     acc_by_block = [] # each element is [block length, block accuracy]
     acc_count_by_block = []
     prev = 0
+    total = 0
     
     for block in blocks:
         ans = block['Active_Poke'].to_numpy()
         val = block['Event']
+        total += len(ans)
         block_corr = np.sum(ans == val)
+
         if normalize:
-            acc_count_by_block.append((prev+block_corr))
+            acc_count_by_block.append((prev+block_corr)/total)
         else:
             acc_count_by_block.append(prev+block_corr)
+        
         prev += block_corr
+
+    if grad:
+        gradients = []
+        for i, item in enumerate(acc_count_by_block):
+            if i == 0: continue
+            gradients.append(item - acc_count_by_block[i-1])
+            return acc_count_by_block, gradients
     return acc_count_by_block
 
 
