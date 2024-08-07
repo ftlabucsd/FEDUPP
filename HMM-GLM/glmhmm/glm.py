@@ -11,8 +11,8 @@ import autograd.numpy as np
 from scipy import optimize
 from autograd import value_and_grad, hessian
 from warnings import simplefilter
-import glmhmm.observations as obs
-from glmhmm.utils import reshape_obs, replace_inputs
+import observations as obs
+from utils import reshape_obs, replace_inputs
 
 class GLM(object):
     

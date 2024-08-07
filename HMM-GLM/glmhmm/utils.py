@@ -332,10 +332,10 @@ def splitData(sessions,mouseIDs,testSize=0.2,seed=0):
     testSessionStartIxs = np.zeros(len(testSessionIxs)+1, dtype=int)
     count = 0
     for i in range(len(testSessionIxs)):
-    	testSessionStartIxs[i] = count
-    	sessLength = testSessionLengths[i]
-    	testTrialIxs[count:count+sessLength] = np.arange(testSessionIxs[i],testSessionIxs[i]+sessLength,1)
-    	count = count+sessLength
+        testSessionStartIxs[i] = count
+        sessLength = testSessionLengths[i]
+        testTrialIxs[count:count+sessLength] = np.arange(testSessionIxs[i],testSessionIxs[i]+sessLength,1)
+        count = count+sessLength
     testSessionStartIxs[-1] = count
 
     # get all the indices of the data points for the test set
@@ -343,10 +343,10 @@ def splitData(sessions,mouseIDs,testSize=0.2,seed=0):
     trainSessionStartIxs = np.zeros(len(trainSessionIxs)+1, dtype=int)
     count = 0
     for i in range(len(trainSessionIxs)):
-    	trainSessionStartIxs[i] = count
-    	sessLength = trainSessionLengths[i]
-    	trainTrialIxs[count:count+sessLength] = np.arange(trainSessionIxs[i],trainSessionIxs[i]+sessLength,1)
-    	count = count+sessLength
+        trainSessionStartIxs[i] = count
+        sessLength = trainSessionLengths[i]
+        trainTrialIxs[count:count+sessLength] = np.arange(trainSessionIxs[i],trainSessionIxs[i]+sessLength,1)
+        count = count+sessLength
     trainSessionStartIxs[-1] = count
 
     return trainTrialIxs, trainSessionStartIxs, testTrialIxs, testSessionStartIxs

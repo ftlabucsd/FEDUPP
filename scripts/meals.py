@@ -34,7 +34,7 @@ def average_pellet(group: pd.DataFrame) -> float:
     Returns:
         float: average pellet count
     """
-    total_hr = (group['Interval_Start'].max()-group['Interval_Start'].min()).total_seconds() / 3600
+    total_hr = 24*(group['Interval_Start'].max()-group['Interval_Start'].min()).total_seconds() / 3600
     total_pellet = group['Pellet_Count'].sum()
     return round(total_pellet / total_hr, 3)
 

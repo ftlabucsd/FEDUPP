@@ -9,10 +9,10 @@ Created on Tue Oct 12 20:50:03 2021
 import numpy as np
 import autograd.numpy as npa
 from autograd import hessian
-from glmhmm.hmm import HMM
-from glmhmm.init_params import init_transitions, init_states, init_weights
-from glmhmm import glm
-from glmhmm.utils import replace_inputs
+from hmm import HMM
+from init_params import init_transitions, init_states, init_weights
+import glm
+from utils import replace_inputs
 
 class GLMHMM(HMM):
     

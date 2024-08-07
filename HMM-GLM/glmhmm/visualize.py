@@ -10,8 +10,8 @@ Functions for visualizing and plotting results related to glmhmm fitting code
 import matplotlib.pyplot as plt
 import numpy as np
 import warnings
-from glmhmm.utils import find_best_fit, uniqueSessionIDs
-from glmhmm.analysis import fit_line_to_hist, dwell_times_per_session, session_lengths_for_animal
+from utils import find_best_fit, uniqueSessionIDs
+from analysis import fit_line_to_hist, dwell_times_per_session, session_lengths_for_animal
 import matplotlib as mpl
 mpl.rcParams['figure.facecolor'] = '1'
 mpl.rcParams['pdf.fonttype'] = 42

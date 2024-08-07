@@ -240,7 +240,6 @@ def graph_avg_corr_rate(ctrl:list, exp:list, width=0.4, exp_group_name=None):
         exp (list): data of experiment group
         width (float): width of plotted bars
         exp_group_name (str, Optional): name of the experiment group, name with treatments usually.
-
     """
     ctrl_mean = np.mean(ctrl)
     cask_mean = np.mean(exp)
@@ -252,7 +251,7 @@ def graph_avg_corr_rate(ctrl:list, exp:list, width=0.4, exp_group_name=None):
 
     plt.figure(figsize=(7, 7))
     plt.bar([1, 2], [ctrl_mean, cask_mean], yerr=[ctrl_err, cask_err], capsize=12, tick_label=groups, 
-            width=width, color=['lightblue', 'yellow'], alpha=0.8, zorder=1, label=['Control', 'CASK'])
+            width=width, color=['lightblue', 'yellow'], alpha=0.8, zorder=1, label=['Control', exp_name])
 
     x1 = [1] * len(ctrl)
     x2 = [2] * len(exp)

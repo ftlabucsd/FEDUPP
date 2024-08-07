@@ -2,6 +2,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 import tools as tl
+from accuracy import calculate_accuracy
 import seaborn as sns
 import numpy as np
 
@@ -24,11 +25,11 @@ def split_data_to_blocks(data_dropped: pd.DataFrame) -> list:
 
     for key, val in data_dropped.iterrows():
         if val['Active_Poke'] != curr_poke:
-            blocks.append(data_dropped.iloc[start_idx:key])  # add current block
+            blocks.append(data_dropped.iloc[start_idx:key].reset_index(drop=True))  # add current block
             start_idx = key # update start_idx
             curr_poke = val['Active_Poke']   # update poke marker
 
-    blocks.append(data_dropped.iloc[start_idx:])  # append the last block
+    blocks.append(data_dropped.iloc[start_idx:].reset_index(drop=True))  # append the last block
     return blocks
 
 
@@ -212,51 +213,63 @@ def graph_tranition_stats(data_stats: pd.DataFrame, blocks: list, path: str):
     plt.show()
 
 
-def block_cumulative_acc(blocks:list, normalize=False, grad=False) -> list:
-    acc_by_block = [] # each element is [block length, block accuracy]
-    acc_count_by_block = []
-    prev = 0
-    total = 0
+def learning_score(blocks: list, proportion=0.5) -> float:
+    """Calculate learning score for each sample
     
+    We take first proportion amount of the data to calculate accuracy, 
+    which indicates the 
+
+    Args:
+        blocks (list): list of all splited blocks of each mouse
+        proportion (float): the proportion of the data we use to measure learning (Default=0.5) 
+
+    Returns:
+        float: score calculated
+    """
+    for idx, block in enumerate(blocks):
+        size = int(len(block) * proportion)
+        blocks[idx] = block[:size]
+    
+    acc = []
     for block in blocks:
-        ans = block['Active_Poke'].to_numpy()
-        val = block['Event']
-        total += len(ans)
-        block_corr = np.sum(ans == val)
+        each = calculate_accuracy(block)
+        acc.append(each)
+    
+    return np.mean(acc)
 
-        if normalize:
-            acc_count_by_block.append((prev+block_corr)/total)
-        else:
-            acc_count_by_block.append(prev+block_corr)
+
+def graph_learning_score(ctrl:list, exp:list, width=0.4, exp_group_name=None, proportion=None):
+    """
+    Graph learning score of two groups
+
+    Args:
+        ctrl (list): data of control group
+        exp (list): data of experiment group
+        width (float): width of plotted bars
+        exp_group_name (str, Optional): name of the experiment group, name with treatments usually.
+        proportion (float): proportion of the data we use to evaluate learning performance
+    """
+    ctrl_mean = np.mean(ctrl)
+    cask_mean = np.mean(exp)
+    ctrl_err = np.std(ctrl) / np.sqrt(len(ctrl))
+    cask_err = np.std(exp) / np.sqrt(len(exp))
+
+    exp_name = 'Experiment' if exp_group_name==None else exp_group_name
+    groups = ['Control', exp_name]
+
+    plt.figure(figsize=(7, 7))
+    plt.bar([1, 2], [ctrl_mean, cask_mean], yerr=[ctrl_err, cask_err], capsize=12, tick_label=groups, 
+            width=width, color=['lightblue', 'yellow'], alpha=0.8, zorder=1, label=['Control', exp_name])
+
+    x1 = [1] * len(ctrl)
+    x2 = [2] * len(exp)
+    plt.scatter(x1, ctrl, marker='o', color='blue', zorder=2) 
+    plt.scatter(x2, exp, marker='x', color='orange', zorder=2)
+
+    plt.xlabel('Groups', fontsize=14)
+    plt.ylabel('Learning Score', fontsize=14)
+    plt.title(f'Learning Score Control and {exp_name} Groups with {proportion} Data', fontsize=16)
+
+    plt.legend()
+    plt.show()
         
-        prev += block_corr
-
-    if grad:
-        gradients = []
-        for i, item in enumerate(acc_count_by_block):
-            if i == 0: continue
-            gradients.append(item - acc_count_by_block[i-1])
-        return acc_count_by_block, gradients
-    return acc_count_by_block
-
-
-def get_difference_key(data_stats: pd.DataFrame) -> (pd.DataFrame, bool):
-    diff = pd.DataFrame(data=data_stats[['Block_Index', 'Left_to_Left', 'Right_to_Right']])
-    diff['Left_to_Left'] -= diff['Right_to_Right']
-    diff = diff.drop(['Right_to_Right'], axis='columns').rename(columns={'Left_to_Left':'Difference'})
-    return diff, data_stats['Active_Poke'][0] == 'Left'
-
-
-def learning_score_grad(diff: pd.DataFrame, left_start = True) -> float:
-    ans = 0
-    curr_expect = not left_start
-
-    for idx, row in diff.iterrows():
-        if idx == 0: continue
-        grad = row['Difference'] - diff.loc[idx - 1]['Difference']
-        if curr_expect:
-            ans += grad
-        else:
-            ans -= grad
-        curr_expect = not curr_expect
-    return ans

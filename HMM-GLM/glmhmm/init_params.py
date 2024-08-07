@@ -9,7 +9,7 @@ Functions for initializing the parameters of a hidden Markov Model (\theta = {A,
 using different distributions. Can easily be extended to include support for custom distributions. 
 """
 import numpy as np
-#from glmhmm import glm
+# import glm
 
 def init_transitions(self,distribution='dirichlet',alpha_diag=5,alpha_full=1):
     

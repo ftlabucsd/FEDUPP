@@ -11,8 +11,8 @@ Various analysis functions for evaluating the results from fitting glm-hmms (as 
 
 import numpy as np
 import scipy.io as sio
-from glmhmm.utils import convert_ll_bits, reshape_obs, compObs
-from glmhmm.glm import GLM
+from utils import convert_ll_bits, reshape_obs, compObs
+from glm import GLM
 import matplotlib.pyplot as plt
 import itertools
 
