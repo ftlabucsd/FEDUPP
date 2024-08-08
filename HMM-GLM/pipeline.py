@@ -4,36 +4,14 @@ from sklearn.metrics import accuracy_score
 import seaborn as sns
 import matplotlib.pyplot as plt
 import sys
+from sklearn.model_selection import KFold
 
 import ssm
 sys.path.append('..')
 import meals as ml
-
-
-# def model_training(path: str, num_states: int, obs_dim: int, num_categories: int,
-#                     max_iter: int, feat: list()) -> tuple:
-#     """
-#     The feat, feature list, is corresponding to the order:
-#     [curr_active, prev_event, prev_active, meal, prev_reward]
-#     """
-#     if len(feat) < 5:
-#         print('Missing boolean parameters for features')
-#         return
-    
-#     # calculate input dimension
-#     input_dim = 1
-#     for f in feat:
-#         if f == True:
-#             input_dim += 1
-
-#     X, y, original = extract_features(path, feat[0], feat[1], feat[2], feat[3], feat[4])
-
-#     model = ssm.HMM(num_states, obs_dim, input_dim, observations="input_driven_obs",
-#                     observation_kwargs=dict(C=num_categories), transitions="inputdriven")
-    
-#     log3 = model.fit(y, inputs=X, method='em', num_iters=max_iter, tolerance=10**-4)
-    
-#     return log3, model, X, y, original
+sys.path.append('./glmhmm')
+from utils import find_best_fit, permute_states
+import glm_hmm
 
 def in_meal(meals: list, time) -> bool:
     """
@@ -109,116 +87,205 @@ def extract_features(path: str, prev_trace: int, meal: bool) -> tuple:
     return X.to_numpy(), np.array(y), feats
 
 
-# def graph_model_parameters(model: ssm.HMM, log_array: list, feat: list):
-#     """
-#     Graph GLM weights, transition matrix and log probability for the model
-#     """
-#     para = model.observations.params
-#     tran = model.transitions.transition_matrix
-#     num_states = model.K
-#     input_dim = model.M
+def fit_all(model:glm_hmm.GLMHMM, X:np.array, y:np.array, inits=2, fit_init_states=False) -> tuple:
+    """Fit GLMHMM model for all data
 
-#     factor_dict = []
-#     if feat[0]:
-#         factor_dict = ['Curr Active']
-#     if feat[1]:
-#         factor_dict.append('Prev Event')
-#     if feat[2]:
-#         factor_dict.append('Prev Active')
-#     if feat[3]:
-#         factor_dict.append("Meal")
-#     if feat[4]:
-#         factor_dict.append('Prev Reward')
+    Args:
+        model (glm_hmm.GLMHMM): model to be trained
+        inits (int, optional): Number of random initialization to try. Defaults to 2.
+        fit_init_states (bool): Whether fit inital states. Defaults to False.
+        
+    Returns:
+        tuple: log-likelihood, transition matrices, weights, initial state probs, trined model, best-performance index
+    """
+    # Initialization for all inits
+    K, D, C = model.k, model.d, model.c
+    lls_all = np.zeros((inits,250))
+    A_all = np.zeros((inits,K,K))
+    w_all = np.zeros((inits,K,D,C))
 
-#     factor_dict.append('bias')
-
-#     states = []
-#     for i in range(1, num_states+1):
-#         states.append(str(i))
-
-#     # Plot parameters:
-#     fig = plt.figure(figsize=(18, 6), dpi=80, facecolor='w', edgecolor='k')
-#     plt.subplot(1, 3, 1)
-#     cols = ['#377eb8', '#ff7f00', '#4daf4a', '#fc0303']
-#     for k in range(num_states):
-#         plt.plot(range(input_dim), para[k][0], marker='o',
-#                  color=cols[k], linestyle='-',
-#                  lw=1.5, label="state " + str(k+1))
-#     plt.yticks(fontsize=10)
-#     plt.ylabel("GLM weight", fontsize=15)
-#     plt.xlabel("covariate", fontsize=15)
-#     plt.xticks(range(input_dim), factor_dict, fontsize=12, rotation=45)
-#     plt.axhline(y=0, color="k", alpha=0.5, ls="--")
-#     plt.legend()
-#     plt.title("Model weights", fontsize=15)
-
-#     plt.subplot(1, 3, 2)
-#     gen_trans_mat = tran
-#     plt.imshow(gen_trans_mat, vmin=-0.8, vmax=1, cmap='bone')
-#     for i in range(gen_trans_mat.shape[0]):
-#         for j in range(gen_trans_mat.shape[1]):
-#             text = plt.text(j, i, str(np.around(gen_trans_mat[i, j], decimals=3)), ha="center", va="center",
-#                             color="k", fontsize=12)
-#     plt.xlim(-0.5, num_states - 0.5)
-#     plt.xticks(range(0, num_states), states, fontsize=10)
-#     plt.yticks(range(0, num_states), states, fontsize=10)
-#     plt.ylim(num_states - 0.5, -0.5)
-#     plt.ylabel("state t", fontsize=15)
-#     plt.xlabel("state t+1", fontsize=15)
-#     plt.title("Model transition matrix", fontsize=15)
-
-#     plt.subplot(1, 3, 3)
-#     plt.plot(log_array)
-#     plt.title("Log Likelihood", fontsize=15)
-#     plt.xlabel('Iteration', fontsize=15)
-#     plt.show()
+    for i in range(inits):
+        A_init,w_init,pi_init = model.generate_params() # initialize the model parameters
+        lls_all[i,:],A_all[i,:,:],w_all[i,:,:],pi0 = model.fit(y,X,A_init,w_init, 
+                                                               tol=1e-3,
+                                                               fit_init_states=fit_init_states) # fit the model
+        print('initialization %s complete' %(i+1))
+    return lls_all, A_all, w_all, pi0, model, find_best_fit(lls_all)
 
 
-# def display_fitting_results(model: ssm.HMM, X, y):
-#     """
-#     Graph the occupancy percentage of each state
-#     print out model accuracy when predicting actual behavior,
-#     model accuracy in each state (compare model prediction of event and active poke) and overall accuracy
-#     """
-#     pred_state, pred_choice = model.sample(len(X), input=X)
-#     num_state = model.K
+def evaluate_likelihood(model:glm_hmm.GLMHMM, X:np.array, y:np.array, matrix:np.array, weight: np.array):
+    phi = np.array([model.glm.compObs(X, weight[k]) for k in range(model.k)])
+    phi = phi.transpose(1, 0, 2)
+    fit_ll,_,_,_ = model.forwardPass(y,matrix,phi)
+    return fit_ll
 
-#     state_list = []
-#     for i in range(num_state):
-#         state_list.append(f'State {i+1}')
 
-#     # Model Prediction vs Actual Sequence
-#     accuracy = accuracy_score(y, pred_choice)
+def graph_fit_all(A_all:np.array, w_all:np.array, lls_all:np.array, features:list, best_ll:float, bestix:int):
+    num_states = A_all[0].shape[0]
+    n_inits = lls_all.shape[0]
+    label = [f"state {state+1}" for state in range(num_states)]
+    colors = ['#377eb8', '#ff7f00', '#4daf4a', '#fc0303']
+    
+    # for easy comparison permute the states in order from highest to lowest self-transition probability
+    A_permuted, order = permute_states(A_all[bestix])
+    w_permuted,_ = permute_states(w_all[bestix],method='order',param='weights',order=order)
 
-#     # Model state occupancy
-#     corr_state_acc = [0] * num_state
-#     overall_acc = 0
-#     states = [0] * num_state
-#     for state in pred_state:
-#         states[state] += 1
-#     states_percent = [i/len(X) for i in states]
+    # transition matrix
+    plt.subplot(1, 3, 1)
+    plt.imshow(A_permuted, vmin=-0.8, vmax=1, cmap='bone')
+    for i in range(num_states):
+        for j in range(num_states):
+            text = plt.text(j, i, str(np.around(A_permuted[i, j], decimals=3)), ha="center", va="center",
+                            color="k", fontsize=12)
+    plt.xlim(-0.5, num_states - 0.5)
+    plt.xticks(range(0, num_states), label, fontsize=10)
+    plt.yticks(range(0, num_states), label, fontsize=10)
+    plt.ylim(num_states - 0.5, -0.5)
+    plt.ylabel("state t", fontsize=15)
+    plt.xlabel("state t+1", fontsize=15)
+    plt.title("Model transition matrix", fontsize=15)
+    
+    # model weight
+    plt.subplot(1, 3, 2)
+    for i in range(num_states):
+        plt.plot(w_permuted[i,:, 1], linestyle='-', color=colors[i], label=label[i], linewidth=2)
+        
+    plt.ylabel('weight', fontsize=15)
+    plt.plot(range(len(features)), np.zeros(len(features)), linestyle='--', color='gray')  # Ensure alignment by using range(len(features))
+    plt.xticks(range(len(features)), features, rotation=75)
+    plt.xlabel("Features", fontsize=15)
+    plt.title('Model Weight By Feature', fontsize=15)
+    plt.legend()
+    
+    
+    plt.subplot(1,3,3)
+    plt.plot(lls_all[bestix], linewidth=2.5, color='blue', label='Best fit') # plot best fit
+    for i in range(n_inits):
+        if i != bestix:
+            plt.plot(lls_all[i], color='gray', label='Other fits')
 
-#     # Accuracy w.r.t states
-#     for idx, row in enumerate(X):
-#         # row[0] is active poke
-#         if row[0] == pred_choice[idx]:
-#             corr_state_acc[pred_state[idx]] += 1
-#             overall_acc += 1
+    plt.annotate(f'Best Likelihood: {best_ll:.2f}', 
+            xy=(len(lls_all[bestix])-1, best_ll), 
+            xytext=(-90, -90),
+            textcoords='offset points',
+            arrowprops=dict(arrowstyle='->', lw=1.5),
+            fontsize=12,
+            color='blue')
+    
+    handles, labels = plt.gca().get_legend_handles_labels()
+    by_label = dict(zip(labels, handles))
+    plt.legend(by_label.values(), by_label.keys())
+    plt.title("Log Likelihood", fontsize=15)
+    plt.xlabel('Iteration', fontsize=15)
+    plt.show()
 
-#     for i in range(num_state):
-#         corr_state_acc[i] /= states[i]
 
-#     # Plot state occupancy
-#     plt.figure(figsize=(6, 6))
-#     sns.barplot(x=state_list,
-#                 y=states_percent, width=0.6, palette='bright')
-#     plt.title(f'State Occupancy in {num_state} State Model', fontsize=18)
-#     plt.ylabel('Occupancy Rate', fontsize=16)
-#     plt.show()
+def fit_cv(model:glm_hmm.GLMHMM, X:np.array, y:np.array, folds:int, inits:int):
+    # split the data into five folds
+    y_train = [None] * folds
+    y_test = [None] * folds
+    x_train = [None] * folds
+    x_test = [None] * folds
+    kf = KFold(n_splits=folds)
+    kf.get_n_splits(y)
+    for i, (train_index, test_index) in enumerate(kf.split(y)):
+        y_train[i], y_test[i] = y[train_index], y[test_index]
+        x_train[i], x_test[i] = X[train_index], X[test_index]
+    
+    lls_all = []  # List to store log-likelihoods
+    A_all = []    # List to store A matrices
+    w_all = []    # List to store w matrices
 
-#     # Overall accuracy in the model
-#     print('Accuracy of Predicting Mice Behavior:', accuracy)
-#     for i in range(num_state):
-#         print(f'State {i+1} Percentage:',
-#           states_percent[i], '; Accuracy:', corr_state_acc[i])
-#     print('Overall Accuracy in Model:', overall_acc/len(X))
+    # fit the model for each training set and each initialization
+    for i in range(folds):
+        fold_lls = []
+        fold_As = []
+        fold_ws = []
+        for j in range(inits):
+            model.n = len(y_train[i]) # reset the number of data points in accordance with the size of the training set
+            A_init, w_init, pi_init = model.generate_params()  # initialize the model parameters
+            lls, A, w, pi0 = model.fit(y_train[i], x_train[i], A_init, w_init, fit_init_states=True)  # fit the model
+            
+            # Append results for this initialization
+            fold_lls.append(lls)
+            fold_As.append(A)
+            fold_ws.append(w)
+            print(f'Initialization {j+1} complete')
+
+        # Append results for this fold
+        lls_all.append(fold_lls)
+        A_all.append(fold_As)
+        w_all.append(fold_ws)
+        print('fold %s complete' %(i+1))
+    return model, lls_all, A_all, w_all, x_test, y_test
+
+
+def cv_evaluate(model:glm_hmm.GLMHMM, x_test:list, y_test:list,
+                 A_all:np.array, w_all:np.array, lls_all:np.array):
+    fit_ll = []
+
+    for i in range(len(y_test)):  # Assuming folds is the actual number of folds used, not hard-coded to 5
+        model.n = len(y_test[i])  # Adjusting to the actual test set size for the current fold
+
+        lls = np.array(lls_all[i])  # Convert list of log-likelihoods for current fold to numpy array for processing
+        bestix = np.argmax(lls.mean(axis=1))  # Assuming mean log-likelihood is the criterion for best fit
+
+        # Convert inferred weights into observation probabilities for each state
+        phi = np.array([model.glm.compObs(x_test[i], w_all[i][bestix][k]) for k in range(K)])
+        phi = phi.transpose(1, 0, 2)
+
+        fit_log_likelihood,_,_,_ = model.forwardPass(y_test[i], A_all[i][bestix], phi)
+        fit_ll.append(fit_log_likelihood)
+
+    print('Inferred LL: %f' % np.mean(fit_ll))
+    return fit_ll
+
+
+def display_fitting_results(model: glm_hmm.GLMHMM, X, y):
+    """
+    Graph the occupancy percentage of each state
+    print out model accuracy when predicting actual behavior,
+    model accuracy in each state (compare model prediction of event and active poke) and overall accuracy
+    """
+    _, pred_choice, pred_state = model.generate_data_from_fit(model.w, model.A, X)
+    num_state = model.k
+
+    state_list = []
+    for i in range(num_state):
+        state_list.append(f'State {i+1}')
+
+    # Model Prediction vs Actual Sequence
+    accuracy = accuracy_score(y, pred_choice)
+
+    # Model state occupancy
+    corr_state_acc = [0] * num_state
+    overall_acc = 0
+    states = [0] * num_state
+    for state in pred_state:
+        states[state] += 1
+    states_percent = [i/len(X) for i in states]
+
+    # Accuracy w.r.t states
+    for idx, row in enumerate(X):
+        # row[0] is active poke
+        if row[0] == pred_choice[idx]:
+            corr_state_acc[pred_state[idx]] += 1
+            overall_acc += 1
+
+    for i in range(num_state):
+        corr_state_acc[i] /= states[i]
+
+    # Plot state occupancy
+    plt.figure(figsize=(6, 6))
+    sns.barplot(x=state_list,
+                y=states_percent, width=0.6, palette='bright')
+    plt.title(f'State Occupancy in {num_state} State Model', fontsize=18)
+    plt.ylabel('Occupancy Rate', fontsize=16)
+    plt.show()
+
+    # Overall accuracy in the model
+    print('Accuracy of Predicting Mice Behavior:', accuracy)
+    for i in range(num_state):
+        print(f'State {i+1} Percentage:',
+          states_percent[i], '; Accuracy:', corr_state_acc[i])
+    print('Overall Accuracy in Model:', overall_acc/len(X))

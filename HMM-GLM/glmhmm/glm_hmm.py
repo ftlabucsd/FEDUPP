@@ -24,6 +24,7 @@ class GLMHMM(HMM):
         
         self.glm = glm.GLM(self.n,self.d,self.c,observations=observations)
         
+        
     def generate_params(self,weights=['uniform',-1,1,1],transitions=['dirichlet',5,1],state_priors='uniform'):
         
         '''
