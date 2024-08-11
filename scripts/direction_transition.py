@@ -211,9 +211,91 @@ def graph_tranition_stats(data_stats: pd.DataFrame, blocks: list, path: str):
     fig.set_dpi(80)
     plt.grid(alpha=0.5, linestyle='--')
     plt.show()
+    
+    
+def graph_learning_trend(data_stats: pd.DataFrame, blocks: list, path: str, block_prop=0.6, action_prop=0.5):
+    """Graph Statistics of first 60% block in transition
+    
+    Visualize accuracy of each transition, the accuracy and active poke of each block
+
+    Args:
+        data_stats (pd.DataFrame): calculated statistics from the data
+        blocks (list): list of pd.DataFrame that is splitted from the complete data
+        path (str): path of original file path to get display info
+        proportion (float): proportion of the blocks used (Default is 0.6)
+        action_prop (float): proportion of the data in each block used (Default is 0.5) 
+    """
+    fig, ax = plt.subplots(figsize=(14, 8))
+    
+    cutoff = int(len(data_stats)*block_prop)
+    data_stats = data_stats[:cutoff]
+    cut_blocks = blocks[:cutoff]
+    acc_in_block_by_prop = block_accuracy_by_proportion(cut_blocks, action_prop)
+
+    ax.bar(data_stats['Block_Index'][::2], acc_in_block_by_prop[::2],
+        label='Success Rate', color='pink' if data_stats['Active_Poke'][0] == 'Left' else 'lightblue', alpha=0.7)
+    ax.bar(data_stats['Block_Index'][1::2], acc_in_block_by_prop[1::2],
+        label='Success Rate', color='lightblue' if data_stats['Active_Poke'][1] == 'Right' else 'pink', alpha=0.7)
+
+    ax.set_xlabel('Blocks', fontsize=16)
+    ax.set_ylabel('Percentage(%)', color='black', fontsize=16)
+
+    night_blocks = []
+    block_start_index = 1
+    info = tl.get_bhv_num(path)
+
+    if len(info) == 1:
+        for block_df in cut_blocks:
+            if not block_df.empty and 'Time' in block_df:
+                first_timestamp = pd.to_datetime(block_df['Time'].iloc[0])
+                if 19 >= first_timestamp.hour or first_timestamp.hour >= 7:
+                    night_blocks.append(block_start_index)
+            block_start_index += 1
+    else:
+        for block_df in cut_blocks:
+            if not block_df.empty and 'Time' in block_df:
+                first_timestamp = pd.to_datetime(block_df['Time'].iloc[0])
+                if 19 <= first_timestamp.hour or first_timestamp.hour < 7:
+                    night_blocks.append(block_start_index)
+            block_start_index += 1
+
+    for block_index in night_blocks:
+        ax.axvspan(block_index - 0.5, block_index + 0.5, facecolor='gray', alpha=0.4)
+
+    left_patch = mpatches.Patch(color='pink', alpha=0.5, label='Left Active')
+    right_patch = mpatches.Patch(color='lightblue', alpha=0.5, label='Right Active')
+    night_patch = mpatches.Patch(color='gray', alpha=0.5, label='Night Period')
+
+    leg_bg = plt.legend(handles=[left_patch, right_patch, night_patch], loc='upper right')
+
+    leg_bg.set_title('Correct Rate')
+    leg_bg.get_title().set_fontsize('17')
+    leg_bg.get_texts()[0].set_fontsize('15')
+    leg_bg.get_texts()[1].set_fontsize('15')
+    leg_bg.get_texts()[2].set_fontsize('15')
+    
+    info = tl.get_bhv_num(path)
+    if len(info) == 2:
+        plt.title(f'Accuracy by Switch for Group {info[0]} Mouse {info[1]}', fontsize=24)
+    else:
+        plt.title(f'Accuracy by Switch for Mouse {info[0]}', fontsize=24)
+
+    plt.xticks(data_stats['Block_Index'])
+    plt.yticks(range(0, 100, 20))
+    fig.set_dpi(80)
+    plt.grid(alpha=0.5, linestyle='--')
+    plt.show()
 
 
-def learning_score(blocks: list, proportion=0.5) -> float:
+def block_accuracy_by_proportion(blocks: list, proportion: float):
+    acc = []
+    for block in blocks:
+        size = int(len(block) * proportion)
+        acc.append(calculate_accuracy(block[:size]))
+    return acc
+
+
+def learning_score(blocks: list, block_prop=0.5, action_prop=0.8) -> float:
     """Calculate learning score for each sample
     
     We take first proportion amount of the data to calculate accuracy, 
@@ -226,16 +308,8 @@ def learning_score(blocks: list, proportion=0.5) -> float:
     Returns:
         float: score calculated
     """
-    for idx, block in enumerate(blocks):
-        size = int(len(block) * proportion)
-        blocks[idx] = block[:size]
-    
-    acc = []
-    for block in blocks:
-        each = calculate_accuracy(block)
-        acc.append(each)
-    
-    return np.mean(acc)
+    cutoff = int(len(blocks)*block_prop)
+    return np.mean(block_accuracy_by_proportion(blocks=blocks[:cutoff], proportion=action_prop))
 
 
 def graph_learning_score(ctrl:list, exp:list, width=0.4, exp_group_name=None, proportion=None):
