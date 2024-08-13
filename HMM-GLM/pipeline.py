@@ -5,13 +5,13 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 import sys
 from sklearn.model_selection import KFold
+import math
 
-import ssm
-sys.path.append('..')
+sys.path.append('../scripts')
 import meals as ml
 sys.path.append('./glmhmm')
-from utils import find_best_fit, permute_states
 import glm_hmm
+from utils import find_best_fit, permute_states
 
 def in_meal(meals: list, time) -> bool:
     """
@@ -81,6 +81,7 @@ def extract_features(path: str, prev_trace: int, meal: bool) -> tuple:
 
     X = data.drop(['Event'], axis='columns')[prev_trace:]
     y = data['Event'][prev_trace:]
+    
 
     X['bias'] = 1
     feats = X.columns
@@ -100,14 +101,14 @@ def fit_all(model:glm_hmm.GLMHMM, X:np.array, y:np.array, inits=2, fit_init_stat
     """
     # Initialization for all inits
     K, D, C = model.k, model.d, model.c
-    lls_all = np.zeros((inits,250))
+    lls_all = np.zeros((inits,500))
     A_all = np.zeros((inits,K,K))
     w_all = np.zeros((inits,K,D,C))
 
     for i in range(inits):
         A_init,w_init,pi_init = model.generate_params() # initialize the model parameters
         lls_all[i,:],A_all[i,:,:],w_all[i,:,:],pi0 = model.fit(y,X,A_init,w_init, 
-                                                               tol=1e-3,
+                                                               tol=1e-5, maxiter=500,
                                                                fit_init_states=fit_init_states) # fit the model
         print('initialization %s complete' %(i+1))
     return lls_all, A_all, w_all, pi0, model, find_best_fit(lls_all)
@@ -129,7 +130,8 @@ def graph_fit_all(A_all:np.array, w_all:np.array, lls_all:np.array, features:lis
     # for easy comparison permute the states in order from highest to lowest self-transition probability
     A_permuted, order = permute_states(A_all[bestix])
     w_permuted,_ = permute_states(w_all[bestix],method='order',param='weights',order=order)
-
+    
+    plt.figure(figsize=(18, 6))
     # transition matrix
     plt.subplot(1, 3, 1)
     plt.imshow(A_permuted, vmin=-0.8, vmax=1, cmap='bone')
@@ -159,13 +161,22 @@ def graph_fit_all(A_all:np.array, w_all:np.array, lls_all:np.array, features:lis
     
     
     plt.subplot(1,3,3)
-    plt.plot(lls_all[bestix], linewidth=2.5, color='blue', label='Best fit') # plot best fit
+    best_line = lls_all[bestix]
+    conv_idx = len(best_line) - 1
+    
+    for i, each in enumerate(best_line):
+        if math.isnan(each): 
+            conv_idx = i - 3
+            break
+        
+    plt.plot(best_line, linewidth=2.5, color='blue', label='Best fit') # plot best fit
+    
     for i in range(n_inits):
         if i != bestix:
             plt.plot(lls_all[i], color='gray', label='Other fits')
 
     plt.annotate(f'Best Likelihood: {best_ll:.2f}', 
-            xy=(len(lls_all[bestix])-1, best_ll), 
+            xy=(conv_idx, best_ll), 
             xytext=(-90, -90),
             textcoords='offset points',
             arrowprops=dict(arrowstyle='->', lw=1.5),
@@ -177,6 +188,8 @@ def graph_fit_all(A_all:np.array, w_all:np.array, lls_all:np.array, features:lis
     plt.legend(by_label.values(), by_label.keys())
     plt.title("Log Likelihood", fontsize=15)
     plt.xlabel('Iteration', fontsize=15)
+    
+    plt.tight_layout()
     plt.show()
 
 
@@ -248,6 +261,8 @@ def display_fitting_results(model: glm_hmm.GLMHMM, X, y):
     model accuracy in each state (compare model prediction of event and active poke) and overall accuracy
     """
     _, pred_choice, pred_state = model.generate_data_from_fit(model.w, model.A, X)
+    pred_choice, pred_state = list(map(int, pred_choice)), list(map(int, pred_state))
+    # print(pred_choice[:5], pred_state[:5])
     num_state = model.k
 
     state_list = []

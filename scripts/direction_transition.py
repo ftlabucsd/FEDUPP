@@ -243,28 +243,23 @@ def graph_learning_trend(data_stats: pd.DataFrame, blocks: list, path: str, bloc
     night_blocks = []
     block_start_index = 1
     info = tl.get_bhv_num(path)
+    
+    for block_df in cut_blocks:
+        if not block_df.empty and 'Time' in block_df:
+            first_timestamp = pd.to_datetime(block_df['Time'].iloc[0])
+            if 19 <= first_timestamp.hour or first_timestamp.hour < 7:
+                night_blocks.append(block_start_index)
+        block_start_index += 1
 
     if len(info) == 1:
-        for block_df in cut_blocks:
-            if not block_df.empty and 'Time' in block_df:
-                first_timestamp = pd.to_datetime(block_df['Time'].iloc[0])
-                if 19 >= first_timestamp.hour or first_timestamp.hour >= 7:
-                    night_blocks.append(block_start_index)
-            block_start_index += 1
-    else:
-        for block_df in cut_blocks:
-            if not block_df.empty and 'Time' in block_df:
-                first_timestamp = pd.to_datetime(block_df['Time'].iloc[0])
-                if 19 <= first_timestamp.hour or first_timestamp.hour < 7:
-                    night_blocks.append(block_start_index)
-            block_start_index += 1
+        night_blocks = [each for each in range(1, len(cut_blocks)+1) if each not in night_blocks]
 
     for block_index in night_blocks:
         ax.axvspan(block_index - 0.5, block_index + 0.5, facecolor='gray', alpha=0.4)
 
     left_patch = mpatches.Patch(color='pink', alpha=0.5, label='Left Active')
     right_patch = mpatches.Patch(color='lightblue', alpha=0.5, label='Right Active')
-    night_patch = mpatches.Patch(color='gray', alpha=0.5, label='Night Period')
+    night_patch = mpatches.Patch(color='gray', alpha=0.5, label='Inactive Period')
 
     leg_bg = plt.legend(handles=[left_patch, right_patch, night_patch], loc='upper right')
 
@@ -347,3 +342,37 @@ def graph_learning_score(ctrl:list, exp:list, width=0.4, exp_group_name=None, pr
     plt.legend()
     plt.show()
         
+
+def graph_retrieval_time(ctrl:list, exp:list, width=0.4, exp_group_name=None):
+    """
+    Graph average correct rate
+
+    Args:
+        ctrl (list): data of control group
+        exp (list): data of experiment group
+        width (float): width of plotted bars
+        exp_group_name (str, Optional): name of the experiment group, name with treatments usually.
+    """
+    ctrl_mean = np.mean(ctrl)
+    cask_mean = np.mean(exp)
+    ctrl_err = np.std(ctrl) / np.sqrt(len(ctrl))
+    cask_err = np.std(exp) / np.sqrt(len(exp))
+
+    exp_name = 'Experiment' if exp_group_name==None else exp_group_name
+    groups = ['Control', exp_name]
+
+    plt.figure(figsize=(7, 7))
+    plt.bar([1, 2], [ctrl_mean, cask_mean], yerr=[ctrl_err, cask_err], capsize=12, tick_label=groups, 
+            width=width, color=['lightblue', 'yellow'], alpha=0.8, zorder=1, label=['Control', exp_name])
+
+    x1 = [1] * len(ctrl)
+    x2 = [2] * len(exp)
+    plt.scatter(x1, ctrl, marker='o', color='blue', zorder=2) 
+    plt.scatter(x2, exp, marker='x', color='orange', zorder=2)
+
+    plt.xlabel('Groups', fontsize=14)
+    plt.ylabel('Time (minutes)', fontsize=14)
+    plt.title(f'Pellet Retrieval Time of Control and {exp_name} Groups in Reversal', fontsize=16)
+
+    plt.legend()
+    plt.show()

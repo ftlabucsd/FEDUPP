@@ -1,4 +1,5 @@
 import pandas as pd
+import math
 
 def read_excel_by_sheet(sheet, parent='../behavior data integrated/Adjusted FED3 Data.xlsx', 
                         hundredize=True, convert_time=True, remove_trival=True):
@@ -35,7 +36,8 @@ def read_excel_by_sheet(sheet, parent='../behavior data integrated/Adjusted FED3
     return df
 
 
-def read_csv_clean(path:str, remove_trivial=True, cumulative_accuracy=False, convert_large=False) -> pd.DataFrame:
+def read_csv_clean(path:str, remove_trivial=True, cumulative_accuracy=False, 
+                   convert_large=False, collect_time=False) -> pd.DataFrame:
     """Read csv file and clean it
 
     Args:
@@ -94,3 +96,10 @@ def calculate_accuracy_by_row(df:pd.DataFrame, convert_large=True):
     return df
         
     
+def get_retrieval_time(path:str):
+    df = pd.read_csv(path)
+    times = df['Retrieval_Time']
+    pellet_times = [each for each in times.tolist() if each != 'Timed_out']
+    pellet_times = list(map(float, pellet_times))
+    pellet_times = [each for each in pellet_times if not math.isnan(each)]
+    return pellet_times

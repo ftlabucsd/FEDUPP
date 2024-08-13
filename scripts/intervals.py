@@ -3,6 +3,8 @@ from scipy import stats
 import matplotlib.pyplot as plt
 import seaborn as sns
 from tools import get_bhv_num
+from preprocessing import get_retrieval_time
+import numpy as np
 
 
 def count_interval(data: pd.DataFrame) -> list:
@@ -73,6 +75,16 @@ def graph_pellet_interval(path: str):
     plt.xlabel('Time')
     plt.ylabel('Interval (minutes)')
     plt.show()
+    
+    
+def mean_pellet_collect_time(path:str, remove_outlier=False, n_stds=3):
+    pellet_times = get_retrieval_time(path)
+    mean = np.mean(pellet_times)
+    std = np.std(pellet_times)
+    if remove_outlier:
+        cutoff = mean+std*n_stds
+        pellet_times = [each for each in pellet_times if each < cutoff]
+    return pellet_times, np.mean(pellet_times), np.std(pellet_times)
     
 
 def perform_T_test(ctrl:list, exp:list, test_side='two-sided', alpha=0.05, paired=False):
