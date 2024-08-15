@@ -193,65 +193,65 @@ def graph_fit_all(A_all:np.array, w_all:np.array, lls_all:np.array, features:lis
     plt.show()
 
 
-def fit_cv(model:glm_hmm.GLMHMM, X:np.array, y:np.array, folds:int, inits:int):
-    # split the data into five folds
-    y_train = [None] * folds
-    y_test = [None] * folds
-    x_train = [None] * folds
-    x_test = [None] * folds
-    kf = KFold(n_splits=folds)
-    kf.get_n_splits(y)
-    for i, (train_index, test_index) in enumerate(kf.split(y)):
-        y_train[i], y_test[i] = y[train_index], y[test_index]
-        x_train[i], x_test[i] = X[train_index], X[test_index]
+# def fit_cv(model:glm_hmm.GLMHMM, X:np.array, y:np.array, folds:int, inits:int):
+#     # split the data into five folds
+#     y_train = [None] * folds
+#     y_test = [None] * folds
+#     x_train = [None] * folds
+#     x_test = [None] * folds
+#     kf = KFold(n_splits=folds)
+#     kf.get_n_splits(y)
+#     for i, (train_index, test_index) in enumerate(kf.split(y)):
+#         y_train[i], y_test[i] = y[train_index], y[test_index]
+#         x_train[i], x_test[i] = X[train_index], X[test_index]
     
-    lls_all = []  # List to store log-likelihoods
-    A_all = []    # List to store A matrices
-    w_all = []    # List to store w matrices
+#     lls_all = []  # List to store log-likelihoods
+#     A_all = []    # List to store A matrices
+#     w_all = []    # List to store w matrices
 
-    # fit the model for each training set and each initialization
-    for i in range(folds):
-        fold_lls = []
-        fold_As = []
-        fold_ws = []
-        for j in range(inits):
-            model.n = len(y_train[i]) # reset the number of data points in accordance with the size of the training set
-            A_init, w_init, pi_init = model.generate_params()  # initialize the model parameters
-            lls, A, w, pi0 = model.fit(y_train[i], x_train[i], A_init, w_init, fit_init_states=True)  # fit the model
+#     # fit the model for each training set and each initialization
+#     for i in range(folds):
+#         fold_lls = []
+#         fold_As = []
+#         fold_ws = []
+#         for j in range(inits):
+#             model.n = len(y_train[i]) # reset the number of data points in accordance with the size of the training set
+#             A_init, w_init, pi_init = model.generate_params()  # initialize the model parameters
+#             lls, A, w, pi0 = model.fit(y_train[i], x_train[i], A_init, w_init, fit_init_states=True)  # fit the model
             
-            # Append results for this initialization
-            fold_lls.append(lls)
-            fold_As.append(A)
-            fold_ws.append(w)
-            print(f'Initialization {j+1} complete')
+#             # Append results for this initialization
+#             fold_lls.append(lls)
+#             fold_As.append(A)
+#             fold_ws.append(w)
+#             print(f'Initialization {j+1} complete')
 
-        # Append results for this fold
-        lls_all.append(fold_lls)
-        A_all.append(fold_As)
-        w_all.append(fold_ws)
-        print('fold %s complete' %(i+1))
-    return model, lls_all, A_all, w_all, x_test, y_test
+#         # Append results for this fold
+#         lls_all.append(fold_lls)
+#         A_all.append(fold_As)
+#         w_all.append(fold_ws)
+#         print('fold %s complete' %(i+1))
+#     return model, lls_all, A_all, w_all, x_test, y_test
 
 
-def cv_evaluate(model:glm_hmm.GLMHMM, x_test:list, y_test:list,
-                 A_all:np.array, w_all:np.array, lls_all:np.array):
-    fit_ll = []
+# def cv_evaluate(model:glm_hmm.GLMHMM, x_test:list, y_test:list,
+#                  A_all:np.array, w_all:np.array, lls_all:np.array):
+#     fit_ll = []
 
-    for i in range(len(y_test)):  # Assuming folds is the actual number of folds used, not hard-coded to 5
-        model.n = len(y_test[i])  # Adjusting to the actual test set size for the current fold
+#     for i in range(len(y_test)):  # Assuming folds is the actual number of folds used, not hard-coded to 5
+#         model.n = len(y_test[i])  # Adjusting to the actual test set size for the current fold
 
-        lls = np.array(lls_all[i])  # Convert list of log-likelihoods for current fold to numpy array for processing
-        bestix = np.argmax(lls.mean(axis=1))  # Assuming mean log-likelihood is the criterion for best fit
+#         lls = np.array(lls_all[i])  # Convert list of log-likelihoods for current fold to numpy array for processing
+#         bestix = np.argmax(lls.mean(axis=1))  # Assuming mean log-likelihood is the criterion for best fit
 
-        # Convert inferred weights into observation probabilities for each state
-        phi = np.array([model.glm.compObs(x_test[i], w_all[i][bestix][k]) for k in range(K)])
-        phi = phi.transpose(1, 0, 2)
+#         # Convert inferred weights into observation probabilities for each state
+#         phi = np.array([model.glm.compObs(x_test[i], w_all[i][bestix][k]) for k in range(K)])
+#         phi = phi.transpose(1, 0, 2)
 
-        fit_log_likelihood,_,_,_ = model.forwardPass(y_test[i], A_all[i][bestix], phi)
-        fit_ll.append(fit_log_likelihood)
+#         fit_log_likelihood,_,_,_ = model.forwardPass(y_test[i], A_all[i][bestix], phi)
+#         fit_ll.append(fit_log_likelihood)
 
-    print('Inferred LL: %f' % np.mean(fit_ll))
-    return fit_ll
+#     print('Inferred LL: %f' % np.mean(fit_ll))
+#     return fit_ll
 
 
 def display_fitting_results(model: glm_hmm.GLMHMM, X, y):
