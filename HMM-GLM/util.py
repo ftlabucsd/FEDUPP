@@ -13,11 +13,14 @@ cols = ['#377eb8', '#ff7f00', '#4daf4a', '#fc0303']
 
 
 def model_training(path: str, num_states: int, obs_dim: int, num_categories: int,
-                    max_iter: int, prev_trace=5, meal=True) -> tuple:
+                    max_iter: int, prev_trace=5, meal=True, transition='recurrent') -> tuple:
     """
     The feat, feature list, is corresponding to the order:
     [curr_active, prev_event, prev_active, meal, prev_reward]
     """
+    if transition not in ['recurrent', 'inputdriven']:
+        raise ValueError('Unsupport transition type')
+    
     X, y, features = extract_features(path, prev_trace=prev_trace, meal=meal)
     y = y.reshape(-1, 1)
 
@@ -25,9 +28,9 @@ def model_training(path: str, num_states: int, obs_dim: int, num_categories: int
     input_dim = X.shape[1]
 
     model = ssm.HMM(num_states, obs_dim, input_dim, observations="input_driven_obs", init_method='kmeans',
-                    observation_kwargs=dict(C=num_categories), transitions="inputdriven")
+                    observation_kwargs=dict(C=num_categories), transitions=transition)
     
-    log3 = model.fit(y, inputs=X, method='em', num_iters=max_iter, tolerance=5e-4)
+    log3 = model.fit(y, inputs=X, method='em', num_iters=max_iter, tolerance=1e-4)
     model.expected_states
     
     return log3, model, X, y, features

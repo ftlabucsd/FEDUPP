@@ -29,8 +29,8 @@ def extract_features(path: str, prev_trace: int, meal: bool) -> tuple:
     extract current active poke, previous choice, previous active poke, previous reward and biasas X
     use current event as output
     """
-    if prev_trace <= 0 or prev_trace > 6:
-        raise ValueError(f'prev_trace needs to be integer from 0 to 6, but got {prev_trace}')
+    # if prev_trace <= 0 or prev_trace > 6:
+    #     raise ValueError(f'prev_trace needs to be integer from 0 to 6, but got {prev_trace}')
     
     data = pd.read_csv(path)
     data = data[['MM:DD:YYYY hh:mm:ss', 'Event', 'Active_Poke', 'Pellet_Count']].replace(
