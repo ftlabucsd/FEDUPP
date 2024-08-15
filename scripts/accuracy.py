@@ -131,7 +131,7 @@ def instant_acc(sheet=None, parent='../behavior data integrated/Adjusted FED3 Da
     return result, get_bhv_num(sheet)
 
 
-def find_night_index(hourly_labels:list):
+def find_night_index(hourly_labels:list, rev:bool):
     """Find pairs of indices that is between 7 pm and 7 am
 
     Args:
@@ -163,6 +163,18 @@ def find_night_index(hourly_labels:list):
     if in_interval:
         intervals.append([interval_start_index, len(hourly_labels) - 1])
     
+    hourly_labels = [datetime.strptime(time_str, '%H:%M').hour for time_str in hourly_labels]
+    
+    if rev:
+        result = []
+        start = 0
+        for interval in intervals:
+            if interval[0] > start:
+                result.append([start, interval[0] - 1])
+            start = interval[1] + 1
+        if start <= len(hourly_labels) - 1:
+            result.append([start, len(hourly_labels) - 1])
+        return result
     return intervals
 
 

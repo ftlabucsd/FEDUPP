@@ -34,7 +34,7 @@ def average_pellet(group: pd.DataFrame) -> float:
     Returns:
         float: average pellet count
     """
-    total_hr = 24*(group['Interval_Start'].max()-group['Interval_Start'].min()).total_seconds() / 3600
+    total_hr = (group['Interval_Start'].max()-group['Interval_Start'].min()).total_seconds() / 3600
     total_pellet = group['Pellet_Count'].sum()
     return round(total_pellet / total_hr, 3)
 
@@ -68,11 +68,14 @@ def graph_pellet_frequency(grouped_data: pd.DataFrame, bhv, num):
     ax.set_xticklabels(hourly_labels, rotation=45, horizontalalignment='right')  # Set the tick labels to hourly format
     
     # Locate the x-coordinates for the specified times
-    dark = find_night_index(hourly_labels)
+    if bhv is not None:
+        dark = find_night_index(hourly_labels, rev=False)
+    else:
+        dark = find_night_index(hourly_labels, rev=True)
 
     for idx, each in enumerate(dark):
         if idx == 0:
-            ax.axvspan(6*each[0], 6*(1+each[1]), color='grey', alpha=0.4, label='Night')
+            ax.axvspan(6*each[0], 6*(1+each[1]), color='grey', alpha=0.4, label='Inactive')
         else:
             ax.axvspan(6*each[0], 6*(1+each[1]), color='grey', alpha=0.4)
 
@@ -139,15 +142,27 @@ def graphing_cum_count(data: pd.DataFrame, meal: list, bhv, num, flip=False):
 
     start = None
     end = None
-    for interval in pd.date_range(start=data['Time'].min(), end=data['Time'].max(), freq='20min'):
-        if (19 <= interval.hour or interval.hour < 7) and start == None:
-            start = interval
-        elif interval.hour == 7:
-            end = interval
-            plt.axvspan(start, end, color='grey', alpha=0.4)
-            start = end = None
-    if start != None and end == None:
-        plt.axvspan(start, data['Time'].max(), color='grey', alpha=0.4)
+    
+    if bhv is not None:
+        for interval in pd.date_range(start=data['Time'].min(), end=data['Time'].max(), freq='20min'):
+            if (19 <= interval.hour or interval.hour < 7) and start == None:
+                start = interval
+            elif interval.hour == 7:
+                end = interval
+                plt.axvspan(start, end, color='grey', alpha=0.4)
+                start = end = None
+        if start != None and end == None:
+            plt.axvspan(start, data['Time'].max(), color='grey', alpha=0.4)
+    else:
+        for interval in pd.date_range(start=data['Time'].min(), end=data['Time'].max(), freq='20min'):
+            if (7 <= interval.hour and interval.hour < 19) and start == None:
+                start = interval
+            elif interval.hour == 19 and start != None:        
+                # print(start, interval)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         
+                plt.axvspan(start, interval, color='grey', alpha=0.4)
+                start = end = None
+        if start != None and end == None:
+            plt.axvspan(start, data['Time'].max(), color='grey', alpha=0.4)
     
     patch_meal = mpatches.Patch(color='lightblue', alpha=0.8, label='Meal')
     patch_night = mpatches.Patch(color='grey', alpha=0.5, label='Inactive')
