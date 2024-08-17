@@ -100,15 +100,17 @@ def find_meals(data: pd.DataFrame) -> list:
     meal_list = []
     pellet_count_threshold = 5
     window_duration = timedelta(minutes=10)
+    collect_threshold = 15
     start_idx = 0
 
     for idx, row in data.iterrows():
         meal_start = data.iloc[start_idx]['Time']
         time_diff = row['Time'] - meal_start
 
-        if (row['Pellet_Count'] - data.loc[start_idx]['Pellet_Count'] >= 
-                    pellet_count_threshold) and (time_diff <= window_duration):
-            
+        if ((row['Pellet_Count'] - data.loc[start_idx]['Pellet_Count'] >= pellet_count_threshold) and
+            (time_diff <= window_duration) and
+            (sum(data['collect_time'][start_idx:idx+1]) <= collect_threshold)): 
+
             meal_list.append([meal_start, row['Time']])
             start_idx = idx
         elif time_diff > window_duration:
@@ -213,12 +215,14 @@ def active_meal(meals: list) -> float:
             cnt += 1
     return round(cnt/len(meals), 4) 
 
-def graph_average_pellet(ctrl:list, exp:list, bar_width=0.2, err_width=14, dpi=100, exp_name=None, verbose=True):
+def graph_group_stats(ctrl:list, exp:list, stats_name:str, bar_width=0.2,
+                      err_width=14, dpi=100, exp_name=None, verbose=True):
     """Plot bar graphs of average pellet for control and experiment groups
 
     Args:
         ctrl_pellet_avg (list): control data
         exp_pellet_avg (list): experiment data
+        stats_name (str): the name of statistic you are graphing
         exp_name (_type_, optional): Name of the experiment group. Defaults to None.
         bar_width (float, optional): bar width of bar plot. Defaults to 0.2.
         err_width (int, optional): error bar width onthe bar. Defaults to 12.
@@ -257,7 +261,7 @@ def graph_average_pellet(ctrl:list, exp:list, bar_width=0.2, err_width=14, dpi=1
 
     ax.set_xlabel('Groups', fontsize=14)
     ax.set_ylabel('Averages', fontsize=14)
-    ax.set_title(f'Average Pellet of Control and {exp_name} Groups', fontsize=20)
+    ax.set_title(f'{stats_name} of Control and {exp_name} Groups', fontsize=20)
     ax.set_xticks(x)
     ax.set_xticklabels(['Control', exp_name])
 

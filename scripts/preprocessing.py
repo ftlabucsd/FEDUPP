@@ -1,5 +1,6 @@
 import pandas as pd
 import math
+import numpy as np
 
 def read_excel_by_sheet(sheet, parent='../behavior data integrated/Adjusted FED3 Data.xlsx', 
                         hundredize=True, convert_time=True, remove_trival=True):
@@ -51,10 +52,10 @@ def read_csv_clean(path:str, remove_trivial=True, cumulative_accuracy=False,
     """
     if path.startswith('.'): return None
     
-    df = pd.read_csv(path)
+    all = pd.read_csv(path)
     
-    if 'Time' not in df.columns:
-        df = df[['MM:DD:YYYY hh:mm:ss', 'Event', 'Active_Poke', 'Pellet_Count', 
+    if 'Time' not in all.columns:
+        df = all[['MM:DD:YYYY hh:mm:ss', 'Event', 'Active_Poke', 'Pellet_Count', 
                  'Left_Poke_Count', 'Right_Poke_Count']].rename(columns={
                 'MM:DD:YYYY hh:mm:ss': 'Time'}).dropna()
         
@@ -72,6 +73,14 @@ def read_csv_clean(path:str, remove_trivial=True, cumulative_accuracy=False,
     
     if cumulative_accuracy:
         df = calculate_accuracy_by_row(df, convert_large)
+    
+    if collect_time:
+        df['collect_time'] = all['Retrieval_Time']
+        df['collect_time'] = pd.to_numeric(df['collect_time'], errors='coerce')
+        max_value = df['collect_time'].max()
+        # print("Replaced Timed_out with max value", max_value)
+        df['collect_time'] = df['collect_time'].replace('Timed_out', max_value)
+        df.loc[np.isnan(df['collect_time']), "collect_time"] = 0
     
     return df
 
