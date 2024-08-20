@@ -31,7 +31,6 @@ def model_training(path: str, num_states: int, obs_dim: int, num_categories: int
                     observation_kwargs=dict(C=num_categories), transitions=transition)
     
     log3 = model.fit(y, inputs=X, method='em', num_iters=max_iter, tolerance=1e-4)
-    model.expected_states
     
     return log3, model, X, y, features
 

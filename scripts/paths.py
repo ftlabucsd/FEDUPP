@@ -82,13 +82,14 @@ fr1_cask_sheet = [
 ]
 
 root = '/home/ftlab/Desktop/For_Andy/FED3-data'
-root = '/Users/yaomingyang/Desktop/FED3-data'
+# root = '/Users/yaomingyang/Desktop/FED3-data'
 
 contigency_flip_ctrl = list_files(root=f'{root}/behavior data integrated/CASK/reversal/ctrl', direct_access=False)
 contigency_flip_cask = list_files(root=f'{root}/behavior data integrated/CASK/reversal/cask', direct_access=False)
 
 
-fr1_cask_csvs = list_files(root=f'{root}/behavior data integrated/CASK/FR1/cask', direct_access=False)
+fr1_cask_csvs = list_files(root=f'{root}/behavior data integrated/CASK/FR1/cask', direct_access=True)
+fr1_ctrl_csvs = list_files(root=f'{root}/behavior data integrated/CASK/FR1/ctrl', direct_access=True)
 
 fr1_ivsa = find_condition(root=f'{root}/behavior data integrated/CD1 IVSA/', fr1=True)
 reversal_ivsa = find_condition(root=f'{root}/behavior data integrated/CD1 IVSA/', fr1=False)

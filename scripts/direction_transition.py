@@ -1,6 +1,7 @@
 import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
+from matplotlib.lines import Line2D
 import tools as tl
 from accuracy import calculate_accuracy
 import seaborn as sns
@@ -91,7 +92,7 @@ def remove_pellet(block: pd.DataFrame) -> pd.DataFrame:
     return block[block['Event'] != 'Pellet']
 
 
-def get_transition_info(blocks: list) -> pd.DataFrame:
+def get_transition_info(blocks: list, meals:list) -> pd.DataFrame:
     """Get related statistics about each block
     
     Return a data frame with columns Block_Index, Left_to_Left, Left_to_Right,
@@ -110,6 +111,17 @@ def get_transition_info(blocks: list) -> pd.DataFrame:
         size = len(no_pellet)
         transitions = count_transitions(no_pellet)
         active_poke = block.iloc[0]['Active_Poke']
+        
+        times = block['Time'].tolist()
+        have_meal = False
+        for time in times:
+            for each in meals:
+                if time >= each[0] and time <= each[1]:
+                    have_meal = True
+                    break
+            if have_meal: break
+        time = round((time - times[0]).total_seconds() / 60, 2) if have_meal else 'no meal'
+        
         new_row_data = {
             'Block_Index': i+1,
             'Left_to_Left': round(transitions.get('Left_to_Left')/size * 100, 2),
@@ -119,7 +131,9 @@ def get_transition_info(blocks: list) -> pd.DataFrame:
             'Success_Count': transitions.get('success_count'),
             'Success_Rate' : round(transitions.get('success_count')/size * 100, 2),
             'Active_Poke' : active_poke,
-            'Total_Count': size
+            'First_Meal_Time': time,
+            'Block_Time': round((times[-1] - times[0]).total_seconds() / 60, 2),
+            'Incorrect_Pokes': size - transitions.get('success_count')
         }
         new_add.append(new_row_data)
 
@@ -128,11 +142,11 @@ def get_transition_info(blocks: list) -> pd.DataFrame:
         count = count_pellet(blocks[idx])
         each['Pellet_Rate'] = round(count / len(blocks[idx]), 2)
         idx += 1
-        
-
+    
     data_stats = pd.DataFrame(new_add, columns=[
         'Block_Index', 'Left_to_Left', 'Left_to_Right', 'Right_to_Right', 'Right_to_Left',
-        'Success_Count', 'Success_Rate','Active_Poke', 'Pellet_Rate'])
+        'Success_Count', 'Success_Rate','Active_Poke', 'First_Meal_Time', 'Block_Time', 
+        'Incorrect_Pokes', 'Pellet_Rate'])
 
     return data_stats
 
@@ -149,28 +163,43 @@ def graph_tranition_stats(data_stats: pd.DataFrame, blocks: list, path: str):
     """
     fig, ax = plt.subplots(figsize=(22, 12))
 
-    ax.plot(data_stats['Block_Index'], data_stats['Left_to_Left'],
+    l1 = ax.plot(data_stats['Block_Index'], data_stats['Left_to_Left'],
             marker='o', label='Left-Left', color='black')
-    ax.plot(data_stats['Block_Index'], data_stats['Left_to_Right'],
+    l2 = ax.plot(data_stats['Block_Index'], data_stats['Left_to_Right'],
             marker='*', label='Left-Right', color='green')
-    ax.plot(data_stats['Block_Index'], data_stats['Right_to_Right'],
+    l3 = ax.plot(data_stats['Block_Index'], data_stats['Right_to_Right'],
             marker='s', label='Right-Right', color='orange')
-    ax.plot(data_stats['Block_Index'], data_stats['Right_to_Left'],
-            marker='X', label='Right-Left', color='red')
+    l4 = ax.plot(data_stats['Block_Index'], data_stats['Right_to_Left'],
+            marker='X', label='Right-Left', color='purple')
+     
+    bars1 = ax.bar(data_stats['Block_Index'][::2], data_stats['Success_Rate'][::2],
+                color='pink' if data_stats['Active_Poke'][0] == 'Left' else 'lightblue', alpha=0.7)
 
-    legend = plt.legend(title='Poke Transitions', loc='upper right')
+    bars2 = ax.bar(data_stats['Block_Index'][1::2], data_stats['Success_Rate'][1::2],
+                color='lightblue' if data_stats['Active_Poke'][1] == 'Right' else 'pink', alpha=0.7)
 
-    ax.bar(data_stats['Block_Index'][::2], data_stats['Success_Rate'][::2],
-        label='Success Rate', color='pink' if data_stats['Active_Poke'][0] == 'Left' else 'lightblue', alpha=0.7)
-    ax.bar(data_stats['Block_Index'][1::2], data_stats['Success_Rate'][1::2],
-        label='Success Rate', color='lightblue' if data_stats['Active_Poke'][1] == 'Right' else 'pink', alpha=0.7)
-
+    labels = data_stats['First_Meal_Time']
+    for bar, label in zip(bars1, labels[::2]):
+        ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.01,  # Add small offset (0.01) to bar height
+                label, ha='center', va='bottom', fontsize=12)
+            
+    for bar, label in zip(bars2, labels[1::2]):
+        ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.01,  # Add small offset (0.01) to bar height
+                label, ha='center', va='bottom', fontsize=12)
+    
+    plt.annotate('First Meal Time', 
+            xy=(bars1[0].get_x()+0.4, bars1[0].get_height() + 3), 
+            xytext=(-90, 45),
+            textcoords='offset points',
+            arrowprops=dict(arrowstyle='->', lw=2),
+            fontsize=15,
+            color='blue')
+        
     ax.set_xlabel('Blocks', fontsize=16)
     ax.set_ylabel('Percentage(%)', color='black', fontsize=16)
-
-    legend.get_title().set_fontsize('17')
-    for text in legend.get_texts():
-        text.set_fontsize('15')
+    ax2 = ax.twinx()
+    l5 = ax2.plot(data_stats['Block_Index'], data_stats['Incorrect_Pokes'], color='red', label='Incorrect Pokes', alpha=0.75)
+    ax2.set_ylabel('Incorrect Poke Count', fontsize=16)
 
     night_blocks = []
     block_start_index = 1
@@ -181,26 +210,27 @@ def graph_tranition_stats(data_stats: pd.DataFrame, blocks: list, path: str):
             if 19 <= first_timestamp.hour or first_timestamp.hour < 7:
                 night_blocks.append(block_start_index)
         block_start_index += 1
+    
+    info = tl.get_bhv_num(path)
+
+    if len(info) == 1:
+        night_blocks = [each for each in range(1, len(blocks)+1) if each not in night_blocks]
 
     for block_index in night_blocks:
         ax.axvspan(block_index - 0.5, block_index + 0.5, facecolor='gray', alpha=0.4)
 
     left_patch = mpatches.Patch(color='pink', alpha=0.5, label='Left Active')
     right_patch = mpatches.Patch(color='lightblue', alpha=0.5, label='Right Active')
-    night_patch = mpatches.Patch(color='gray', alpha=0.5, label='Night Period')
-
-    leg_bg = plt.legend(handles=[left_patch, right_patch, night_patch], loc='upper right', bbox_to_anchor=(1.0, 0.84))
-
-    leg_bg.set_title('Correct Rate')
-    leg_bg.get_title().set_fontsize('17')
-    leg_bg.get_texts()[0].set_fontsize('15')
-    leg_bg.get_texts()[1].set_fontsize('15')
-    leg_bg.get_texts()[2].set_fontsize('15')
-
-    ax = plt.gca()
-    ax.add_artist(legend)
+    night_patch = mpatches.Patch(color='gray', alpha=0.5, label='Inactive Period')
     
-    info = tl.get_bhv_num(path)
+    lines = [l1[0], l2[0], l3[0], l4[0], l5[0], bars1[0], bars2[0], left_patch, right_patch, night_patch]  # Combine the line objects
+    labels = [line.get_label() for line in lines]  # Get the labels of the line
+    legend = ax.legend(lines, labels, loc='upper right')
+    legend.set_title('Legend')
+    legend.get_title().set_fontsize('17')
+    for text in legend.get_texts():
+        text.set_fontsize('15')
+    
     if len(info) == 2:
         plt.title(f'Probability of Transitions in Poke Choosing and Accuracy in Group {info[0]} Mouse {info[1]}', fontsize=24)
     else:
@@ -209,7 +239,7 @@ def graph_tranition_stats(data_stats: pd.DataFrame, blocks: list, path: str):
     plt.xticks(data_stats['Block_Index'])
     plt.yticks(range(0, 100, 20))
     fig.set_dpi(80)
-    plt.grid(alpha=0.5, linestyle='--')
+    ax.grid(alpha=0.5, linestyle='--')
     plt.show()
     
     

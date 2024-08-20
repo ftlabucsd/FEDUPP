@@ -33,13 +33,19 @@ def extract_features(path: str, prev_trace: int, meal: bool) -> tuple:
     #     raise ValueError(f'prev_trace needs to be integer from 0 to 6, but got {prev_trace}')
     
     data = pd.read_csv(path)
-    data = data[['MM:DD:YYYY hh:mm:ss', 'Event', 'Active_Poke', 'Pellet_Count']].replace(
+    data = data[['MM:DD:YYYY hh:mm:ss', 'Event', 'Active_Poke', 'Pellet_Count', 'Retrieval_Time']].replace(
         {'LeftWithPellet': 'Left', 'LeftDuringDispense': 'Left',
          'RightWithPellet': 'Right', 'RightDuringDispense': 'Right'}).rename(
-        {'MM:DD:YYYY hh:mm:ss': 'Time'}, axis='columns')
+        {'MM:DD:YYYY hh:mm:ss': 'Time', 'Retrieval_Time': 'collect_time'}, axis='columns')
     data['Time'] = pd.to_datetime(data['Time'])
+    data['collect_time'] = pd.to_numeric(data['collect_time'], errors='coerce')
+    max_value = data['collect_time'].max()
+    data['collect_time'] = data['collect_time'].replace('Timed_out', max_value)
+    data.loc[np.isnan(data['collect_time']), "collect_time"] = 0
+    all_data = data.copy()
+    
     data = data[data['Event'] != 'Pellet'].reset_index(drop=True)
-    meals = ml.find_meals(data)
+    meals = ml.find_meals(all_data)
 
     # Extract the date and time and take 2nd day
     data['Date'] = data['Time'].dt.date
@@ -77,7 +83,7 @@ def extract_features(path: str, prev_trace: int, meal: bool) -> tuple:
         data['meal'] = data['meal'].map(bool_mapper)
 
     data = data.drop(
-        ['Date', 'Time_of_day', 'Time', 'prev_active', 'Active_Poke', 'Pellet_Count'], axis=1)
+        ['Date', 'Time_of_day', 'Time', 'prev_active', 'Active_Poke', 'Pellet_Count', 'collect_time'], axis=1)
 
     X = data.drop(['Event'], axis='columns')[prev_trace:]
     y = data['Event'][prev_trace:]
