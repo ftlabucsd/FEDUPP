@@ -41,13 +41,15 @@ def clean_and_interval(path: str) -> pd.DataFrame:
         pd.DataFrame: data with interval column
     """
     data = pd.read_csv(path)
-    data = data[['MM:DD:YYYY hh:mm:ss', 'Event']].rename(columns={'MM:DD:YYYY hh:mm:ss' : 'Time'})
+    data = data[['MM:DD:YYYY hh:mm:ss', 'Event', 'Retrieval_Time']].rename(columns={'MM:DD:YYYY hh:mm:ss' : 'Time', 
+                                                                                    'Retrieval_Time': 'collect_time'})
     data = data[data['Event'] == 'Pellet'].reset_index().drop('index', axis='columns')
     data['Time'] = pd.to_datetime(data['Time'])
-    
+
     # calculate time
     data['Interval'] = data['Time'].diff().fillna(pd.Timedelta(seconds=0))
     data['Interval'] = data['Interval'].dt.total_seconds() / 60
+
     return data
 
 

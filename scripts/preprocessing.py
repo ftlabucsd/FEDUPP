@@ -66,11 +66,6 @@ def read_csv_clean(path:str, remove_trivial=True, cumulative_accuracy=False,
     df['Time'] = pd.to_datetime(df['Time'])
     df = df.reset_index().drop(['index'], axis='columns')
     
-    if remove_trivial:
-        first_non_zero_index = df['Cum_Sum'].ne(0).idxmax()
-        df = df.loc[first_non_zero_index:]
-        df.reset_index(drop=True, inplace=True)
-    
     if cumulative_accuracy:
         df = calculate_accuracy_by_row(df, convert_large)
     
@@ -81,6 +76,11 @@ def read_csv_clean(path:str, remove_trivial=True, cumulative_accuracy=False,
         # print("Replaced Timed_out with max value", max_value)
         df['collect_time'] = df['collect_time'].replace('Timed_out', max_value)
         df.loc[np.isnan(df['collect_time']), "collect_time"] = 0
+    
+    if remove_trivial:
+        first_non_zero_index = df['Cum_Sum'].ne(0).idxmax()
+        df = df.loc[first_non_zero_index:]
+        df.reset_index(drop=True, inplace=True)
     
     return df
 

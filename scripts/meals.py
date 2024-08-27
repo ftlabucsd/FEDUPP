@@ -93,15 +93,35 @@ def graph_pellet_frequency(grouped_data: pd.DataFrame, bhv, num):
     plt.show()
 
 
-def find_meals(data: pd.DataFrame) -> list:
+def meal_threshold(data: pd.DataFrame, collect_quantile=0.6, pellet_quantile=0.75) -> tuple:
+    data = data[data['Event'] == 'Pellet'].reset_index().drop('index', axis='columns')
+    data['Time'] = pd.to_datetime(data['Time'])
+
+    data['Interval'] = data['Time'].diff().fillna(pd.Timedelta(seconds=0))
+    data['Interval'] = data['Interval'].dt.total_seconds() / 60
+    
+    data['collect_time'] = pd.to_numeric(data['collect_time'], errors='coerce')
+    max_value = data['collect_time'].max()
+    data['collect_time'] = data['collect_time'].replace('Timed_out', max_value)
+
+    collect_time_thres = data['collect_time'].quantile(collect_quantile)
+    pellet_interval_thres = data['Interval'].quantile(pellet_quantile)
+    return pellet_interval_thres, collect_time_thres
+
+
+def find_meals(data: pd.DataFrame, pellet_count_threshold=5, collect_quantile=0.6,
+               pellet_quantile=0.75, verbose=False) -> list:
     """
     find meals in the behaviors. 5 pellets in 10 minutes is considered as a meal
     """
     meal_list = []
-    pellet_count_threshold = 5
-    window_duration = timedelta(minutes=10)
-    collect_threshold = 15
+    pellet_thres, collect_thres = meal_threshold(data, collect_quantile, pellet_quantile)
+    window_duration = timedelta(minutes=pellet_count_threshold*pellet_thres)
+    collect_threshold = pellet_count_threshold*collect_thres
+    # print(window_duration, collect_threshold)
     start_idx = 0
+    if verbose:
+        print(f'Pellet Window Threshold: {window_duration.total_seconds()/60}min, Retrieval Window: {collect_threshold}min')
 
     for idx, row in data.iterrows():
         meal_start = data.iloc[start_idx]['Time']
@@ -109,9 +129,12 @@ def find_meals(data: pd.DataFrame) -> list:
 
         if ((row['Pellet_Count'] - data.loc[start_idx]['Pellet_Count'] >= pellet_count_threshold) and
             (time_diff <= window_duration) and
-            (sum(data['collect_time'][start_idx:idx+1]) <= collect_threshold)): 
-
-            meal_list.append([meal_start, row['Time']])
+            (sum(data['collect_time'][start_idx:idx+1]) <= collect_threshold)):
+            # print(data['collect_time'][start_idx:idx+1].tolist(), sum(data['collect_time'][start_idx:idx+1]))
+            sliced_data = data[start_idx:idx+1]
+            first_pellet_idx = sliced_data[sliced_data['Event'] == 'Pellet'].index[0]
+            first_pellet_time = sliced_data.loc[first_pellet_idx, 'Time']
+            meal_list.append([first_pellet_time, row['Time']])
             start_idx = idx
         elif time_diff > window_duration:
             start_idx = idx
@@ -166,7 +189,7 @@ def graphing_cum_count(data: pd.DataFrame, meal: list, bhv, num, flip=False):
         if start != None and end == None:
             plt.axvspan(start, data['Time'].max(), color='grey', alpha=0.4)
     
-    patch_meal = mpatches.Patch(color='lightblue', alpha=0.8, label='Meal')
+    patch_meal = mpatches.Patch(color='lightblue', alpha=0.9, label='Meal')
     patch_night = mpatches.Patch(color='grey', alpha=0.5, label='Inactive')
 
     plt.legend(handles=[patch_meal, patch_night], loc='upper right')
@@ -267,35 +290,4 @@ def graph_group_stats(ctrl:list, exp:list, stats_name:str, bar_width=0.2,
 
     ax.legend()
     plt.show()
-
-
-# def graph_average_pellet(ctrl_pellet_avg:list, exp_pellet_avg:list, exp_name=None):
-#     """Plot bar graphs of average pellet for control and experiment groups
-
-#     Args:
-#         ctrl_pellet_avg (list): control data
-#         exp_pellet_avg (list): experiment data
-#         exp_name (_type_, optional): Name of the experiment group. Defaults to None.
-#     """
-#     exp_name = 'Experiment' if exp_name == None else exp_name
-    
-#     # Create DataFrames for each group
-#     data_ctrl = pd.DataFrame({'Group': 'Control', 'Value': ctrl_pellet_avg})
-#     data_cask = pd.DataFrame({'Group': exp_name, 'Value': exp_pellet_avg})
-
-#     # Concatenate the two DataFrames
-#     data = pd.concat([data_ctrl, data_cask])
-
-#     plt.figure(figsize=(8, 6))
-#     sns.set(style="whitegrid")
-
-#     # Create the bar plot with error bars
-#     sns.barplot(x="Group", y="Value", data=data, palette="pastel",
-#                     errorbar="sd", capsize=0.2, width=0.5, errcolor='0.4')
-
-#     plt.title('Average Pellets Per Hour for FR1', fontsize=16)
-#     plt.xlabel('Groups')
-#     plt.ylabel('Average Pellets')
-#     plt.show()
-
     

@@ -92,7 +92,7 @@ def remove_pellet(block: pd.DataFrame) -> pd.DataFrame:
     return block[block['Event'] != 'Pellet']
 
 
-def get_transition_info(blocks: list, meals:list) -> pd.DataFrame:
+def get_transition_info(blocks: list, meals:list, reverse:bool) -> pd.DataFrame:
     """Get related statistics about each block
     
     Return a data frame with columns Block_Index, Left_to_Left, Left_to_Right,
@@ -105,13 +105,14 @@ def get_transition_info(blocks: list, meals:list) -> pd.DataFrame:
         pd.DataFrame: stats
     """
     new_add = []
+    inactives = find_inactive_blocks(blocks, reverse=reverse)
 
     for i, block in enumerate(blocks):
         no_pellet = remove_pellet(block)
         size = len(no_pellet)
         transitions = count_transitions(no_pellet)
         active_poke = block.iloc[0]['Active_Poke']
-        
+
         times = block['Time'].tolist()
         have_meal = False
         for time in times:
@@ -133,7 +134,8 @@ def get_transition_info(blocks: list, meals:list) -> pd.DataFrame:
             'Active_Poke' : active_poke,
             'First_Meal_Time': time,
             'Block_Time': round((times[-1] - times[0]).total_seconds() / 60, 2),
-            'Incorrect_Pokes': size - transitions.get('success_count')
+            'Incorrect_Pokes': size - transitions.get('success_count'),
+            'Active': not (i in inactives)
         }
         new_add.append(new_row_data)
 
@@ -146,9 +148,43 @@ def get_transition_info(blocks: list, meals:list) -> pd.DataFrame:
     data_stats = pd.DataFrame(new_add, columns=[
         'Block_Index', 'Left_to_Left', 'Left_to_Right', 'Right_to_Right', 'Right_to_Left',
         'Success_Count', 'Success_Rate','Active_Poke', 'First_Meal_Time', 'Block_Time', 
-        'Incorrect_Pokes', 'Pellet_Rate'])
+        'Incorrect_Pokes', 'Active','Pellet_Rate'])
 
     return data_stats
+
+
+def first_meal_stats(data_stats: pd.DataFrame, ignore_inactive=False):
+    data_stats = data_stats[:-1]
+    time_list = data_stats['First_Meal_Time'].to_numpy()
+    total_list = data_stats['Block_Time'].to_numpy()
+    
+    if ignore_inactive:
+        active_idx = [idx for idx, each in data_stats.iterrows() if each['Active']]
+        time_list = time_list[active_idx]
+        total_list = total_list[active_idx]
+        
+    time_list = np.array([time if type(time) == float else total_list[idx] for idx, time in enumerate(time_list)])
+    
+    avg_ratio = np.median(time_list/total_list)
+    avg_time = np.median(time_list)
+    return avg_ratio, avg_time
+
+
+def find_inactive_blocks(blocks:list, reverse):
+    night_blocks = []
+    block_start_index = 1
+
+    for block_df in blocks:
+        if not block_df.empty and 'Time' in block_df:
+            times = pd.to_datetime(block_df['Time']).tolist()
+            cnt = [1 if time.hour >= 19 or time.hour < 7 else 0 for time in times]
+            if sum(cnt) > len(cnt) // 2:
+                night_blocks.append(block_start_index)
+        block_start_index += 1
+
+    if reverse:
+        night_blocks = [each for each in range(1, len(blocks)+1) if each not in night_blocks]
+    return night_blocks
 
 
 def graph_tranition_stats(data_stats: pd.DataFrame, blocks: list, path: str):
@@ -179,42 +215,36 @@ def graph_tranition_stats(data_stats: pd.DataFrame, blocks: list, path: str):
                 color='lightblue' if data_stats['Active_Poke'][1] == 'Right' else 'pink', alpha=0.7)
 
     labels = data_stats['First_Meal_Time']
-    for bar, label in zip(bars1, labels[::2]):
-        ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.01,  # Add small offset (0.01) to bar height
+    total_times = data_stats['Block_Time']
+    for bar, label, total in zip(bars1, labels[::2], total_times[::2]):
+        ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 1.75,  # Add small offset (0.01) to bar height
                 label, ha='center', va='bottom', fontsize=12)
+        ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.01,  # Add small offset (0.01) to bar height
+                total, ha='center', va='bottom', fontsize=12)
             
-    for bar, label in zip(bars2, labels[1::2]):
-        ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.01,  # Add small offset (0.01) to bar height
+    for bar, label, total in zip(bars2, labels[1::2], total_times[1::2]):
+        ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 1.75,  # Add small offset (0.01) to bar height
                 label, ha='center', va='bottom', fontsize=12)
+        ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.01,  # Add small offset (0.01) to bar height
+                total, ha='center', va='bottom', fontsize=12)
     
-    plt.annotate('First Meal Time', 
-            xy=(bars1[0].get_x()+0.4, bars1[0].get_height() + 3), 
-            xytext=(-90, 45),
+    plt.annotate('First Meal Time (min) \n Block Length', 
+            xy=(bars1[0].get_x()+0.4, bars1[0].get_height() + 4.2), 
+            xytext=(-90, 20),
             textcoords='offset points',
             arrowprops=dict(arrowstyle='->', lw=2),
-            fontsize=15,
+            fontsize=16,
             color='blue')
         
     ax.set_xlabel('Blocks', fontsize=16)
     ax.set_ylabel('Percentage(%)', color='black', fontsize=16)
     ax2 = ax.twinx()
-    l5 = ax2.plot(data_stats['Block_Index'], data_stats['Incorrect_Pokes'], color='red', label='Incorrect Pokes', alpha=0.75)
+    l5 = ax2.plot(data_stats['Block_Index'], data_stats['Incorrect_Pokes'], color='red',
+                  label='Incorrect Pokes', alpha=0.7, lw=2)
     ax2.set_ylabel('Incorrect Poke Count', fontsize=16)
-
-    night_blocks = []
-    block_start_index = 1
-
-    for block_df in blocks:
-        if not block_df.empty and 'Time' in block_df:
-            first_timestamp = pd.to_datetime(block_df['Time'].iloc[0])
-            if 19 <= first_timestamp.hour or first_timestamp.hour < 7:
-                night_blocks.append(block_start_index)
-        block_start_index += 1
     
     info = tl.get_bhv_num(path)
-
-    if len(info) == 1:
-        night_blocks = [each for each in range(1, len(blocks)+1) if each not in night_blocks]
+    night_blocks = find_inactive_blocks(blocks, reverse=len(info) == 1)
 
     for block_index in night_blocks:
         ax.axvspan(block_index - 0.5, block_index + 0.5, facecolor='gray', alpha=0.4)
@@ -225,11 +255,11 @@ def graph_tranition_stats(data_stats: pd.DataFrame, blocks: list, path: str):
     
     lines = [l1[0], l2[0], l3[0], l4[0], l5[0], bars1[0], bars2[0], left_patch, right_patch, night_patch]  # Combine the line objects
     labels = [line.get_label() for line in lines]  # Get the labels of the line
-    legend = ax.legend(lines, labels, loc='upper right')
+    legend = ax.legend(lines, labels, loc='upper right', bbox_to_anchor=(1.13, 1), borderaxespad=0)
     legend.set_title('Legend')
-    legend.get_title().set_fontsize('17')
+    legend.get_title().set_fontsize('16')
     for text in legend.get_texts():
-        text.set_fontsize('15')
+        text.set_fontsize('14')
     
     if len(info) == 2:
         plt.title(f'Probability of Transitions in Poke Choosing and Accuracy in Group {info[0]} Mouse {info[1]}', fontsize=24)
@@ -238,7 +268,7 @@ def graph_tranition_stats(data_stats: pd.DataFrame, blocks: list, path: str):
 
     plt.xticks(data_stats['Block_Index'])
     plt.yticks(range(0, 100, 20))
-    fig.set_dpi(80)
+    fig.set_dpi(100)
     ax.grid(alpha=0.5, linestyle='--')
     plt.show()
     
