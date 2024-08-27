@@ -115,6 +115,7 @@ def find_meals(data: pd.DataFrame, pellet_count_threshold=5, collect_quantile=0.
     find meals in the behaviors. 5 pellets in 10 minutes is considered as a meal
     """
     meal_list = []
+    data = data[data['Event'] == 'Pellet'].reset_index(drop=True)
     pellet_thres, collect_thres = meal_threshold(data, collect_quantile, pellet_quantile)
     window_duration = timedelta(minutes=pellet_count_threshold*pellet_thres)
     collect_threshold = pellet_count_threshold*collect_thres
@@ -131,16 +132,42 @@ def find_meals(data: pd.DataFrame, pellet_count_threshold=5, collect_quantile=0.
             (time_diff <= window_duration) and
             (sum(data['collect_time'][start_idx:idx+1]) <= collect_threshold)):
             # print(data['collect_time'][start_idx:idx+1].tolist(), sum(data['collect_time'][start_idx:idx+1]))
-            sliced_data = data[start_idx:idx+1]
-            first_pellet_idx = sliced_data[sliced_data['Event'] == 'Pellet'].index[0]
-            first_pellet_time = sliced_data.loc[first_pellet_idx, 'Time']
-            meal_list.append([first_pellet_time, row['Time']])
+            meal_list.append([meal_start, row['Time']])
             start_idx = idx
         elif time_diff > window_duration:
             start_idx = idx
 
     return meal_list
 
+
+def find_meals_paper(df, time_threshold=130):
+    df = df[df['Event'] == 'Pellet'].reset_index(drop=True)
+    df['Time'] = pd.to_datetime(df['Time']) 
+    meals = []
+    meal_start_time = None
+    meal_end_time = None
+    window_duration = timedelta(minutes=15)
+    
+    for index, row in df.iterrows():
+        current_time = row['Time']  # Get current time from the 'Time' column
+        collect_time = row['collect_time'] * 60  # Convert collect_time to seconds
+        
+        if meal_start_time is None:
+            meal_start_time = current_time
+            meal_end_time = current_time
+        # if current pellet is retrieved within 130 seconds
+        if collect_time <= time_threshold and current_time - meal_start_time <= window_duration:
+            meal_end_time = current_time # extend meal end time
+        else:
+            if meal_start_time != meal_end_time:
+                meals.append([meal_start_time, meal_end_time])
+            meal_start_time = current_time
+            meal_end_time = current_time
+    
+    if meal_start_time is not None:
+        meals.append([meal_start_time, meal_end_time])
+    
+    return meals
 
 def graphing_cum_count(data: pd.DataFrame, meal: list, bhv, num, flip=False):
     """
