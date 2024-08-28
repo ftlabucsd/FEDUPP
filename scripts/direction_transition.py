@@ -155,16 +155,17 @@ def get_transition_info(blocks: list, meals:list, reverse:bool) -> pd.DataFrame:
 
 def first_meal_stats(data_stats: pd.DataFrame, ignore_inactive=False):
     data_stats = data_stats[:-1]
-    time_list = data_stats['First_Meal_Time'].to_numpy()
-    total_list = data_stats['Block_Time'].to_numpy()
+    total_list = data_stats['Block_Time'].to_numpy(dtype=np.float32)
+    time_list = np.array([time if type(time) == float else total_list[idx] 
+                          for idx, time in enumerate(data_stats['First_Meal_Time'])])
     
     if ignore_inactive:
         active_idx = [idx for idx, each in data_stats.iterrows() if each['Active']]
         time_list = time_list[active_idx]
         total_list = total_list[active_idx]
         
-    time_list = np.array([time if type(time) == float else total_list[idx] for idx, time in enumerate(time_list)])
     
+    # print(time_list, total_list)
     avg_ratio = np.median(time_list/total_list)
     avg_time = np.median(time_list)
     return avg_ratio, avg_time

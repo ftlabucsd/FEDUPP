@@ -142,7 +142,9 @@ def find_meals(data: pd.DataFrame, pellet_count_threshold=5, collect_quantile=0.
 
 def find_meals_paper(df, time_threshold=130):
     df = df[df['Event'] == 'Pellet'].reset_index(drop=True)
-    df['Time'] = pd.to_datetime(df['Time']) 
+    df['Time'] = pd.to_datetime(df['Time'])
+    df['retrieval_timestamp'] = df['Time'] + pd.to_timedelta(df['collect_time'], unit='m')
+
     meals = []
     meal_start_time = None
     meal_end_time = None
@@ -150,13 +152,14 @@ def find_meals_paper(df, time_threshold=130):
     
     for index, row in df.iterrows():
         current_time = row['Time']  # Get current time from the 'Time' column
-        collect_time = row['collect_time'] * 60  # Convert collect_time to seconds
         
         if meal_start_time is None:
             meal_start_time = current_time
             meal_end_time = current_time
-        # if current pellet is retrieved within 130 seconds
-        if collect_time <= time_threshold and current_time - meal_start_time <= window_duration:
+
+        # if current pellet is retrieved within 130 seconds after previous retrieval
+        if (((row['retrieval_timestamp'] - meal_start_time).total_seconds() <= time_threshold) and
+             (current_time - meal_start_time <= window_duration)):
             meal_end_time = current_time # extend meal end time
         else:
             if meal_start_time != meal_end_time:
