@@ -4,7 +4,7 @@ import seaborn as sns
 import matplotlib.patches as mpatches
 from datetime import timedelta
 import numpy as np
-from accuracy import find_night_index
+from accuracy import find_night_index, calculate_accuracy
 
 plt.rcParams['figure.figsize'] = (20, 6)
 
@@ -140,37 +140,51 @@ def find_meals(data: pd.DataFrame, pellet_count_threshold=5, collect_quantile=0.
     return meal_list
 
 
-def find_meals_paper(df, time_threshold=130):
-    df = df[df['Event'] == 'Pellet'].reset_index(drop=True)
-    df['Time'] = pd.to_datetime(df['Time'])
+def find_meals_paper(data:pd.DataFrame, time_threshold=130, pellet_threshold=3):
+    data['Time'] = pd.to_datetime(data['Time'])
+    df = data[data['Event'] == 'Pellet'].copy()
     df['retrieval_timestamp'] = df['Time'] + pd.to_timedelta(df['collect_time'], unit='m')
 
     meals = []
+    meal_pellet_cnt = []
+    meal_acc = []
     meal_start_time = None
     meal_end_time = None
-    window_duration = timedelta(minutes=15)
+    meal_start_index = None
+    # window_duration = timedelta(minutes=15)
     
+    pellet_cnt = 0 # record pellets in the meal
     for index, row in df.iterrows():
-        current_time = row['Time']  # Get current time from the 'Time' column
-        
+        current_time = row['retrieval_timestamp']  # Get current time from the 'Time' column
+
         if meal_start_time is None:
             meal_start_time = current_time
             meal_end_time = current_time
+            meal_start_index = index
 
         # if current pellet is retrieved within 130 seconds after previous retrieval
-        if (((row['retrieval_timestamp'] - meal_start_time).total_seconds() <= time_threshold) and
-             (current_time - meal_start_time <= window_duration)):
+        if ((row['retrieval_timestamp'] - meal_start_time).total_seconds() <= time_threshold):
             meal_end_time = current_time # extend meal end time
+            pellet_cnt += 1
         else:
-            if meal_start_time != meal_end_time:
+            meal_events = data.loc[meal_start_index:index]
+            if pellet_cnt >= pellet_threshold and calculate_accuracy(meal_events) > 50:
                 meals.append([meal_start_time, meal_end_time])
+                meal_pellet_cnt.append(pellet_cnt)
+                meal_acc.append(calculate_accuracy(meal_events))
+
             meal_start_time = current_time
             meal_end_time = current_time
-    
-    if meal_start_time is not None:
+            meal_start_index = index
+            pellet_cnt = 0
+
+    if pellet_cnt >= pellet_threshold:
         meals.append([meal_start_time, meal_end_time])
-    
-    return meals
+        meal_pellet_cnt.append(pellet_cnt)
+        meal_events = data.loc[meal_start_index:index]
+        meal_acc.append(calculate_accuracy(meal_events))
+    return meals, meal_pellet_cnt, meal_acc
+
 
 def graphing_cum_count(data: pd.DataFrame, meal: list, bhv, num, flip=False):
     """
@@ -267,6 +281,7 @@ def active_meal(meals: list) -> float:
         if meal[0].hour >= 19 or meal[0].hour < 7:
             cnt += 1
     return round(cnt/len(meals), 4) 
+
 
 def graph_group_stats(ctrl:list, exp:list, stats_name:str, bar_width=0.2,
                       err_width=14, dpi=100, exp_name=None, verbose=True):

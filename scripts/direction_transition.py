@@ -6,6 +6,7 @@ import tools as tl
 from accuracy import calculate_accuracy
 import seaborn as sns
 import numpy as np
+from meals import find_meals_paper
 
 colors = {'Left': 'red', 'Right': 'blue', 'Pellet': 'green'}
 
@@ -92,7 +93,7 @@ def remove_pellet(block: pd.DataFrame) -> pd.DataFrame:
     return block[block['Event'] != 'Pellet']
 
 
-def get_transition_info(blocks: list, meals:list, reverse:bool) -> pd.DataFrame:
+def get_transition_info(blocks: list, meal_config:list, reverse:bool) -> pd.DataFrame:
     """Get related statistics about each block
     
     Return a data frame with columns Block_Index, Left_to_Left, Left_to_Right,
@@ -114,14 +115,8 @@ def get_transition_info(blocks: list, meals:list, reverse:bool) -> pd.DataFrame:
         active_poke = block.iloc[0]['Active_Poke']
 
         times = block['Time'].tolist()
-        have_meal = False
-        for time in times:
-            for each in meals:
-                if time >= each[0] and time <= each[1]:
-                    have_meal = True
-                    break
-            if have_meal: break
-        time = round((time - times[0]).total_seconds() / 60, 2) if have_meal else 'no meal'
+        meals,_,_ = find_meals_paper(block, meal_config[0], meal_config[1])
+        time = round((meals[0][0] - times[0]).total_seconds() / 60, 2) if len(meals) > 0 else 'no meal'
         
         new_row_data = {
             'Block_Index': i+1,

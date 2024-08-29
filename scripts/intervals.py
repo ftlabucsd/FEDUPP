@@ -87,8 +87,27 @@ def mean_pellet_collect_time(path:str, remove_outlier=False, n_stds=3):
         cutoff = mean+std*n_stds
         pellet_times = [each for each in pellet_times if each < cutoff]
     return pellet_times, np.mean(pellet_times), np.std(pellet_times)
-    
 
+
+def plot_retrieval_time(path:str, remove_outlier=False, n_stds=3):
+    times, mean, std = mean_pellet_collect_time(path, remove_outlier, n_stds)
+    
+    plt.figure(figsize=(6,2))
+    plt.boxplot(times, vert=False, widths=0.75, patch_artist=True, 
+                 boxprops=dict(facecolor='lightblue', color='blue'),
+                 whiskerprops=dict(color='blue'),
+                 capprops=dict(color='blue'),
+                 medianprops=dict(color='red'),
+                 flierprops=dict(markerfacecolor='blue', alpha=0.4, marker='o', markersize=5, linestyle='none'))
+    plt.xlabel('Retrieval Time (min)', fontsize=15)
+    info = get_bhv_num(path)
+    if len(info) == 2:
+        plt.title(f'Retrieval Time of Group {info[0]} Mouse {info[1]}', fontsize=18)
+    else:
+        plt.title(f'Retrieval Time of Mouse {info[0]}', fontsize=18)
+    plt.show()
+    
+    
 def perform_T_test(ctrl:list, exp:list, test_side='two-sided', alpha=0.05, paired=False):
     """Perform T tests on control and experiment groups
 

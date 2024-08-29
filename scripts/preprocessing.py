@@ -107,8 +107,8 @@ def calculate_accuracy_by_row(df:pd.DataFrame, convert_large=True):
     
 def get_retrieval_time(path:str):
     df = pd.read_csv(path)
-    times = df['Retrieval_Time']
-    pellet_times = [each for each in times.tolist() if each != 'Timed_out']
+    times = df['Retrieval_Time'].tolist()
+    pellet_times = [each for each in times if each != 'Timed_out']
     pellet_times = list(map(float, pellet_times))
     pellet_times = [each for each in pellet_times if not math.isnan(each)]
     return pellet_times

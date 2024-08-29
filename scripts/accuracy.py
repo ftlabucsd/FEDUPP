@@ -59,10 +59,13 @@ def cumulative_pellets_meals(data: pd.DataFrame, bhv: int, num: int):
     plt.show()
 
 
-def calculate_accuracy(group):
+def calculate_accuracy(group: pd.DataFrame):
     """
     Calculate the percent correct(0-100) in a interval of getting correct poke
     """
+    if 'Pellet' in group['Event'].values:
+        group = group[group['Event'] != 'Pellet']
+        
     total_events = len(group)
     matching_events = group[group['Event'] == group['Active_Poke']]
     matching_count = len(matching_events)
