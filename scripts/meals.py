@@ -1,3 +1,4 @@
+from collections import defaultdict
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -109,35 +110,60 @@ def meal_threshold(data: pd.DataFrame, collect_quantile=0.6, pellet_quantile=0.7
     return pellet_interval_thres, collect_time_thres
 
 
-def find_meals(data: pd.DataFrame, pellet_count_threshold=5, collect_quantile=0.6,
-               pellet_quantile=0.75, verbose=False) -> list:
+def extract_meal_acc_each(events: pd.DataFrame):
+    acc = []
+    pellet_indices = events.index[events['Event'] == 'Pellet'].tolist()
+
+    for idx in range(len(pellet_indices) - 1):
+        start, end = pellet_indices[idx], pellet_indices[idx+1]
+        curr_slice = events.loc[start:end]
+        acc.append(calculate_accuracy(curr_slice))
+
+    # print(f"There are {len(pellet_indices)} pellets and {len(acc)} accuracy")
+    return acc
+
+
+def extract_meals_data(data: pd.DataFrame, time_threshold=130, 
+                       pellet_threshold=3, verbose=False) -> list:
     """
     find meals in the behaviors. 5 pellets in 10 minutes is considered as a meal
     """
-    meal_list = []
-    data = data[data['Event'] == 'Pellet'].reset_index(drop=True)
-    pellet_thres, collect_thres = meal_threshold(data, collect_quantile, pellet_quantile)
-    window_duration = timedelta(minutes=pellet_count_threshold*pellet_thres)
-    collect_threshold = pellet_count_threshold*collect_thres
-    # print(window_duration, collect_threshold)
-    start_idx = 0
-    if verbose:
-        print(f'Pellet Window Threshold: {window_duration.total_seconds()/60}min, Retrieval Window: {collect_threshold}min')
+    data['Time'] = pd.to_datetime(data['Time'])
+    df = data[data['Event'] == 'Pellet'].copy()
+    df['retrieval_timestamp'] = df['Time'] + pd.to_timedelta(df['collect_time'], unit='m')
 
-    for idx, row in data.iterrows():
-        meal_start = data.iloc[start_idx]['Time']
-        time_diff = row['Time'] - meal_start
+    meal_acc = defaultdict(list) # key is number of pellets, value is each series of accuracy in the meal
+    meal_start_time = None
+    meal_start_index = None
 
-        if ((row['Pellet_Count'] - data.loc[start_idx]['Pellet_Count'] >= pellet_count_threshold) and
-            (time_diff <= window_duration) and
-            (sum(data['collect_time'][start_idx:idx+1]) <= collect_threshold)):
-            # print(data['collect_time'][start_idx:idx+1].tolist(), sum(data['collect_time'][start_idx:idx+1]))
-            meal_list.append([meal_start, row['Time']])
-            start_idx = idx
-        elif time_diff > window_duration:
-            start_idx = idx
+    pellet_cnt = 1 # record pellets in the meal
+    for index, row in df.iterrows():
+        current_time = row['retrieval_timestamp']  # Get current time from the 'Time' column
 
-    return meal_list
+        if meal_start_time is None:
+            meal_start_time = current_time
+            meal_start_index = index
+            continue
+
+        # if current pellet is retrieved within 130 seconds after previous retrieval
+        if ((row['retrieval_timestamp'] - meal_start_time).total_seconds() <= time_threshold):
+            pellet_cnt += 1
+        else:
+            if pellet_cnt >= pellet_threshold:
+                pellet_cnt += 1
+                meal_events = data.loc[meal_start_index:index]
+                accuracies = extract_meal_acc_each(meal_events)
+                meal_acc[pellet_cnt].append(accuracies)
+
+            meal_start_time = current_time
+            meal_start_index = index
+            pellet_cnt = 1
+
+    if pellet_cnt >= pellet_threshold:
+        accuracies = extract_meal_acc_each(meal_events)
+        meal_acc[len(accuracies)+1].append(accuracies)
+    
+    return meal_acc
 
 
 def find_meals_paper(data:pd.DataFrame, time_threshold=130, pellet_threshold=3):
@@ -335,4 +361,30 @@ def graph_group_stats(ctrl:list, exp:list, stats_name:str, bar_width=0.2,
 
     ax.legend()
     plt.show()
+
+
+def print_meal_stats(data):
+    total_meals = 0
+    keep_meals = 0
+    for key, item in data.items():
+        size = len(item)
+        total_meals += size
+        if key in [3, 4, 5]:
+            keep_meals += size
+            print(f"Number of Pellets: {key}, n_meals: {size}")
+    print(f"Total {total_meals} meals and keep {keep_meals}")
+
+
+def preprocess_meal_data(data: defaultdict):
+    new_data = []
+    new_data.extend(data[3])
+    new_data.extend(data[4])
+    new_data.extend(data[5])
+    for each in new_data:
+        size = len(each)
+        while size < 5:
+            each.append(0)
+            size += 1
+    return np.array(new_data, dtype=np.float16)
+
     
