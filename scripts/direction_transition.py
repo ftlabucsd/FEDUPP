@@ -153,13 +153,12 @@ def first_meal_stats(data_stats: pd.DataFrame, ignore_inactive=False):
     total_list = data_stats['Block_Time'].to_numpy(dtype=np.float32)
     time_list = np.array([time if type(time) == float else total_list[idx] 
                           for idx, time in enumerate(data_stats['First_Meal_Time'])])
-    
+
     if ignore_inactive:
         active_idx = [idx for idx, each in data_stats.iterrows() if each['Active']]
         time_list = time_list[active_idx]
         total_list = total_list[active_idx]
         
-    
     # print(time_list, total_list)
     avg_ratio = np.median(time_list/total_list)
     avg_time = np.median(time_list)
@@ -236,7 +235,7 @@ def graph_tranition_stats(data_stats: pd.DataFrame, blocks: list, path: str):
     ax.set_ylabel('Percentage(%)', color='black', fontsize=16)
     ax2 = ax.twinx()
     l5 = ax2.plot(data_stats['Block_Index'], data_stats['Incorrect_Pokes'], color='red',
-                  label='Incorrect Pokes', alpha=0.7, lw=2)
+                  label='Incorrect Pokes', alpha=0.5, lw=2)
     ax2.set_ylabel('Incorrect Poke Count', fontsize=16)
     
     info = tl.get_bhv_num(path)
@@ -268,6 +267,73 @@ def graph_tranition_stats(data_stats: pd.DataFrame, blocks: list, path: str):
     ax.grid(alpha=0.5, linestyle='--')
     plt.show()
     
+
+def graph_learning_trend_by_activity(data_stats: pd.DataFrame, blocks: list, path: str, block_prop=0.6, action_prop=0.5):
+    """
+    Graph Statistics of first 60% block in transition
+
+    Visualize accuracy of each transition, the accuracy and active poke of each block
+
+    Args:
+        data_stats (pd.DataFrame): calculated statistics from the data
+        blocks (list): list of pd.DataFrame that is split from the complete data
+        path (str): path of original file path to get display info
+        block_prop (float): proportion of the blocks used (Default is 0.6)
+        action_prop (float): proportion of the data in each block used (Default is 0.5) 
+    """
+    # Calculate cutoff based on block proportion
+    cutoff = int(len(data_stats) * block_prop)
+    data_stats = data_stats.iloc[:cutoff].reset_index(drop=True)
+    cut_blocks = blocks[:cutoff]
+    acc_in_block_by_prop = block_accuracy_by_proportion(cut_blocks, action_prop)
+
+    # Identify inactive and active block indices
+    info = tl.get_bhv_num(path)
+    night_blocks = find_inactive_blocks(cut_blocks, len(info)==1)
+    night_blocks = [each-1 for each in night_blocks]
+    active_blocks = [i for i in range(len(data_stats)) if i not in night_blocks]
+
+    # Split data_stats and accuracy into active and inactive periods
+    data_stats_active = data_stats.iloc[active_blocks]
+    data_stats_inactive = data_stats.iloc[night_blocks]
+    acc_active = [acc_in_block_by_prop[i] for i in active_blocks]
+    acc_inactive = [acc_in_block_by_prop[i] for i in night_blocks]
+
+    fig, (ax_active, ax_inactive) = plt.subplots(2, 1, figsize=(12, 8))
+    fig.subplots_adjust(hspace=0.3)  # Adjust space between subplots
+
+    colors_active = ['pink' if poke == 'Left' else 'lightblue' for poke in data_stats_active['Active_Poke']]
+    ax_active.bar(data_stats_active['Block_Index'], acc_active, color=colors_active, alpha=0.7)
+    ax_active.set_xlabel('Blocks', fontsize=12)
+    ax_active.set_ylabel('Success Rate (%)', color='black', fontsize=12)
+    ax_active.set_title('Accuracy during Active Periods', fontsize=16)
+    ax_active.set_xticks(data_stats_active['Block_Index'])
+    ax_active.set_yticks(range(0, 81, 20))
+    ax_active.grid(alpha=0.5, linestyle='--')
+
+    colors_inactive = ['pink' if poke == 'Left' else 'lightblue' for poke in data_stats_inactive['Active_Poke']]
+    ax_inactive.bar(data_stats_inactive['Block_Index'], acc_inactive, color=colors_inactive, alpha=0.7)
+    ax_inactive.set_xlabel('Blocks', fontsize=12)
+    ax_inactive.set_ylabel('Success Rate (%)', color='black', fontsize=12)
+    ax_inactive.set_title('Accuracy during Inactive Periods', fontsize=16)
+    ax_inactive.set_xticks(data_stats_inactive['Block_Index'])
+    ax_inactive.set_yticks(range(0, 81, 20))
+    ax_inactive.grid(alpha=0.5, linestyle='--')
+
+    left_patch = mpatches.Patch(color='pink', alpha=0.5, label='Left Active')
+    right_patch = mpatches.Patch(color='lightblue', alpha=0.5, label='Right Active')
+
+    ax_active.legend(handles=[left_patch, right_patch], loc='upper right', fontsize=9)
+    ax_inactive.legend(handles=[left_patch, right_patch], loc='upper right', fontsize=9)
+
+    if len(info) == 2:
+        fig.suptitle(f'Accuracy by Switch for Group {info[0]} Mouse {info[1]}', fontsize=18)
+    else:
+        fig.suptitle(f'Accuracy by Switch for Mouse {info[0]}', fontsize=18)
+
+    plt.show()
+
+    
     
 def graph_learning_trend(data_stats: pd.DataFrame, blocks: list, path: str, block_prop=0.6, action_prop=0.5):
     """Graph Statistics of first 60% block in transition
@@ -296,20 +362,9 @@ def graph_learning_trend(data_stats: pd.DataFrame, blocks: list, path: str, bloc
     ax.set_xlabel('Blocks', fontsize=16)
     ax.set_ylabel('Percentage(%)', color='black', fontsize=16)
 
-    night_blocks = []
-    block_start_index = 1
     info = tl.get_bhv_num(path)
+    night_blocks = find_inactive_blocks(blocks, False)
     
-    for block_df in cut_blocks:
-        if not block_df.empty and 'Time' in block_df:
-            first_timestamp = pd.to_datetime(block_df['Time'].iloc[0])
-            if 19 <= first_timestamp.hour or first_timestamp.hour < 7:
-                night_blocks.append(block_start_index)
-        block_start_index += 1
-
-    if len(info) == 1:
-        night_blocks = [each for each in range(1, len(cut_blocks)+1) if each not in night_blocks]
-
     for block_index in night_blocks:
         ax.axvspan(block_index - 0.5, block_index + 0.5, facecolor='gray', alpha=0.4)
 
@@ -399,7 +454,7 @@ def graph_learning_score(ctrl:list, exp:list, width=0.4, exp_group_name=None, pr
     plt.show()
         
 
-def graph_retrieval_time(ctrl:list, exp:list, width=0.4, exp_group_name=None):
+def graph_retrieval_time(ctrl:list, exp:list, width=0.4, exp_group_name=None, rev=False):
     """
     Graph average correct rate
 
@@ -428,7 +483,8 @@ def graph_retrieval_time(ctrl:list, exp:list, width=0.4, exp_group_name=None):
 
     plt.xlabel('Groups', fontsize=14)
     plt.ylabel('Time (minutes)', fontsize=14)
-    plt.title(f'Pellet Retrieval Time of Control and {exp_name} Groups in Reversal', fontsize=16)
+    exp_type = 'Reversal' if rev else 'FR1'
+    plt.title(f'Pellet Retrieval Time of Control and {exp_name} Groups in {exp_type}', fontsize=16)
 
     plt.legend()
     plt.show()
