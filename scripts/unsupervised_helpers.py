@@ -7,6 +7,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 import meals as ml
 from preprocessing import read_csv_clean
+import os
+import pickle
 
 def label_indices(labels):
     result = defaultdict(list)
@@ -85,4 +87,34 @@ def visualize_kmeans(data:list, labels:list):
     plt.ylabel('PCA Component 2')
     plt.colorbar(scatter, label='Cluster Label')
     plt.show()
-    
+
+
+def read_data(filename:str) -> list:
+    if os.path.exists(filename):
+        with open(filename, 'rb') as file:
+            data = pickle.load(file)
+    else:
+        data = []
+
+    return data
+
+
+def update_data(filename:str, new_list:np.array):
+    data = read_data(filename)
+    print(f'Old data has {len(data)} items')
+    data.extend(new_list.tolist())
+    with open(filename, 'wb') as file:
+        pickle.dump(data, file)
+    print(f'New data has {len(data)} items')
+
+
+def collect_meals_from_categories(meals_by_category:dict, good_class:list):
+    bad_class = [each for each in meals_by_category.keys() if each not in good_class]
+    good_meals = []
+    bad_meals = []
+
+    for idx in good_class:
+        good_meals.extend(meals_by_category[idx])
+    for idx in bad_class:
+        bad_meals.extend(meals_by_category[idx])
+    return np.array(good_meals), np.array(bad_meals)

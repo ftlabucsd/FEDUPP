@@ -117,6 +117,7 @@ def extract_meal_acc_each(events: pd.DataFrame):
     for idx in range(len(pellet_indices) - 1):
         start, end = pellet_indices[idx], pellet_indices[idx+1]
         curr_slice = events.loc[start:end]
+        curr_slice = curr_slice[curr_slice['Event'] != 'Pellet']
         acc.append(calculate_accuracy(curr_slice))
 
     # print(f"There are {len(pellet_indices)} pellets and {len(acc)} accuracy")
