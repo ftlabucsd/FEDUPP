@@ -82,7 +82,7 @@ fr1_cask_sheet = [
 ]
 
 root = '/home/ftlab/Desktop/For_Andy/FED3-data'
-# root = '/Users/yaomingyang/Desktop/FED3-data'
+root = '/Users/yaomingyang/Documents/VS Code/lab/FED3-data'
 
 contigency_flip_ctrl = list_files(root=f'{root}/behavior data integrated/CASK/reversal/ctrl', direct_access=False)
 contigency_flip_cask = list_files(root=f'{root}/behavior data integrated/CASK/reversal/cask', direct_access=False)

@@ -118,3 +118,31 @@ def collect_meals_from_categories(meals_by_category:dict, good_class:list):
     for idx in bad_class:
         bad_meals.extend(meals_by_category[idx])
     return np.array(good_meals), np.array(bad_meals)
+
+
+def data_padding(data: list) -> np.array:
+    for each in data:
+        size = len(each)
+        while size < 4:
+            each.append(-1)
+            size += 1
+    return np.array(data)
+
+def create_dataset_single_group(experiment:str, ctrl:bool):
+    data_root = f'{experiment}_{"ctrl" if ctrl else "exp"}_'
+
+    good_X = read_data(data_root+'good.pkl')
+    bad_X = read_data(data_root+'bad.pkl')
+    good_y = np.zeros((len(good_X)))
+    bad_y = np.ones((len(bad_X)))
+
+    X = np.vstack((data_padding(good_X), data_padding(bad_X)))
+    y = np.concatenate((good_y, bad_y))
+
+    return X, y
+
+
+def merge_dataset(ctrl_X:np.array, ctrl_y:np.array, exp_X:np.array, exp_y:np.array):
+    X = np.vstack((ctrl_X, exp_X))
+    y = np.concatenate(((ctrl_y, exp_y)))
+    return X, y

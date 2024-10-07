@@ -376,16 +376,16 @@ def print_meal_stats(data):
     print(f"Total {total_meals} meals and keep {keep_meals}")
 
 
-def preprocess_meal_data(data: defaultdict):
-    new_data = []
-    new_data.extend(data[3])
-    new_data.extend(data[4])
-    new_data.extend(data[5])
-    for each in new_data:
-        size = len(each)
-        while size < 5:
-            each.append(0)
-            size += 1
-    return np.array(new_data, dtype=np.float16)
+# def preprocess_meal_data(data: defaultdict):
+#     new_data = []
+#     new_data.extend(data[3])
+#     new_data.extend(data[4])
+#     new_data.extend(data[5])
+#     for each in new_data:
+#         size = len(each)
+#         while size < 5:
+#             each.append(0)
+#             size += 1
+#     return np.array(new_data, dtype=np.float16)
 
     
