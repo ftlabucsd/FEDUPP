@@ -1,3 +1,4 @@
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -35,6 +36,38 @@ class RNNClassifier(nn.Module):
         out = out[:, -1, :]
         out = self.fc(out)
         return out
+
+
+class CNNClassifier(nn.Module):
+    def __init__(self, num_classes=2, maxlen=4):
+        super(CNNClassifier, self).__init__()
+        self.conv1 = nn.Conv1d(in_channels=1, out_channels=16, kernel_size=2)
+        self.relu = nn.ReLU()
+        self.conv2 = nn.Conv1d(in_channels=16, out_channels=32, kernel_size=2)
+        self.pool = nn.MaxPool1d(kernel_size=2)
+        self.maxlen = maxlen
+        # Calculate the size of the feature map after convolution and pooling
+        self.feature_size = self._get_feature_size()
+        self.fc = nn.Linear(self.feature_size, num_classes)
+        
+    def _get_feature_size(self):
+        # Replace 'maxlen' with your actual maximum sequence length
+        dummy_input = torch.zeros(1, 1, self.maxlen)  # Shape: [batch_size, channels, seq_len]
+        x = self.relu(self.conv1(dummy_input))
+        x = self.relu(self.conv2(x))
+        x = self.pool(x)
+        feature_size = x.view(1, -1).size(1)
+        return feature_size
+        
+    def forward(self, x):
+        # x shape: [batch_size, seq_len]
+        x = x.unsqueeze(1)  # Shape: [batch_size, channels=1, seq_len]
+        x = self.relu(self.conv1(x))
+        x = self.relu(self.conv2(x))
+        x = self.pool(x)
+        x = x.view(x.size(0), -1)  # Flatten the tensor
+        x = self.fc(x)
+        return x
 
 
 def train(model:nn.Module, lr:float, num_epochs:int, train_loader:DataLoader, 
@@ -77,3 +110,32 @@ def train(model:nn.Module, lr:float, num_epochs:int, train_loader:DataLoader,
             print(f'Ep {epoch+1}, Loss: {avg_loss:.4f}, Train Acc: {train_accuracy:.4f}, Test Acc: {test_accuracy:.4f}')
     
     return model
+
+
+def evaluate_meals_by_groups(model:nn.Module, ctrl_input:torch.Tensor, ctrl_y:torch.Tensor,
+                             exp_input:torch.Tensor, exp_y:torch.Tensor):
+    model.eval()
+    with torch.no_grad():
+        outputs_ctrl = model(ctrl_input)
+        _, predicted_ctrl = torch.max(outputs_ctrl.data, 1)
+        correct_test = (predicted_ctrl.cpu().numpy() == ctrl_y).sum().item()
+        ctrl_accuracy = correct_test / len(ctrl_y)
+
+        outputs_exp = model(exp_input)
+        _, predicted_exp = torch.max(outputs_exp.data, 1)
+        correct_test = (predicted_exp.cpu().numpy() == exp_y).sum().item()
+        exp_accuracy = correct_test / len(exp_y)
+
+    print(f'Control Accuracy: {ctrl_accuracy:.3f}, Exp Accuracy: {exp_accuracy:.3f}')
+
+    predicted_ctrl, predicted_exp = predicted_ctrl.cpu().numpy(), predicted_exp.cpu().numpy()
+    ctrl_good, ctrl_total = np.sum(predicted_ctrl), np.size(predicted_ctrl)
+    exp_good, exp_total = np.sum(predicted_exp), np.size(predicted_exp)
+
+    print(f'Control Group: {ctrl_good}/{ctrl_total} good meals with proportion of {ctrl_good/ctrl_total}')
+    print(f'Experiment Group: {exp_good}/{exp_total} good meals with proportion of {exp_good/exp_total}')
+
+
+def count_parameters(model:nn.Module):
+    trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    print(f'Trainable parameters: {trainable_params}')

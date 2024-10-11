@@ -1,10 +1,7 @@
 import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
-from matplotlib.lines import Line2D
 import tools as tl
-from accuracy import calculate_accuracy
-import seaborn as sns
 import numpy as np
 from meals import find_meals_paper
 
@@ -393,11 +390,25 @@ def graph_learning_trend(data_stats: pd.DataFrame, blocks: list, path: str, bloc
     plt.show()
 
 
+def accuracy(group: pd.DataFrame):
+    """
+    Calculate the percent correct(0-100) in a interval of getting correct poke
+    """ 
+    total_events = len(group)
+    matching_events = group[group['Event'] == group['Active_Poke']]
+    matching_count = len(matching_events)
+    
+    if total_events == 0:
+        return 0
+    else:
+        return (matching_count / total_events) * 100
+    
+    
 def block_accuracy_by_proportion(blocks: list, proportion: float):
     acc = []
     for block in blocks:
         size = int(len(block) * proportion)
-        acc.append(calculate_accuracy(block[:size]))
+        acc.append(accuracy(block[:size]))
     return acc
 
 

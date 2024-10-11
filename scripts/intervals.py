@@ -104,8 +104,16 @@ def plot_retrieval_time_by_block(path:str):
         times = [each for each in times if each != 0 and each < cutoff]
         time_by_block.append(np.mean(times) if len(times) != 0 else 0)
     
+    temp = time_by_block[:-1]
+    block_indices = np.arange(len(temp))
+    slope, intercept = np.polyfit(block_indices, temp, 1)
+    best_fit_line = slope * block_indices + intercept
+    
+    
     plt.figure(figsize=(6, 4))
     plt.plot(time_by_block, marker='*')
+    plt.plot(block_indices, best_fit_line, color='red', linestyle='--', 
+             alpha=0.75, label=f'Best Fit Line (slope: {slope:.2f})')
     plt.xlabel('Blocks', fontsize=14)
     plt.ylabel('Mean Time (min)', fontsize=14)
     
@@ -115,6 +123,7 @@ def plot_retrieval_time_by_block(path:str):
     else:
         plt.title(f'Retrieval Time of Mouse {info[0]}', fontsize=18)
     plt.grid()
+    plt.legend()
     plt.show()
     return time_by_block
     
