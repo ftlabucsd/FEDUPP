@@ -19,7 +19,8 @@ def graph_cumulative_acc(mice: list, group=None):
 
     cnt = 1
     for each in mice:
-        sns.lineplot(data=each, x='Time', y='Percent_Correct', label=f'M{cnt}')
+        each['Time_passed_hours'] = each['Time_passed'].dt.total_seconds() / 3600
+        sns.lineplot(data=each, x='Time_passed_hours', y='Percent_Correct', label=f'M{cnt}')
         cnt += 1
     plt.grid()
     if isinstance(group, str):
@@ -27,7 +28,7 @@ def graph_cumulative_acc(mice: list, group=None):
     elif isinstance(group, int):
         plt.title(f'Changes in Correction Rate for Group {group}', fontsize=24)
 
-    plt.xlabel('Time', fontsize=16)
+    plt.xlabel('Session Time', fontsize=16)
     plt.ylabel('Correct Rate', fontsize=16)
     plt.yticks(range(0, 110, 10))
     plt.legend()
@@ -47,7 +48,7 @@ def cumulative_pellets_meals(data: pd.DataFrame, bhv: int, num: int):
     """
     plt.figure(figsize=(15, 6), dpi=90)
 
-    sns.lineplot(data=data, x='Time', y='Cum_Sum', label='M1')
+    sns.lineplot(data=data, x='Time_passed', y='Cum_Sum', label='M1')
 
     plt.grid()
     plt.title(f'Cumulative Sum of Pellet for Control Group {bhv} Mice {num}', fontsize=22)
@@ -126,10 +127,9 @@ def instant_acc(sheet=None, parent='../behavior data integrated/Adjusted FED3 Da
     else:
         result = df.resample('10h').apply(calculate_accuracy).reset_index().rename(columns={0: 'Accuracy'})
         
-    result['Time'] = pd.to_datetime(result['Time'])
-    
+    # result['Time_passed'] = pd.to_datetime(result['Time_passed'])
     if csv:
-        return result
+        return result, get_bhv_num(path)
 
     return result, get_bhv_num(sheet)
 
@@ -181,7 +181,7 @@ def find_night_index(hourly_labels:list, rev:bool):
     return intervals
 
 
-def graph_instant_acc(data:pd.DataFrame, bhv:object, num:str, lr_time:str):
+def graph_instant_acc(data:pd.DataFrame, bhv:object, num:str, lr_time:str, rev:bool):
     """PLot instant accuracy
    
     Plot bar graph with instant accuracy calculate from function instant_acc.
@@ -193,7 +193,8 @@ def graph_instant_acc(data:pd.DataFrame, bhv:object, num:str, lr_time:str):
         lr_time (str): time in string of first time we get 80% accuracy for two hours
     """
     plt.figure(figsize=(13, 7), dpi=90)
-
+    # Convert 'Time_passed' to total hours
+    # data['Time_passed_hours'] = data['Time_passed'].dt.total_seconds() / 3600
     ax = sns.barplot(x=data['Time'], y=data['Accuracy'], color="skyblue", width=0.6, label='Accuracy')
 
     xtick_positions = ax.get_xticks()
@@ -204,7 +205,7 @@ def graph_instant_acc(data:pd.DataFrame, bhv:object, num:str, lr_time:str):
     ax.set_xticklabels(hourly_labels, rotation=45, horizontalalignment='right')  # Set the tick labels to hourly format
 
     # Locate the x-coordinates for the specified times
-    dark = find_night_index(hourly_labels)
+    dark = find_night_index(hourly_labels, rev=rev)
 
     for idx, each in enumerate(dark):
         if idx == 0:
@@ -243,7 +244,7 @@ def time_high_acc(grouped_data: pd.DataFrame):
             first_time = grouped_data.loc[idx-1]['Time']
             time_taken = (first_time - grouped_data['Time'].min()).total_seconds() / 3600
             break
-    return first_time, time_taken if res else None
+    return first_time, time_taken if res else get_session_time(grouped_data)
 
 
 def graph_avg_corr_rate(ctrl:list, exp:list, width=0.4, exp_group_name=None):

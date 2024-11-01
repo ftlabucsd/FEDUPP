@@ -125,7 +125,7 @@ def plot_retrieval_time_by_block(path:str):
     plt.grid()
     plt.legend()
     plt.show()
-    return time_by_block
+    return time_by_block, round(slope, 2)
     
 
 def plot_retrieval_time(path:str, remove_outlier=False, n_stds=3):

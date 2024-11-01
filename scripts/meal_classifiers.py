@@ -137,5 +137,5 @@ def evaluate_meals_by_groups(model:nn.Module, ctrl_input:torch.Tensor, ctrl_y:to
 
 
 def count_parameters(model:nn.Module):
-    trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    trainable_params = sum(p.numel() for p in model.parameters())
     print(f'Trainable parameters: {trainable_params}')

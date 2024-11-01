@@ -496,6 +496,40 @@ def graph_retrieval_time(ctrl:list, exp:list, width=0.4, exp_group_name=None, re
     plt.ylabel('Time (minutes)', fontsize=14)
     exp_type = 'Reversal' if rev else 'FR1'
     plt.title(f'Pellet Retrieval Time of Control and {exp_name} Groups in {exp_type}', fontsize=16)
+    plt.legend()
+    plt.show()
+    
 
+def graph_slope(ctrl:list, exp:list, width=0.4, exp_group_name=None, rev=False):
+    """
+    Graph average correct rate
+
+    Args:
+        ctrl (list): data of control group
+        exp (list): data of experiment group
+        width (float): width of plotted bars
+        exp_group_name (str, Optional): name of the experiment group, name with treatments usually.
+    """
+    ctrl_mean = np.mean(ctrl)
+    cask_mean = np.mean(exp)
+    ctrl_err = np.std(ctrl) / np.sqrt(len(ctrl))
+    cask_err = np.std(exp) / np.sqrt(len(exp))
+
+    exp_name = 'Experiment' if exp_group_name==None else exp_group_name
+    groups = ['Control', exp_name]
+
+    plt.figure(figsize=(7, 7))
+    plt.bar([1, 2], [ctrl_mean, cask_mean], yerr=[ctrl_err, cask_err], capsize=12, tick_label=groups, 
+            width=width, color=['lightblue', 'yellow'], alpha=0.8, zorder=1, label=['Control', exp_name])
+
+    x1 = [1] * len(ctrl)
+    x2 = [2] * len(exp)
+    plt.scatter(x1, ctrl, marker='o', color='blue', zorder=2) 
+    plt.scatter(x2, exp, marker='x', color='orange', zorder=2)
+
+    plt.xlabel('Groups', fontsize=14)
+    plt.ylabel('Time (minutes)', fontsize=14)
+    exp_type = 'Reversal' if rev else 'FR1'
+    plt.title(f'Slope of Retrieval Time Best-Fit Line of Control and {exp_name} Groups in {exp_type}', fontsize=16)
     plt.legend()
     plt.show()

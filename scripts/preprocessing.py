@@ -1,6 +1,7 @@
 import pandas as pd
 import math
 import numpy as np
+import datetime
 
 def read_excel_by_sheet(sheet, parent='../behavior data integrated/Adjusted FED3 Data.xlsx', 
                         hundredize=True, convert_time=True, remove_trival=True):
@@ -24,7 +25,9 @@ def read_excel_by_sheet(sheet, parent='../behavior data integrated/Adjusted FED3
     
     df = df.replace({'LeftWithPellet': 'Left', 'LeftDuringDispense': 'Left',
                     'RightWithPellet': 'Right', 'RightDuringDispense': 'Right'})
-
+    baseline_time = df['Time'].iloc[0]
+    df['Time_passed'] = df['Time'] - baseline_time
+    
     if hundredize:
         df['Percent_Correct'] *= 100
     if convert_time:
@@ -64,6 +67,8 @@ def read_csv_clean(path:str, remove_trivial=True, cumulative_accuracy=False,
     
         df['Cum_Sum'] = df['Pellet_Count'] / max(df['Pellet_Count'])
     df['Time'] = pd.to_datetime(df['Time'])
+    baseline_time = df['Time'].iloc[0]
+    df['Time_passed'] = df['Time'] - baseline_time
     df = df.reset_index().drop(['index'], axis='columns')
     
     if cumulative_accuracy:

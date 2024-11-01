@@ -149,7 +149,8 @@ root = '/home/ftlab/Desktop/For_Andy/mPFC/Fentanyl Tx/Mouse_10/FR1/'
 output = '/Users/yaomingyang/Desktop/FED3-data/behavior data integrated/mPFC/Fentanyl Tx/FR1/M2.CSV'
 files = [file1, file2]
 
-check_data_by_date(file1)
+import paths
+prep_pellet_count(paths.fr1_ctrl_csvs[4])
 # concatenate_csv_files(files, output)
 # prep_pellet_count(output)
 # prep_pellet_count('/Users/yaomingyang/Desktop/FED3-data/behavior data integrated/mPFC/Fentanyl Tx/FR1/M2.CSV')

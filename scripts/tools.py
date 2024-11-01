@@ -49,7 +49,8 @@ def get_session_time(data: pd.DataFrame) -> float:
     Returns:
         float: duraion in hours
     """
-    
-    diff = data['Time'].loc[len(data)-1] - data['Time'].loc[0]
-    
+    if 'Time_passed' in data.columns:
+        return data['Time_passed'].iloc[-1].total_seconds() / 3600
+
+    diff = data['Time'].loc[len(data) - 1] - data['Time'].loc[0]
     return diff.total_seconds() / 3600

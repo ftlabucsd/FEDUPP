@@ -45,7 +45,7 @@ def extract_features(path: str, prev_trace: int, meal: bool) -> tuple:
     all_data = data.copy()
     
     data = data[data['Event'] != 'Pellet'].reset_index(drop=True)
-    meals = ml.find_meals(all_data)
+    meals,_,_ = ml.find_meals_paper(all_data, 60, 2)
 
     # Extract the date and time and take 2nd day
     data['Date'] = data['Time'].dt.date
