@@ -2,9 +2,23 @@ import pandas as pd
 import math
 import numpy as np
 import datetime
+import warnings
+warnings.filterwarnings('ignore')
 
-def read_excel_by_sheet(sheet, parent='../behavior data integrated/Adjusted FED3 Data.xlsx', 
-                        hundredize=True, convert_time=True, remove_trival=True):
+
+def convert_to_numeric(value):
+    if isinstance(value, str) and value.isnumeric():
+        return pd.to_numeric(value)
+    else:
+        return value
+
+def get_all_sheet_names(excel_path:str):
+    xls = pd.ExcelFile(excel_path)
+    return  xls.sheet_names
+
+
+def read_excel_by_sheet(sheet, parent, convert_large=False, collect_time=True,
+                        cumulative_accuracy=True, remove_trivial=False):
     """
     Read excel file with certain sheet name. Replace all RightWithPellet and LeftWithPellet to 
     Right and left. It will automatically convert accuracy to 0-100 scale and remove data at the
@@ -19,74 +33,36 @@ def read_excel_by_sheet(sheet, parent='../behavior data integrated/Adjusted FED3
         become first pellet behavior
     """
     df = pd.read_excel(parent, sheet_name=sheet)
+    if 'Cum_Sum' not in df.columns:
+        df['Cum_Sum'] = df['Pellet_Count'] / max(df['Pellet_Count'])
 
-    df = df[['MM:DD:YYYY hh:mm:ss', 'Event', 'Active_Poke', 'Pellet_Count',
-         'Cum_Sum', 'Percent_Correct']].rename(columns={'MM:DD:YYYY hh:mm:ss': 'Time'}).dropna()
-    
+    df = df[['MM:DD:YYYY hh:mm:ss', 'Event', 'Active_Poke', 'Pellet_Count', 
+            'Left_Poke_Count', 'Right_Poke_Count', 'Cum_Sum', 'Retrieval_Time']].rename(columns={
+            'MM:DD:YYYY hh:mm:ss': 'Time', 'Retrieval_Time': 'collect_time'
+            })
+
     df = df.replace({'LeftWithPellet': 'Left', 'LeftDuringDispense': 'Left',
                     'RightWithPellet': 'Right', 'RightDuringDispense': 'Right'})
-    baseline_time = df['Time'].iloc[0]
-    df['Time_passed'] = df['Time'] - baseline_time
-    
-    if hundredize:
-        df['Percent_Correct'] *= 100
-    if convert_time:
-        df['Time'] = pd.to_datetime(df['Time'])
-    if remove_trival:
-        mask = (df['Percent_Correct'] != 0) & (df['Cum_Sum'] != 0)
-        df = df[mask]
-
-    df = df.reset_index().drop(['index'], axis='columns')
-    return df
-
-
-def read_csv_clean(path:str, remove_trivial=True, cumulative_accuracy=False, 
-                   convert_large=False, collect_time=False) -> pd.DataFrame:
-    """Read csv file and clean it
-
-    Args:
-        path (str): path of the csv file
-        remove_trivial (bool, optional): remove rows until the first pellet. Defaults to True.
-        cumulative_accuracy (bool, optional): whether calcualate cumulative accuracy for each row. Defaults to False.
-        convert_large (bool, optional): whether convert accuracy to 0-100 scale from 0-1 scale. Defaults to False.
-
-    Returns:
-        pd.DataFrame: cleaned data
-    """
-    if path.startswith('.'): return None
-    
-    all = pd.read_csv(path)
-    
-    if 'Time' not in all.columns:
-        df = all[['MM:DD:YYYY hh:mm:ss', 'Event', 'Active_Poke', 'Pellet_Count', 
-                 'Left_Poke_Count', 'Right_Poke_Count']].rename(columns={
-                'MM:DD:YYYY hh:mm:ss': 'Time'}).dropna()
-        
-        df = df.replace({'LeftWithPellet': 'Left', 'LeftDuringDispense': 'Left',
-                        'RightWithPellet': 'Right', 'RightDuringDispense': 'Right'})
-    
-        df['Cum_Sum'] = df['Pellet_Count'] / max(df['Pellet_Count'])
     df['Time'] = pd.to_datetime(df['Time'])
-    baseline_time = df['Time'].iloc[0]
-    df['Time_passed'] = df['Time'] - baseline_time
-    df = df.reset_index().drop(['index'], axis='columns')
-    
+    df = df.reset_index(drop=True)
+
     if cumulative_accuracy:
         df = calculate_accuracy_by_row(df, convert_large)
-    
+
     if collect_time:
-        df['collect_time'] = all['Retrieval_Time']
-        df['collect_time'] = pd.to_numeric(df['collect_time'], errors='coerce')
-        max_value = df['collect_time'].max()
-        # print("Replaced Timed_out with max value", max_value)
+        df['collect_time'] = df['collect_time'].apply(convert_to_numeric)
+        max_value = get_max_numeric(df['collect_time'].copy())
         df['collect_time'] = df['collect_time'].replace('Timed_out', max_value)
-        df.loc[np.isnan(df['collect_time']), "collect_time"] = 0
-    
+        df['collect_time'] = df['collect_time'].fillna(0)
+        df['collect_time'] = pd.to_numeric(df['collect_time'])
+
     if remove_trivial:
         first_non_zero_index = df['Cum_Sum'].ne(0).idxmax()
         df = df.loc[first_non_zero_index:]
-        df.reset_index(drop=True, inplace=True)
-    
+
+    df = df.reset_index(drop=True)
+    baseline_time = df['Time'].iloc[0]
+    df['Time_passed'] = df['Time'] - baseline_time
     return df
 
 
@@ -96,13 +72,9 @@ def calculate_accuracy_by_row(df:pd.DataFrame, convert_large=True):
     Args:
         df (pd.DataFrame): data from cleaned csv
         convert_large (bool): whether convert accuracy from 0-1 scale to 0-100 scale
-    """
-    # if df['Active_Poke'].nunique() > 1:
-    #     raise RuntimeError("Cumulative Accuracy only valids for FR1 data")\
-    
+    """    
     active_poke = df['Active_Poke'].loc[0]
     df['Percent_Correct'] = df[f'{active_poke}_Poke_Count'] / (df['Left_Poke_Count']+df['Right_Poke_Count'])
-    
     
     if convert_large:
         df['Percent_Correct'] *= 100
@@ -110,10 +82,14 @@ def calculate_accuracy_by_row(df:pd.DataFrame, convert_large=True):
     return df
         
     
-def get_retrieval_time(path:str):
-    df = pd.read_csv(path)
-    times = df['Retrieval_Time'].tolist()
-    pellet_times = [each for each in times if each != 'Timed_out']
+def get_max_numeric(series:pd.Series):
+    numeric_values = pd.to_numeric(series, errors='coerce')  # Convert non-numeric to NaN
+    return numeric_values.max(skipna=True)
+
+def get_retrieval_time(path, sheet):
+    data = read_excel_by_sheet(sheet, path)
+    times = data['collect_time'].tolist()
+    pellet_times = [each for each in times if each != 0.0]
     pellet_times = list(map(float, pellet_times))
     pellet_times = [each for each in pellet_times if not math.isnan(each)]
     return pellet_times

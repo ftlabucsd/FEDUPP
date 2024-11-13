@@ -3,7 +3,7 @@ from scipy import stats
 import matplotlib.pyplot as plt
 import seaborn as sns
 from tools import get_bhv_num
-from preprocessing import get_retrieval_time, read_csv_clean
+from preprocessing import get_retrieval_time, read_excel_by_sheet
 import numpy as np
 from direction_transition import split_data_to_blocks
 
@@ -70,34 +70,32 @@ def graph_pellet_interval(path: str):
     sns.lineplot(data=data, x='Time', y='Interval', alpha=0.8)
 
     info = get_bhv_num(path)
-    if len(info) == 2:
-        plt.title(f'Interval Between Pellets for Group {info[0]} Mouse {info[1]}', fontsize=18)
-    else:
-        plt.title(f'Interval Between Pellets for Mouse {info[0]}', fontsize=18)
-
+    plt.title(f'Interval Between Pellets for Group {info[0]} Mouse {info[1]}', fontsize=18)
     plt.xlabel('Time')
     plt.ylabel('Interval (minutes)')
     plt.show()
     
     
-def mean_pellet_collect_time(path:str, remove_outlier=False, n_stds=3):
-    pellet_times = get_retrieval_time(path)
+def mean_pellet_collect_time(path:str, sheet:str, remove_outlier=False, n_stds=3):
+    pellet_times = get_retrieval_time(path, sheet)
+    # print(pellet_times)
     mean = np.mean(pellet_times)
     std = np.std(pellet_times)
     if remove_outlier:
         cutoff = mean+std*n_stds
         pellet_times = [each for each in pellet_times if each < cutoff]
+    # print(pellet_times)
     return pellet_times, np.mean(pellet_times), np.std(pellet_times)
 
 
-def plot_retrieval_time_by_block(path:str):
-    pellet_times = get_retrieval_time(path)
+def plot_retrieval_time_by_block(path:str, sheet):
+    pellet_times = get_retrieval_time(path, sheet)
     mean = np.mean(pellet_times)
     std = np.std(pellet_times)
     cutoff = mean+std*5
-    
+
     time_by_block = []
-    data = read_csv_clean(path, collect_time=True)
+    data = read_excel_by_sheet(sheet, path, collect_time=True)
     blocks = split_data_to_blocks(data)
     for block in blocks:
         times = block['collect_time'].tolist()
@@ -109,7 +107,6 @@ def plot_retrieval_time_by_block(path:str):
     slope, intercept = np.polyfit(block_indices, temp, 1)
     best_fit_line = slope * block_indices + intercept
     
-    
     plt.figure(figsize=(6, 4))
     plt.plot(time_by_block, marker='*')
     plt.plot(block_indices, best_fit_line, color='red', linestyle='--', 
@@ -117,34 +114,12 @@ def plot_retrieval_time_by_block(path:str):
     plt.xlabel('Blocks', fontsize=14)
     plt.ylabel('Mean Time (min)', fontsize=14)
     
-    info = get_bhv_num(path)
-    if len(info) == 2:
-        plt.title(f'Retrieval Time of Group {info[0]} Mouse {info[1]}', fontsize=18)
-    else:
-        plt.title(f'Retrieval Time of Mouse {info[0]}', fontsize=18)
+    info = get_bhv_num(sheet)
+    plt.title(f'Retrieval Time of Group {info[0]} Mouse {info[1]}', fontsize=18)
     plt.grid()
     plt.legend()
     plt.show()
-    return time_by_block, round(slope, 2)
-    
-
-def plot_retrieval_time(path:str, remove_outlier=False, n_stds=3):
-    times, mean, std = mean_pellet_collect_time(path, remove_outlier, n_stds)
-    
-    plt.figure(figsize=(6,2))
-    plt.boxplot(times, vert=False, widths=0.75, patch_artist=True, 
-                 boxprops=dict(facecolor='lightblue', color='blue'),
-                 whiskerprops=dict(color='blue'),
-                 capprops=dict(color='blue'),
-                 medianprops=dict(color='red'),
-                 flierprops=dict(markerfacecolor='blue', alpha=0.4, marker='o', markersize=5, linestyle='none'))
-    plt.xlabel('Retrieval Time (min)', fontsize=15)
-    info = get_bhv_num(path)
-    if len(info) == 2:
-        plt.title(f'Retrieval Time of Group {info[0]} Mouse {info[1]}', fontsize=18)
-    else:
-        plt.title(f'Retrieval Time of Mouse {info[0]}', fontsize=18)
-    plt.show()
+    return time_by_block, best_fit_line[-1]+slope, round(slope, 2)
     
     
 def perform_T_test(ctrl:list, exp:list, test_side='two-sided', alpha=0.05, paired=False):
@@ -180,33 +155,37 @@ def perform_T_test(ctrl:list, exp:list, test_side='two-sided', alpha=0.05, paire
         print("There is no significant difference between the two groups.")
 
 
-def MannWhitneyUTest(ctrl, exp, test_side='two-sided', alpha=0.05):
-    """Perform Mann-Whitney U rank test on control and experiment groups
+def graph_retrieval_time(ctrl:list, exp:list, width=0.4, exp_group_name=None):
+    """
+    Graph average retrieval time of pellets
 
     Args:
-        ctrl (list): data from control group
-        exp (list): data from experiment group
-        test_side (str): the alternative hypothesis 
-                two-sided: not equal
-                greater: exp mean > ctrl mean
-                less: exp mean < ctrl mean
-        alpha (float, optional): significance level of the test. Defaults to 0.05.
-        paired (bool): if true, it means two groups are paired data, while false means 
-            two independent sets. Defaults to 
+        ctrl (list): data of control group
+        exp (list): data of experiment group
+        width (float): width of plotted bars
+        exp_group_name (str, Optional): name of the experiment group, name with treatments usually.
     """
-    if test_side not in ['two-sided', 'less', 'greater']:
-        print('Test size must be two-sided, less or greater')
-        return
+    ctrl_mean = np.mean(ctrl)
+    cask_mean = np.mean(exp)
+    ctrl_err = np.std(ctrl) / np.sqrt(len(ctrl))
+    cask_err = np.std(exp) / np.sqrt(len(exp))
+
+    exp_name = 'Experiment' if exp_group_name==None else exp_group_name
+    groups = ['Control', exp_name]
+
+    plt.figure(figsize=(7, 7))
+    plt.bar(x=[1, 2], height=[ctrl_mean, cask_mean], yerr=[ctrl_err, cask_err], capsize=12,
+            tick_label=groups, width=width, color=['lightblue', 'yellow'], alpha=0.8,
+            zorder=1, label=[f'Control (n = {len(ctrl)})', f'{exp_name} (n = {len(exp)})'])
     
+    x1 = [1] * len(ctrl)
+    x2 = [2] * len(exp)
+    plt.scatter(x1, ctrl, marker='o', color='blue', zorder=2) 
+    plt.scatter(x2, exp, marker='x', color='orange', zorder=2)
 
-    _, p_value = stats.mannwhitneyu(exp, ctrl, alternative=test_side)
+    plt.xlabel('Groups', fontsize=14)
+    plt.ylabel('Retrieval Time (min)', fontsize=14)
+    plt.title(f'Average  of Control and {exp_name} Groups in FR1', fontsize=16)
 
-    print("P Value is ", p_value)
-    if p_value < alpha:
-        if test_side == 'two-sided':
-            print("There is a significant difference between the two groups.")
-        else:
-            print(f'Experiment group is significantly {test_side} than control group')
-    else:
-        print("There is no significant difference between the two groups.")
-
+    plt.legend()
+    plt.show()

@@ -2,41 +2,13 @@ import os
 import shutil
 import pandas as pd
 
-def organize_files(root_folder):
-    fr1_folder = os.path.join(root_folder, 'FR1')
-    reversal_folder = os.path.join(root_folder, 'Reversal')
-    
-    # Create the folders if they don't exist
-    if not os.path.exists(fr1_folder):
-        os.makedirs(fr1_folder)
-    if not os.path.exists(reversal_folder):
-        os.makedirs(reversal_folder)
+def update_excel_with_csv(csv_path, excel_path, sheet_name):
+    csv_df = pd.read_csv(csv_path)
+    # exist then append mode, or write mode
+    mode = "a" if os.path.exists(excel_path) else "w"
 
-    for subdir, _, files in os.walk(root_folder):
-        for file in files:
-            file_path = os.path.join(subdir, file)
-            
-            if file == 'FEDmode.csv':
-                os.remove(file_path)
-                print(f'Deleted {file_path}')
-            else:
-                try:
-                    df = pd.read_csv(file_path)
-                    if 'Session_type' in df.columns:
-                        session_type = df['Session_type'].iloc[0]
-                        if 'FR1' in session_type:
-                            target_folder = fr1_folder
-                        elif 'Rev' in session_type:
-                            target_folder = reversal_folder
-                        else:
-                            continue
-
-                        # Move the file to the appropriate folder
-                        target_path = os.path.join(target_folder, file)
-                        shutil.move(file_path, target_path)
-                        print(f'Moved {file_path} to {target_path}')
-                except Exception as e:
-                    print(f'Could not process {file_path}: {e}')
+    with pd.ExcelWriter(excel_path, mode=mode, engine="openpyxl") as writer:
+        csv_df.to_excel(writer, sheet_name=sheet_name, index=False)
 
 
 def concatenate_csv_files(files:list, output_file:str):
@@ -52,37 +24,7 @@ def concatenate_csv_files(files:list, output_file:str):
     concatenated_df.to_csv(output_file, index=False)
     print(f'Concatenated file saved as {output_file}')
     
-    
-def fr1_rev_split(directory):
-    for root, _, files in os.walk(directory):
-        # Remove small files
-        for file in files:
-            filepath = os.path.join(root, file)
-            if os.path.getsize(filepath) < 7800:  # File size less than 8kb
-                os.remove(filepath)
-                print(f"Deleted {filepath} due to insufficient size.")
-
-        # Now process remaining CSV files
-        for file in files:
-            filepath = os.path.join(root, file)
-            if os.path.exists(filepath) and (file.endswith('csv') or file.endswith('CSV')): 
-                df = pd.read_csv(filepath)
-                session_type = df['Session_type'].iloc[0]
-                if 'FR1' in session_type:
-                    new_folder = os.path.join(root, 'FR1')
-                elif 'Rev' in session_type:
-                    new_folder = os.path.join(root, 'Reversal')
-                else:
-                    continue
-
-                # Create folder if it does not exist
-                new_path = os.path.join(new_folder, file)
-                os.makedirs(new_folder, exist_ok=True)
-                # Move the file
-                shutil.move(filepath, new_path)
-                print(f"Moved {filepath} to {new_path}")
  
-
 def prep_pellet_count(path: str):
     """when combining two csv files, making the pellet count column increasing
     instead of go to 0 for the new file.
@@ -117,41 +59,61 @@ def prep_pellet_count(path: str):
             prev_left = row['Left_Poke_Count']
     print(base_left, base_right ,base_pellet)
     df.to_csv(path[:-4]+'_1.CSV', index=False)
-    # return df
 
 
-def check_data_by_date(path:str):
-    df = pd.read_csv(path)
+def check_data_by_date(path:str, sheet:str):
+    df = pd.read_excel(path, sheet)
     df['MM:DD:YYYY hh:mm:ss'] = pd.to_datetime(df['MM:DD:YYYY hh:mm:ss'])
 
-    # Find the index where the datetime drops to a previous date
     index_drop = (df['MM:DD:YYYY hh:mm:ss'].diff() < pd.Timedelta(0)).idxmax()
-
-    # Split the DataFrame into two parts
     df_part1 = df.iloc[:index_drop]
     df_part2 = df.iloc[index_drop:]
 
-    # Combine the two parts in the correct order
     df_corrected = pd.concat([df_part2, df_part1]).reset_index(drop=True)
-    df_corrected.to_csv(path, index=False)
-
-        
-
-# root_folder = '/home/ftlab/Desktop/For_Andy/behavior data integrated/CD1 IVSA'
-# organize_files(root_folder)
+    df_corrected.to_csv(sheet+'.csv', index=False)
 
 
-file1 = '/home/ftlab/Desktop/For_Andy/FED3-data/behavior data integrated/mPFC/Fentanyl Tx/FR1/M2.CSV'
-file2 = '/Users/yaomingyang/Desktop/FED3-data/behavior data integrated/mPFC/Fentanyl Tx/FR1/FED000_042824_00.CSV'
-file3 = '/home/ftlab/Desktop/For_Andy/behavior data integrated/mPFC/Vehicle Tx/Mouse_6/Contingency_Flip/FED000_050124_01.CSV'
+def merge_csvs_to_excel(excel:str, csv_root:str):
+    files = os.listdir(csv_root)
+    if '.DS_Store' in files: 
+        files.remove('.DS_Store')
 
-root = '/home/ftlab/Desktop/For_Andy/mPFC/Fentanyl Tx/Mouse_10/FR1/'
-output = '/Users/yaomingyang/Desktop/FED3-data/behavior data integrated/mPFC/Fentanyl Tx/FR1/M2.CSV'
-files = [file1, file2]
+    # construct group meta
+    for file in files:
+        path = os.path.join(csv_root, file)
+        print(path)
+        name = file.split('.')[0]
+        sheet = name[:len(name)-2]+'.'+name[-2:]
+        update_excel_with_csv(csv_path=path, excel_path=excel, sheet_name=sheet)
 
-import paths
-prep_pellet_count(paths.fr1_ctrl_csvs[4])
-# concatenate_csv_files(files, output)
-# prep_pellet_count(output)
-# prep_pellet_count('/Users/yaomingyang/Desktop/FED3-data/behavior data integrated/mPFC/Fentanyl Tx/FR1/M2.CSV')
-# fr1_rev_split('/home/ftlab/Desktop/For_Andy/behavior data integrated/CD1 IVSA')
+
+def split_ctrl_cask(excel_path:str):
+    xls = pd.ExcelFile(excel_path)  
+    all_sheets = xls.sheet_names
+    ctrl_sheets = dict()
+    cask_sheets = dict()
+    for sheet in all_sheets:
+        if sheet.startswith('B'): 
+            group = int(sheet.split('.')[0][1:])
+            if group in [2, 3, 5, 7, 11, 12]:
+                ctrl_sheets[sheet] = xls.parse(sheet)
+            else:
+                cask_sheets[sheet] = xls.parse(sheet)
+        elif sheet.startswith('C'):
+            if sheet in ['C1.M1', 'C1.M2', 'C2.M1', 'C2.M3', 'C3.M4']:
+                ctrl_sheets[sheet] = xls.parse(sheet)
+            else:
+                cask_sheets[sheet] = xls.parse(sheet)
+
+    with pd.ExcelWriter("../FR1_ctrl.xlsx", engine="openpyxl") as writer:
+        for sheet_name, data in ctrl_sheets.items():
+            data.to_excel(writer, sheet_name=sheet_name, index=False)
+
+    with pd.ExcelWriter("../FR1_cask.xlsx", engine="openpyxl") as writer:
+        for sheet_name, data in cask_sheets.items():
+            data.to_excel(writer, sheet_name=sheet_name, index=False)
+
+if __name__ == '__main__':
+    # merge_csvs_to_excel(excel='../reversal_cask.xlsx', csv_root='../CASK_Data/reversal/cask')
+    # split_ctrl_cask('../FR1_collection.xlsx')
+    check_data_by_date('../reversal_ctrl.xlsx', 'C1.M1')

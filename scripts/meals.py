@@ -27,7 +27,7 @@ def pellet_flip(data: pd.DataFrame) -> pd.DataFrame:
 
 
 def average_pellet(group: pd.DataFrame) -> float:
-    """return average hour pellet count in a session
+    """return average day pellet count in a session
 
     Args:
         group (pd.DataFrame): data processed by pellet flip
@@ -37,7 +37,7 @@ def average_pellet(group: pd.DataFrame) -> float:
     """
     total_hr = (group['Interval_Start'].max()-group['Interval_Start'].min()).total_seconds() / 3600
     total_pellet = group['Pellet_Count'].sum()
-    return round(total_pellet / total_hr, 3)
+    return round(24*total_pellet / total_hr, 2)
 
 
 def find_pellet_frequency(data: pd.DataFrame) -> pd.DataFrame:
@@ -168,7 +168,6 @@ def extract_meals_data(data: pd.DataFrame, time_threshold=130,
 
 
 def find_meals_paper(data:pd.DataFrame, time_threshold=130, pellet_threshold=3):
-    data['Time'] = pd.to_datetime(data['Time'])
     df = data[data['Event'] == 'Pellet'].copy()
     df['retrieval_timestamp'] = df['Time'] + pd.to_timedelta(df['collect_time'], unit='m')
 
@@ -178,7 +177,6 @@ def find_meals_paper(data:pd.DataFrame, time_threshold=130, pellet_threshold=3):
     meal_start_time = None
     meal_end_time = None
     meal_start_index = None
-    # window_duration = timedelta(minutes=15)
     
     pellet_cnt = 0 # record pellets in the meal
     for index, row in df.iterrows():
@@ -310,7 +308,7 @@ def active_meal(meals: list) -> float:
     return round(cnt/len(meals), 4) 
 
 
-def graph_group_stats(ctrl:list, exp:list, stats_name:str, bar_width=0.2,
+def graph_group_stats(ctrl:list, exp:list, stats_name:str, unit:str, bar_width=0.2,
                       err_width=14, dpi=100, exp_name=None, verbose=True):
     """Plot bar graphs of average pellet for control and experiment groups
 
@@ -343,19 +341,21 @@ def graph_group_stats(ctrl:list, exp:list, stats_name:str, bar_width=0.2,
     fig.set_size_inches(6, 6)
     x = [0.5, 1]
     
-    ax.bar(x=x[0], height=ctrl_averages, width=bar_width, color='blue', label='Control',
+    ax.bar(x=x[0], height=ctrl_averages, width=bar_width, color='blue', 
+           label=f'Control (n = {len(ctrl)})',
            zorder=1, alpha=0.6, yerr=ctrl_std, capsize=err_width)
     
     x_values = np.full(len(ctrl), x[0])
     ax.scatter(x_values, ctrl, marker='o', zorder=2, color='#1405eb')
     
-    ax.bar(x=x[1], height=exp_averages, width=bar_width, color='orange', label=exp_name,
+    ax.bar(x=x[1], height=exp_averages, width=bar_width, color='orange', 
+           label=f'{exp_name} (n = {len(exp)})',
            zorder=1, alpha=0.6, yerr=exp_std, capsize=err_width)
     x_values = np.full(len(exp), x[1])
     ax.scatter(x_values, exp, marker='o', zorder=2, color='#f28211')
 
     ax.set_xlabel('Groups', fontsize=14)
-    ax.set_ylabel('Averages', fontsize=14)
+    ax.set_ylabel(f'Averages ({unit})', fontsize=14)
     ax.set_title(f'{stats_name} of Control and {exp_name} Groups', fontsize=20)
     ax.set_xticks(x)
     ax.set_xticklabels(['Control', exp_name])

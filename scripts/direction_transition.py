@@ -1,3 +1,4 @@
+from unittest import result
 import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
@@ -157,8 +158,8 @@ def first_meal_stats(data_stats: pd.DataFrame, ignore_inactive=False):
         total_list = total_list[active_idx]
         
     # print(time_list, total_list)
-    avg_ratio = np.median(time_list/total_list)
-    avg_time = np.median(time_list)
+    avg_ratio = np.mean(time_list/total_list)
+    avg_time = np.mean(time_list)
     return avg_ratio, avg_time
 
 
@@ -179,7 +180,7 @@ def find_inactive_blocks(blocks:list, reverse):
     return night_blocks
 
 
-def graph_tranition_stats(data_stats: pd.DataFrame, blocks: list, path: str):
+def graph_tranition_stats(data_stats: pd.DataFrame, blocks: list, sheet: str):
     """Graph Statistics of each block in transition
     
     Visualize proportion of each transition, the accuracy and active poke of each block
@@ -227,15 +228,11 @@ def graph_tranition_stats(data_stats: pd.DataFrame, blocks: list, path: str):
             arrowprops=dict(arrowstyle='->', lw=2),
             fontsize=16,
             color='blue')
-        
+
     ax.set_xlabel('Blocks', fontsize=16)
     ax.set_ylabel('Percentage(%)', color='black', fontsize=16)
-    ax2 = ax.twinx()
-    l5 = ax2.plot(data_stats['Block_Index'], data_stats['Incorrect_Pokes'], color='red',
-                  label='Incorrect Pokes', alpha=0.5, lw=2)
-    ax2.set_ylabel('Incorrect Poke Count', fontsize=16)
-    
-    info = tl.get_bhv_num(path)
+
+    info = tl.get_bhv_num(sheet)
     night_blocks = find_inactive_blocks(blocks, reverse=len(info) == 1)
 
     for block_index in night_blocks:
@@ -244,8 +241,8 @@ def graph_tranition_stats(data_stats: pd.DataFrame, blocks: list, path: str):
     left_patch = mpatches.Patch(color='pink', alpha=0.5, label='Left Active')
     right_patch = mpatches.Patch(color='lightblue', alpha=0.5, label='Right Active')
     night_patch = mpatches.Patch(color='gray', alpha=0.5, label='Inactive Period')
-    
-    lines = [l1[0], l2[0], l3[0], l4[0], l5[0], bars1[0], bars2[0], left_patch, right_patch, night_patch]  # Combine the line objects
+
+    lines = [l1[0], l2[0], l3[0], l4[0], bars1[0], bars2[0], left_patch, right_patch, night_patch]
     labels = [line.get_label() for line in lines]  # Get the labels of the line
     legend = ax.legend(lines, labels, loc='upper right', bbox_to_anchor=(1.13, 1), borderaxespad=0)
     legend.set_title('Legend')
@@ -265,7 +262,8 @@ def graph_tranition_stats(data_stats: pd.DataFrame, blocks: list, path: str):
     plt.show()
     
 
-def graph_learning_trend_by_activity(data_stats: pd.DataFrame, blocks: list, path: str, block_prop=0.6, action_prop=0.5):
+def graph_learning_trend_by_activity(data_stats: pd.DataFrame, blocks: list, path: str, 
+                                     block_prop=0.6, action_prop=0.5):
     """
     Graph Statistics of first 60% block in transition
 
@@ -376,7 +374,7 @@ def graph_learning_trend(data_stats: pd.DataFrame, blocks: list, path: str, bloc
     leg_bg.get_texts()[0].set_fontsize('15')
     leg_bg.get_texts()[1].set_fontsize('15')
     leg_bg.get_texts()[2].set_fontsize('15')
-    
+
     info = tl.get_bhv_num(path)
     if len(info) == 2:
         plt.title(f'Accuracy by Switch for Group {info[0]} Mouse {info[1]}', fontsize=24)
@@ -397,7 +395,7 @@ def accuracy(group: pd.DataFrame):
     total_events = len(group)
     matching_events = group[group['Event'] == group['Active_Poke']]
     matching_count = len(matching_events)
-    
+
     if total_events == 0:
         return 0
     else:
@@ -429,6 +427,11 @@ def learning_score(blocks: list, block_prop=0.5, action_prop=0.8) -> float:
     return np.mean(block_accuracy_by_proportion(blocks=blocks[:cutoff], proportion=action_prop))
 
 
+def learning_result(blocks, action_prop=0.25) -> float:
+    results = [accuracy(block[int(len(block)*action_prop):]) for block in blocks]
+    return np.mean(results)
+
+
 def graph_learning_score(ctrl:list, exp:list, width=0.4, exp_group_name=None, proportion=None):
     """
     Graph learning score of two groups
@@ -450,7 +453,8 @@ def graph_learning_score(ctrl:list, exp:list, width=0.4, exp_group_name=None, pr
 
     plt.figure(figsize=(7, 7))
     plt.bar([1, 2], [ctrl_mean, cask_mean], yerr=[ctrl_err, cask_err], capsize=12, tick_label=groups, 
-            width=width, color=['lightblue', 'yellow'], alpha=0.8, zorder=1, label=['Control', exp_name])
+            width=width, color=['lightblue', 'yellow'], alpha=0.8, zorder=1, 
+            label=[f'Control (n = {len(ctrl)})', f'{exp_name} (n = {len(exp)})'])
 
     x1 = [1] * len(ctrl)
     x2 = [2] * len(exp)
@@ -460,6 +464,43 @@ def graph_learning_score(ctrl:list, exp:list, width=0.4, exp_group_name=None, pr
     plt.xlabel('Groups', fontsize=14)
     plt.ylabel('Learning Score', fontsize=14)
     plt.title(f'Learning Score Control and {exp_name} Groups with {proportion} Data', fontsize=16)
+
+    plt.legend()
+    plt.show()
+
+
+def graph_learning_results(ctrl:list, exp:list, width=0.4, exp_group_name=None, proportion=None):
+    """
+    Graph learning score of two groups
+
+    Args:
+        ctrl (list): data of control group
+        exp (list): data of experiment group
+        width (float): width of plotted bars
+        exp_group_name (str, Optional): name of the experiment group, name with treatments usually.
+        proportion (float): proportion of the data we use to evaluate learning performance
+    """
+    ctrl_mean = np.mean(ctrl)
+    cask_mean = np.mean(exp)
+    ctrl_err = np.std(ctrl) / np.sqrt(len(ctrl))
+    cask_err = np.std(exp) / np.sqrt(len(exp))
+
+    exp_name = 'Experiment' if exp_group_name==None else exp_group_name
+    groups = ['Control', exp_name]
+
+    plt.figure(figsize=(7, 7))
+    plt.bar([1, 2], [ctrl_mean, cask_mean], yerr=[ctrl_err, cask_err], capsize=12, tick_label=groups, 
+            width=width, color=['lightblue', 'yellow'], alpha=0.8, zorder=1, 
+            label=[f'Control (n = {len(ctrl)})', f'{exp_name} (n = {len(exp)})'])
+
+    x1 = [1] * len(ctrl)
+    x2 = [2] * len(exp)
+    plt.scatter(x1, ctrl, marker='o', color='blue', zorder=2) 
+    plt.scatter(x2, exp, marker='x', color='orange', zorder=2)
+
+    plt.xlabel('Groups', fontsize=14)
+    plt.ylabel('Mean Accuracy (%)', fontsize=14)
+    plt.title(f'Accuracy of Last {proportion} Data Control and {exp_name} Groups', fontsize=16)
 
     plt.legend()
     plt.show()
@@ -485,7 +526,8 @@ def graph_retrieval_time(ctrl:list, exp:list, width=0.4, exp_group_name=None, re
 
     plt.figure(figsize=(7, 7))
     plt.bar([1, 2], [ctrl_mean, cask_mean], yerr=[ctrl_err, cask_err], capsize=12, tick_label=groups, 
-            width=width, color=['lightblue', 'yellow'], alpha=0.8, zorder=1, label=['Control', exp_name])
+            width=width, color=['lightblue', 'yellow'], alpha=0.8, zorder=1, 
+            label=[f'Control (n = {len(ctrl)})', f'{exp_name} (n = {len(exp)})'])
 
     x1 = [1] * len(ctrl)
     x2 = [2] * len(exp)

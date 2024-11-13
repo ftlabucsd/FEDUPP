@@ -12,32 +12,9 @@ def parent_directory_process(parent: str):
     return files
 
 
-# /home/ftlab/Desktop/For_Andy/behavior data integrated/CASK/reversal/ctrl/B5M1.CSV
-def get_bhv_num(path_or_sheet: str) -> tuple:
-    if len(path_or_sheet) < 8:
-        bhv = path_or_sheet[1]
-        num = path_or_sheet[-1]
-        return [bhv, num]
-
-    elif 'CASK' in path_or_sheet:
-        branches = path_or_sheet.split(sep='/')
-        M = branches[-1].index('M')
-        dot = branches[-1].index('.')
-        num = branches[-1][M+1:dot]
-        bhv = branches[-1][1:M]
-        return [bhv, num]
-
-    elif 'IVSA' in path_or_sheet:
-        branches = path_or_sheet.split(sep='/')
-        num = branches[-3][:2]
-        return [num]
-    
-    elif 'mPFC' in path_or_sheet:
-        branches = path_or_sheet.split(sep='/')
-        dot = branches[-1].index('.')
-        num = branches[-1][1:dot]
-        return [num]
-
+def get_bhv_num(sheet: str) -> tuple:
+    parts = sheet.split('.')
+    return [parts[0][1:], sheet[-1]]
 
 
 def get_session_time(data: pd.DataFrame) -> float:
