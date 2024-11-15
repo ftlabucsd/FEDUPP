@@ -137,7 +137,8 @@ def find_night_index(hourly_labels:list, rev:bool):
     return intervals
 
 
-def find_first_learned_time(data:pd.DataFrame, window_hours=2, accuracy_threshold=0.8):    
+def find_first_learned_time(data:pd.DataFrame, window_hours=2, accuracy_threshold=0.8): 
+    data = data[data['Event'] != 'Pellet'].reset_index(drop=True)
     data['is_match'] = (data['Event'] == data['Active_Poke']).astype(int)
     data['cumulative_total'] = data['is_match'].expanding().count()
     data['cumulative_match'] = data['is_match'].cumsum()
@@ -160,74 +161,58 @@ def find_first_learned_time(data:pd.DataFrame, window_hours=2, accuracy_threshol
     # not reach high accuracy -> return session time
     return data.loc[len(data)-1, 'Time_passed'].total_seconds() / 3600
 
-
-def graph_avg_accuracy(ctrl:list, exp:list, width=0.4, exp_group_name=None):
-    """
-    Graph average correct rate
-
-    Args:
-        ctrl (list): data of control group
-        exp (list): data of experiment group
-        width (float): width of plotted bars
-        exp_group_name (str, Optional): name of the experiment group, name with treatments usually.
-    """
-    ctrl_mean = np.mean(ctrl)
-    cask_mean = np.mean(exp)
-    ctrl_err = np.std(ctrl) / np.sqrt(len(ctrl))
-    cask_err = np.std(exp) / np.sqrt(len(exp))
-
-    exp_name = 'Experiment' if exp_group_name==None else exp_group_name
-    groups = ['Control', exp_name]
-
-    plt.figure(figsize=(7, 7))
-    plt.bar(x=[1, 2], height=[ctrl_mean, cask_mean], yerr=[ctrl_err, cask_err], capsize=12,
-            tick_label=groups, width=width, color=['lightblue', 'yellow'], alpha=0.8,
-            zorder=1, label=[f'Control (n = {len(ctrl)})', f'{exp_name} (n = {len(exp)})'])
-
-    x1 = [1] * len(ctrl)
-    x2 = [2] * len(exp)
-    plt.scatter(x1, ctrl, marker='o', color='blue', zorder=2) 
-    plt.scatter(x2, exp, marker='x', color='orange', zorder=2)
-
-    plt.xlabel('Groups', fontsize=14)
-    plt.ylabel('Correct Rate (%)', fontsize=14)
-    plt.title(f'Average Correct Rate of Control and {exp_name} Groups in FR1', fontsize=16)
-
-    plt.legend()
-    plt.show()
-
-
-def graph_avg_learned_line(ctrl:list, exp:list, width=0.4, exp_group_name=None):
-    """
-    Graph average correct rate
+    
+def graph_group_stats(ctrl:list, exp:list, stats_name:str, unit:str, bar_width=0.2,
+                      err_width=14, dpi=100, exp_name=None, verbose=True):
+    """Plot bar graphs of average pellet for control and experiment groups
 
     Args:
-        ctrl (list): data of control group
-        exp (list): data of experiment group
-        width (float): width of plotted bars
-        exp_group_name (str, Optional): name of the experiment group, name with treatments usually.
+        ctrl_pellet_avg (list): control data
+        exp_pellet_avg (list): experiment data
+        stats_name (str): the name of statistic you are graphing
+        exp_name (_type_, optional): Name of the experiment group. Defaults to None.
+        bar_width (float, optional): bar width of bar plot. Defaults to 0.2.
+        err_width (int, optional): error bar width onthe bar. Defaults to 12.
+        dpi (int, optional): dot per inch, higher dpi gives images with higher resolution. Defaults to 100.
+        verbose (bool, optional): whether printing out information used in plotting. Defaults to False.
     """
-    ctrl_mean = np.mean(ctrl)
-    cask_mean = np.mean(exp)
-    ctrl_err = np.std(ctrl) / np.sqrt(len(ctrl))
-    cask_err = np.std(exp) / np.sqrt(len(exp))
+    ctrl_averages = np.mean(ctrl)
+    exp_averages = np.mean(exp)
+    ctrl_std = np.std(ctrl, ddof=1)
+    exp_std = np.std(exp, ddof=1)
+    
+    exp_name = 'Experiment' if exp_name == None else exp_name
+    
+    if verbose:
+        print(f'Control Size: {len(ctrl)}')
+        print(f'{exp_name} Size: {len(exp)}')
+        print(f'Control Average: {ctrl_averages}')
+        print(f'{exp_name} Average: {exp_averages}')
+        print(f'Control Standard Deviation: {ctrl_std}')
+        print(f'{exp_name} Standard Deviation: {exp_std}')
 
-    exp_name = 'Experiment' if exp_group_name==None else exp_group_name
-    groups = ['Control', exp_name]
+    fig, ax = plt.subplots(dpi=dpi)
+    fig.set_size_inches(6, 6)
+    x = [0.5, 1]
+    
+    ax.bar(x=x[0], height=ctrl_averages, width=bar_width, color='blue', 
+           label=f'Control (n = {len(ctrl)})',
+           zorder=1, alpha=0.6, yerr=ctrl_std, capsize=err_width)
+    
+    x_values = np.full(len(ctrl), x[0])
+    ax.scatter(x_values, ctrl, marker='o', zorder=2, color='#1405eb')
+    
+    ax.bar(x=x[1], height=exp_averages, width=bar_width, color='orange', 
+           label=f'{exp_name} (n = {len(exp)})',
+           zorder=1, alpha=0.6, yerr=exp_std, capsize=err_width)
+    x_values = np.full(len(exp), x[1])
+    ax.scatter(x_values, exp, marker='o', zorder=2, color='#f28211')
 
-    plt.figure(figsize=(7, 7))
-    plt.bar(x=[1, 2], height=[ctrl_mean, cask_mean], yerr=[ctrl_err, cask_err], capsize=12,
-            tick_label=groups, width=width, color=['lightblue', 'yellow'], alpha=0.8,
-            zorder=1, label=[f'Control (n = {len(ctrl)})', f'{exp_name} (n = {len(exp)})'])
+    ax.set_xlabel('Groups', fontsize=14)
+    ax.set_ylabel(f'Averages ({unit})', fontsize=14)
+    ax.set_title(f'{stats_name} of Control and {exp_name} Groups', fontsize=20)
+    ax.set_xticks(x)
+    ax.set_xticklabels(['Control', exp_name])
 
-    x1 = [1] * len(ctrl)
-    x2 = [2] * len(exp)
-    plt.scatter(x1, ctrl, marker='o', color='blue', zorder=2) 
-    plt.scatter(x2, exp, marker='x', color='orange', zorder=2)
-
-    plt.xlabel('Groups', fontsize=14)
-    plt.ylabel('First Learned Time (hours)', fontsize=14)
-    plt.title(f'First Learned Line of Control and {exp_name} Groups', fontsize=16)
-
-    plt.legend()
+    ax.legend()
     plt.show()

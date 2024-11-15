@@ -6,9 +6,10 @@ from sklearn.metrics import silhouette_score
 import matplotlib.pyplot as plt
 import numpy as np
 import meals as ml
-from preprocessing import read_csv_clean
+from preprocessing import read_excel_by_sheet, get_all_sheet_names
 import os
 import pickle
+import torch
 
 def label_indices(labels):
     result = defaultdict(list)
@@ -25,10 +26,11 @@ def index2meal(data_div: defaultdict, data:list):
     return meal_by_category
 
 
-def extract_data_full_group(file_paths:list):
+def extract_data_full_group(file_path):
+    sheets = get_all_sheet_names(file_path)
     data = defaultdict(list)
-    for path in file_paths:
-        each = read_csv_clean(path, remove_trivial=False, collect_time=True)
+    for sheet in sheets:
+        each = read_excel_by_sheet(sheet, file_path, remove_trivial=False, collect_time=True)
         each_acc_dict = ml.extract_meals_data(data=each, 
                                             time_threshold=60,
                                             pellet_threshold=2)
@@ -138,7 +140,6 @@ def create_dataset_single_group(experiment:str, ctrl:bool):
 
     X = np.vstack((data_padding(good_X), data_padding(bad_X)))
     y = np.concatenate((good_y, bad_y))
-
     return X, y
 
 
@@ -146,3 +147,11 @@ def merge_dataset(ctrl_X:np.array, ctrl_y:np.array, exp_X:np.array, exp_y:np.arr
     X = np.vstack((ctrl_X, exp_X))
     y = np.concatenate(((ctrl_y, exp_y)))
     return X, y
+
+
+def dictionary2dataset(meal_by_n_pellet:dict):
+    data = []
+    for count in [3,4,5]:
+        for meal in meal_by_n_pellet[count]:
+            data.append(meal)
+    return torch.tensor(data_padding(data), dtype=torch.float32)

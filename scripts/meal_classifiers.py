@@ -136,6 +136,24 @@ def evaluate_meals_by_groups(model:nn.Module, ctrl_input:torch.Tensor, ctrl_y:to
     print(f'Experiment Group: {exp_good}/{exp_total} good meals with proportion of {exp_good/exp_total}')
 
 
+def evaluate_meals_on_new_data(model:nn.Module, ctrl_input:torch.Tensor, exp_input:torch.Tensor):
+    ctrl_input, exp_input = ctrl_input.to(device), exp_input.to(device)
+    model.eval()
+    with torch.no_grad():
+        outputs_ctrl = model(ctrl_input)
+        _, predicted_ctrl = torch.max(outputs_ctrl.data, 1)
+
+        outputs_exp = model(exp_input)
+        _, predicted_exp = torch.max(outputs_exp.data, 1)
+
+    predicted_ctrl, predicted_exp = predicted_ctrl.cpu().numpy(), predicted_exp.cpu().numpy()
+    ctrl_good, ctrl_total = np.sum(predicted_ctrl), np.size(predicted_ctrl)
+    exp_good, exp_total = np.sum(predicted_exp), np.size(predicted_exp)
+
+    print(f'Control Group: {ctrl_good}/{ctrl_total} good meals with proportion of {ctrl_good/ctrl_total}')
+    print(f'Experiment Group: {exp_good}/{exp_total} good meals with proportion of {exp_good/exp_total}')
+
+
 def count_parameters(model:nn.Module):
     trainable_params = sum(p.numel() for p in model.parameters())
     print(f'Trainable parameters: {trainable_params}')

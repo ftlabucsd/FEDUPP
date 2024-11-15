@@ -76,37 +76,35 @@ def graph_pellet_interval(path: str):
     plt.show()
     
     
-def mean_pellet_collect_time(path:str, sheet:str, remove_outlier=False, n_stds=3):
-    pellet_times = get_retrieval_time(path, sheet)
-    # print(pellet_times)
+def mean_pellet_collect_time(path:str, sheet:str, remove_outlier=False, n_stds=3, day=3):
+    pellet_times = get_retrieval_time(path, sheet, day=day)
     mean = np.mean(pellet_times)
     std = np.std(pellet_times)
     if remove_outlier:
         cutoff = mean+std*n_stds
         pellet_times = [each for each in pellet_times if each < cutoff]
-    # print(pellet_times)
     return pellet_times, np.mean(pellet_times), np.std(pellet_times)
 
 
-def plot_retrieval_time_by_block(path:str, sheet):
-    pellet_times = get_retrieval_time(path, sheet)
+def plot_retrieval_time_by_block(path:str, sheet:str, day=3, n_stds=3):
+    pellet_times = get_retrieval_time(path, sheet, day=10)
     mean = np.mean(pellet_times)
     std = np.std(pellet_times)
-    cutoff = mean+std*5
+    cutoff = mean+std*n_stds
 
     time_by_block = []
     data = read_excel_by_sheet(sheet, path, collect_time=True)
-    blocks = split_data_to_blocks(data)
+    blocks = split_data_to_blocks(data, day=day)
     for block in blocks:
         times = block['collect_time'].tolist()
         times = [each for each in times if each != 0 and each < cutoff]
         time_by_block.append(np.mean(times) if len(times) != 0 else 0)
-    
+
     temp = time_by_block[:-1]
     block_indices = np.arange(len(temp))
     slope, intercept = np.polyfit(block_indices, temp, 1)
     best_fit_line = slope * block_indices + intercept
-    
+
     plt.figure(figsize=(6, 4))
     plt.plot(time_by_block, marker='*')
     plt.plot(block_indices, best_fit_line, color='red', linestyle='--', 

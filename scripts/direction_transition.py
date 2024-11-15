@@ -1,4 +1,4 @@
-from unittest import result
+from datetime import timedelta
 import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
@@ -9,7 +9,7 @@ from meals import find_meals_paper
 colors = {'Left': 'red', 'Right': 'blue', 'Pellet': 'green'}
 
 
-def split_data_to_blocks(data_dropped: pd.DataFrame) -> list:
+def split_data_to_blocks(data_dropped: pd.DataFrame, day=3) -> list:
     """Split dataframe into blocks of same active poke
 
     Args:
@@ -18,7 +18,7 @@ def split_data_to_blocks(data_dropped: pd.DataFrame) -> list:
     Returns:
         list: list of blocks (number of switches of active poke)
     """
-    data_dropped = data_dropped.dropna()
+    data_dropped = data_dropped[data_dropped['Time_passed'] < timedelta(days=day)]
     curr_poke = data_dropped['Active_Poke'][0]
     blocks = []
     start_idx = 0
@@ -375,7 +375,6 @@ def graph_learning_trend(data_stats: pd.DataFrame, blocks: list, path: str, bloc
     leg_bg.get_texts()[1].set_fontsize('15')
     leg_bg.get_texts()[2].set_fontsize('15')
 
-    info = tl.get_bhv_num(path)
     if len(info) == 2:
         plt.title(f'Accuracy by Switch for Group {info[0]} Mouse {info[1]}', fontsize=24)
     else:

@@ -1,7 +1,7 @@
 import pandas as pd
 import math
 import numpy as np
-import datetime
+from datetime import timedelta
 import warnings
 warnings.filterwarnings('ignore')
 
@@ -86,8 +86,10 @@ def get_max_numeric(series:pd.Series):
     numeric_values = pd.to_numeric(series, errors='coerce')  # Convert non-numeric to NaN
     return numeric_values.max(skipna=True)
 
-def get_retrieval_time(path, sheet):
+def get_retrieval_time(path, sheet, day=3):
     data = read_excel_by_sheet(sheet, path)
+    data = data[data['Time_passed'] < timedelta(days=day)]
+
     times = data['collect_time'].tolist()
     pellet_times = [each for each in times if each != 0.0]
     pellet_times = list(map(float, pellet_times))
