@@ -6,9 +6,17 @@ import matplotlib.patches as mpatches
 from datetime import timedelta
 import numpy as np
 from accuracy import find_night_index, calculate_accuracy
+from meal_classifiers import predict, RNNClassifier, CNNClassifier
+import torch
 
 plt.rcParams['figure.figsize'] = (20, 6)
 
+def pad_meal(each:list):
+    size = len(each)
+    while size < 4:
+        each.append(-1)
+        size += 1
+    return each
 
 def pellet_flip(data: pd.DataFrame) -> pd.DataFrame:
     """return a dataframe with 10-min interval and pellet count in this interval
@@ -93,22 +101,72 @@ def graph_pellet_frequency(grouped_data: pd.DataFrame, bhv, num):
     plt.legend()
     plt.show()
 
-
-def meal_threshold(data: pd.DataFrame, collect_quantile=0.6, pellet_quantile=0.75) -> tuple:
-    data = data[data['Event'] == 'Pellet'].reset_index().drop('index', axis='columns')
-    data['Time'] = pd.to_datetime(data['Time'])
-
-    data['Interval'] = data['Time'].diff().fillna(pd.Timedelta(seconds=0))
-    data['Interval'] = data['Interval'].dt.total_seconds() / 60
+def find_first_good_meal(data:pd.DataFrame, time_threshold, pellet_threshold, model_type='cnn'):
+    df = data[data['Event'] == 'Pellet'].copy()
+    df['retrieval_timestamp'] = df['Time'] + pd.to_timedelta(df['collect_time'], unit='m')
     
-    data['collect_time'] = pd.to_numeric(data['collect_time'], errors='coerce')
-    max_value = data['collect_time'].max()
-    data['collect_time'] = data['collect_time'].replace('Timed_out', max_value)
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    if model_type == 'lstm': 
+        model = RNNClassifier(input_size=1, hidden_size=400, num_layers=2, num_classes=2).to(device)
+        model.load_state_dict(torch.load('../CASK_analysis/LSTM_from_CASK.pth'))
+    elif model_type == 'cnn':
+        model = CNNClassifier(num_classes=2, maxlen=4).to(device)
+        model.load_state_dict(torch.load('../CASK_analysis/CNN_from_CASK.pth'))
+    else:
+        print('Only support lstm and cnn.')
+        return
+    
+    meals_with_acc = []
+    meal_start_time = None
+    meal_start_index = None
+    first_good_meal_index = None
 
-    collect_time_thres = data['collect_time'].quantile(collect_quantile)
-    pellet_interval_thres = data['Interval'].quantile(pellet_quantile)
-    return pellet_interval_thres, collect_time_thres
+    pellet_cnt = 1 # record pellets in the meal
+    for index, row in df.iterrows():
+        current_time = row['retrieval_timestamp']  # Get current time from the 'Time' column
 
+        if meal_start_time is None:
+            meal_start_time = current_time
+            meal_start_index = index
+            continue
+
+        # if current pellet is retrieved within 60 seconds after previous retrieval
+        if ((row['retrieval_timestamp'] - meal_start_time).total_seconds() <= time_threshold):
+            pellet_cnt += 1
+        else:
+            meal_events = data.loc[meal_start_index:index]
+            if pellet_cnt >= pellet_threshold and calculate_accuracy(meal_events) > 50:
+                pellet_cnt += 1
+                accuracies = extract_meal_acc_each(meal_events)
+                meals_with_acc.append([meal_start_time, pad_meal(accuracies)])
+
+            meal_start_time = current_time
+            meal_start_index = index
+            pellet_cnt = 1
+
+    if pellet_cnt >= pellet_threshold:
+        accuracies = extract_meal_acc_each(data.loc[meal_start_index:])
+        meals_with_acc.append([meal_start_time, pad_meal(accuracies)])
+
+    if len(meals_with_acc) == 0: return meals_with_acc, None # half session time if no meal
+
+    temp_list = [row[1] for row in meals_with_acc if len(row[1]) in [2,3,4]]
+    idx = -1
+    if len(temp_list) == 0: # no model-recognizable meal
+        for each in meals_with_acc: # search meal with average accuracy of at least 75%
+            if np.mean(each[1]) >= 70:
+                first_good_meal_index = idx+1
+                break
+            idx += 1
+        # if no high-accuracy meal, then use max time
+        if first_good_meal_index == None: first_good_meal_index = len(meals_with_acc) - 1
+    else:
+        meal_data = np.stack(temp_list)
+        predicted = predict(model, meal_data)
+        indices = np.where(predicted == 0)[0]
+        first_good_meal_index = np.where(predicted==0)[0][0] if indices.size > 0 else len(meals_with_acc) - 1
+
+    return meals_with_acc, pd.to_datetime(meals_with_acc[first_good_meal_index][0])
 
 def extract_meal_acc_each(events: pd.DataFrame):
     acc = []
@@ -117,7 +175,7 @@ def extract_meal_acc_each(events: pd.DataFrame):
     for idx in range(len(pellet_indices) - 1):
         start, end = pellet_indices[idx], pellet_indices[idx+1]
         curr_slice = events.loc[start:end]
-        curr_slice = curr_slice[curr_slice['Event'] != 'Pellet']
+        # curr_slice = curr_slice[curr_slice['Event'] != 'Pellet']
         acc.append(calculate_accuracy(curr_slice))
 
     # print(f"There are {len(pellet_indices)} pellets and {len(acc)} accuracy")
@@ -129,7 +187,6 @@ def extract_meals_data(data: pd.DataFrame, time_threshold=130,
     """
     find meals in the behaviors. 5 pellets in 10 minutes is considered as a meal
     """
-    data['Time'] = pd.to_datetime(data['Time'])
     df = data[data['Event'] == 'Pellet'].copy()
     df['retrieval_timestamp'] = df['Time'] + pd.to_timedelta(df['collect_time'], unit='m')
 
@@ -146,7 +203,7 @@ def extract_meals_data(data: pd.DataFrame, time_threshold=130,
             meal_start_index = index
             continue
 
-        # if current pellet is retrieved within 130 seconds after previous retrieval
+        # if current pellet is retrieved within 60 seconds after previous retrieval
         if ((row['retrieval_timestamp'] - meal_start_time).total_seconds() <= time_threshold):
             pellet_cnt += 1
         else:
@@ -161,7 +218,7 @@ def extract_meals_data(data: pd.DataFrame, time_threshold=130,
             pellet_cnt = 1
 
     if pellet_cnt >= pellet_threshold:
-        accuracies = extract_meal_acc_each(meal_events)
+        accuracies = extract_meal_acc_each(data.loc[meal_start_index:])
         meal_acc[len(accuracies)+1].append(accuracies)
     
     return meal_acc
@@ -172,13 +229,12 @@ def find_meals_paper(data:pd.DataFrame, time_threshold=130, pellet_threshold=3):
     df['retrieval_timestamp'] = df['Time'] + pd.to_timedelta(df['collect_time'], unit='m')
 
     meals = []
-    meal_pellet_cnt = []
     meal_acc = []
     meal_start_time = None
     meal_end_time = None
     meal_start_index = None
-    
-    pellet_cnt = 0 # record pellets in the meal
+
+    pellet_cnt = 1 # record pellets in the meal
     for index, row in df.iterrows():
         current_time = row['retrieval_timestamp']  # Get current time from the 'Time' column
 
@@ -195,20 +251,18 @@ def find_meals_paper(data:pd.DataFrame, time_threshold=130, pellet_threshold=3):
             meal_events = data.loc[meal_start_index:index]
             if pellet_cnt >= pellet_threshold and calculate_accuracy(meal_events) > 50:
                 meals.append([meal_start_time, meal_end_time])
-                meal_pellet_cnt.append(pellet_cnt)
                 meal_acc.append(calculate_accuracy(meal_events))
 
             meal_start_time = current_time
             meal_end_time = current_time
             meal_start_index = index
-            pellet_cnt = 0
+            pellet_cnt = 1
 
     if pellet_cnt >= pellet_threshold:
         meals.append([meal_start_time, meal_end_time])
-        meal_pellet_cnt.append(pellet_cnt)
         meal_events = data.loc[meal_start_index:index]
         meal_acc.append(calculate_accuracy(meal_events))
-    return meals, meal_pellet_cnt, meal_acc
+    return meals, meal_acc
 
 
 def graphing_cum_count(data: pd.DataFrame, meal: list, bhv, num, flip=False):

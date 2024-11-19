@@ -154,6 +154,17 @@ def evaluate_meals_on_new_data(model:nn.Module, ctrl_input:torch.Tensor, exp_inp
     print(f'Experiment Group: {exp_good}/{exp_total} good meals with proportion of {exp_good/exp_total}')
 
 
+def predict(model:nn.Module, input):
+    if type(input) != torch.Tensor: input = torch.Tensor(input)
+    input = input.to(device)
+
+    model.eval()
+    with torch.no_grad():
+        outputs_ctrl = model(input)
+        _, predicted_ctrl = torch.max(outputs_ctrl.data, 1)
+
+    return predicted_ctrl.cpu().numpy()
+
 def count_parameters(model:nn.Module):
     trainable_params = sum(p.numel() for p in model.parameters())
     print(f'Trainable parameters: {trainable_params}')

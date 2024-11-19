@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 import tools as tl
 import numpy as np
-from meals import find_meals_paper
+from meals import find_meals_paper, find_first_good_meal
 
 colors = {'Left': 'red', 'Right': 'blue', 'Pellet': 'green'}
 
@@ -113,9 +113,15 @@ def get_transition_info(blocks: list, meal_config:list, reverse:bool) -> pd.Data
         active_poke = block.iloc[0]['Active_Poke']
 
         times = block['Time'].tolist()
-        meals,_,_ = find_meals_paper(block, meal_config[0], meal_config[1])
+        meals,_ = find_meals_paper(block, meal_config[0], meal_config[1])
         time = round((meals[0][0] - times[0]).total_seconds() / 60, 2) if len(meals) > 0 else 'no meal'
         
+        _, first_meal_time = find_first_good_meal(block, 60, 2, 'cnn')
+        if first_meal_time is None:
+            meal_1_good = round((times[-1] - times[0]).total_seconds() / 60, 2)
+        else:
+            meal_1_good = round((first_meal_time - times[0]).total_seconds() / 60, 2)
+
         new_row_data = {
             'Block_Index': i+1,
             'Left_to_Left': round(transitions.get('Left_to_Left')/size * 100, 2),
@@ -126,6 +132,7 @@ def get_transition_info(blocks: list, meal_config:list, reverse:bool) -> pd.Data
             'Success_Rate' : round(transitions.get('success_count')/size * 100, 2),
             'Active_Poke' : active_poke,
             'First_Meal_Time': time,
+            'First_Good_Meal_Time': meal_1_good,
             'Block_Time': round((times[-1] - times[0]).total_seconds() / 60, 2),
             'Incorrect_Pokes': size - transitions.get('success_count'),
             'Active': not (i in inactives)
@@ -140,8 +147,8 @@ def get_transition_info(blocks: list, meal_config:list, reverse:bool) -> pd.Data
     
     data_stats = pd.DataFrame(new_add, columns=[
         'Block_Index', 'Left_to_Left', 'Left_to_Right', 'Right_to_Right', 'Right_to_Left',
-        'Success_Count', 'Success_Rate','Active_Poke', 'First_Meal_Time', 'Block_Time', 
-        'Incorrect_Pokes', 'Active','Pellet_Rate'])
+        'Success_Count', 'Success_Rate','Active_Poke', 'First_Meal_Time', 'First_Good_Meal_Time',
+        'Block_Time', 'Incorrect_Pokes', 'Active', 'Pellet_Rate'])
 
     return data_stats
 
@@ -151,16 +158,22 @@ def first_meal_stats(data_stats: pd.DataFrame, ignore_inactive=False):
     total_list = data_stats['Block_Time'].to_numpy(dtype=np.float32)
     time_list = np.array([time if type(time) == float else total_list[idx] 
                           for idx, time in enumerate(data_stats['First_Meal_Time'])])
+    good_meal_list = np.array([time for time in data_stats['First_Good_Meal_Time']])
 
     if ignore_inactive:
         active_idx = [idx for idx, each in data_stats.iterrows() if each['Active']]
         time_list = time_list[active_idx]
         total_list = total_list[active_idx]
+        good_meal_list = good_meal_list[active_idx]
         
     # print(time_list, total_list)
-    avg_ratio = np.mean(time_list/total_list)
+    avg_ratio = np.mean(good_meal_list/total_list)
+    # print(good_meal_list)
+    # print(total_list)
+    # print(good_meal_list/total_list)
     avg_time = np.mean(time_list)
-    return avg_ratio, avg_time
+    avg_good_time = np.median(good_meal_list)
+    return avg_ratio, avg_time, avg_good_time
 
 
 def find_inactive_blocks(blocks:list, reverse):
