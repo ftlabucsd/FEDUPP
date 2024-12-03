@@ -1,5 +1,5 @@
 import os
-import shutil
+import openpyxl
 import pandas as pd
 
 def update_excel_with_csv(csv_path, excel_path, sheet_name):
@@ -113,7 +113,34 @@ def split_ctrl_cask(excel_path:str):
         for sheet_name, data in cask_sheets.items():
             data.to_excel(writer, sheet_name=sheet_name, index=False)
 
+
+def copy_sheet(input_file, target_file, sheet_name):
+    try:
+        input_wb = openpyxl.load_workbook(input_file, data_only=True)
+        if sheet_name not in input_wb.sheetnames:
+            print(f"Sheet '{sheet_name}' does not exist in {input_file}")
+            return
+
+        input_sheet = input_wb[sheet_name]
+        target_wb = openpyxl.load_workbook(target_file)
+
+        if sheet_name in target_wb.sheetnames:
+            print(f"Sheet '{sheet_name}' already exists in {target_file}.")
+            return
+
+        target_sheet = target_wb.create_sheet(title=sheet_name.strip())
+        for row in input_sheet.iter_rows():
+            for cell in row:
+                target_sheet.cell(row=cell.row, column=cell.column, value=cell.value)
+
+        target_wb.save(target_file)
+        print(f"Copied sheet '{sheet_name}' from {input_file} to {target_file}.")
+    except Exception as e:
+        print(f"Error copying sheet: {e}")
+
+
 if __name__ == '__main__':
     # merge_csvs_to_excel(excel='../reversal_cask.xlsx', csv_root='../CASK_Data/reversal/cask')
     # split_ctrl_cask('../FR1_collection.xlsx')
-    check_data_by_date('../reversal_ctrl.xlsx', 'C1.M1')
+    # check_data_by_date('../reversal_ctrl.xlsx', 'C1.M1')
+    copy_sheet('../reversal_cask.xlsx', '../reversal_ctrl.xlsx', 'C5.M2')
