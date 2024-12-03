@@ -95,3 +95,64 @@ def get_retrieval_time(path, sheet, day=3):
     pellet_times = list(map(float, pellet_times))
     pellet_times = [each for each in pellet_times if not math.isnan(each)]
     return pellet_times
+
+def find_dispense_time(df):
+    total_dispense = 0 # in minutes
+    start_dispense = df['Time'][0] if 'Dispense' in df['Event'][0] else None
+
+    for idx, row in df.iterrows():
+        if idx == len(df) - 1: continue
+        # dispense in next row and not in current row -> dispense start
+        if 'Dispense' not in row['Event'] and 'Dispense' in df.loc[idx+1, 'Event']: 
+            start_dispense = row['Time']
+        # dispense in current event but not the next -> dispense end
+        elif 'Dispense' in row['Event'] and 'Dispense' not in df.loc[idx+1, 'Event']:
+            total_dispense += (df.loc[idx+1, 'Time'] - start_dispense).total_seconds() / 60
+    return round(total_dispense, 3)
+
+def find_dispense_time_one_day(path, sheet):
+    df = pd.read_excel(path, sheet).rename(columns={
+            'MM:DD:YYYY hh:mm:ss': 'Time', 'Retrieval_Time': 'collect_time'})
+    df['Time'] = pd.to_datetime(df['Time'])
+    baseline_time = df['Time'].iloc[0]
+    df['Time_passed'] = df['Time'] - baseline_time
+      
+    # preserve one day only
+    target_time = timedelta(hours=24)
+    df['time_diff'] = (df['Time_passed'] - target_time).abs()
+    df = df[:df['time_diff'].idxmin()].reset_index(drop=True)
+    
+    return find_dispense_time(df)
+
+
+def find_dispense_time_by_day(path, sheet):
+    df = pd.read_excel(path, sheet).rename(columns={
+            'MM:DD:YYYY hh:mm:ss': 'Time', 'Retrieval_Time': 'collect_time'})
+    df['Time'] = pd.to_datetime(df['Time'])
+    baseline_time = df['Time'].iloc[0]
+    df['Time_passed'] = df['Time'] - baseline_time
+    
+    dispenses = []
+      
+    # preserve one day only
+    df['time_diff_1'] = (df['Time_passed'] - timedelta(days=1)).abs()
+    df['time_diff_2'] = (df['Time_passed'] - timedelta(days=2)).abs()
+    df['time_diff_3'] = (df['Time_passed'] - timedelta(days=3)).abs()
+    day_1 = df['time_diff_1'].idxmin()
+    day_2 = df['time_diff_2'].idxmin()
+    day_3 = df['time_diff_3'].idxmin()
+
+    dispenses.append(find_dispense_time(df[:day_1].reset_index(drop=True)))
+    if day_1 == day_2:
+        dispenses.append(find_dispense_time(df[day_1:].reset_index(drop=True)))
+        dispenses.append(-1)
+        return dispenses
+    else:
+        dispenses.append(find_dispense_time(df[day_1:day_2].reset_index(drop=True)))
+    
+    if day_2 == day_3:
+        dispenses.append(find_dispense_time(df[day_2:].reset_index(drop=True)))
+    else:
+        dispenses.append(find_dispense_time(df[day_2:day_3].reset_index(drop=True)))
+    
+    return dispenses

@@ -6,7 +6,7 @@ from tools import get_bhv_num, get_session_time
 import numpy as np
 from datetime import datetime, timedelta
 
-def read_and_record(path:str, sheet:str, ending_corr:list, learned_time:list):
+def read_and_record(path:str, sheet:str, ending_corr:list, learned_time:list, acc_dict:dict):
     df = read_excel_by_sheet(sheet, path, collect_time=True, 
                              cumulative_accuracy=True, remove_trivial=True, 
                              convert_large=True)
@@ -17,6 +17,7 @@ def read_and_record(path:str, sheet:str, ending_corr:list, learned_time:list):
 
     ending_corr.append(closest_accuracy)
     learned_time.append(find_first_learned_time(df))
+    acc_dict[sheet] = closest_accuracy
     return df
 
 
@@ -199,14 +200,18 @@ def graph_group_stats(ctrl:list, exp:list, stats_name:str, unit:str, bar_width=0
            label=f'Control (n = {len(ctrl)})',
            zorder=1, alpha=0.6, yerr=ctrl_std, capsize=err_width)
     
-    x_values = np.full(len(ctrl), x[0])
-    ax.scatter(x_values, ctrl, marker='o', zorder=2, color='#1405eb')
-    
     ax.bar(x=x[1], height=exp_averages, width=bar_width, color='orange', 
            label=f'{exp_name} (n = {len(exp)})',
            zorder=1, alpha=0.6, yerr=exp_std, capsize=err_width)
-    x_values = np.full(len(exp), x[1])
-    ax.scatter(x_values, exp, marker='o', zorder=2, color='#f28211')
+    
+    # Add jitter to scatter points
+    jitter_strength = bar_width / 8
+    x_values_ctrl = x[0] + np.random.uniform(-jitter_strength, jitter_strength, size=len(ctrl))
+    x_values_exp = x[1] + np.random.uniform(-jitter_strength, jitter_strength, size=len(exp))
+
+    # Plot scatter points
+    ax.scatter(x_values_ctrl, ctrl, marker='o', zorder=2, color='#1405eb', alpha=0.8)
+    ax.scatter(x_values_exp, exp, marker='o', zorder=2, color='#f28211', alpha=0.8)
 
     ax.set_xlabel('Groups', fontsize=14)
     ax.set_ylabel(f'Averages ({unit})', fontsize=14)
