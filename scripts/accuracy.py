@@ -13,6 +13,7 @@ def read_and_record(path:str, sheet:str, ending_corr:list, learned_time:list, ac
     target_time = timedelta(hours=24)
     df['time_diff'] = (df['Time_passed'] - target_time).abs()
     closest_accuracy = df.loc[df['time_diff'].idxmin(), 'Percent_Correct']
+    df = df[:df['time_diff'].idxmin()]
     df.drop(columns=['time_diff'], axis='columns')
 
     ending_corr.append(closest_accuracy)
@@ -21,7 +22,7 @@ def read_and_record(path:str, sheet:str, ending_corr:list, learned_time:list, ac
     return df
 
 
-def graph_cumulative_acc(mice: list, group=None):
+def graph_cumulative_acc(mice: list, group=None, export_path=None):
     """
     Graph the line plot for cumulative accuracy of certain group of mice
 
@@ -29,7 +30,7 @@ def graph_cumulative_acc(mice: list, group=None):
     mice: list of data pd.Dataframe data of mice in the group
     group: group number to display on the output plot
     """
-    plt.figure(figsize=(15, 6), dpi=90)
+    plt.figure(figsize=(15, 5), dpi=150)
 
     cnt = 1
     for each in mice:
@@ -37,17 +38,15 @@ def graph_cumulative_acc(mice: list, group=None):
         sns.lineplot(data=each, x='Time_passed_hours', y='Percent_Correct', label=f'M{cnt}')
         cnt += 1
     plt.grid()
-    if isinstance(group, str):
-        plt.title(f'Changes in Correction Rate for {group} Group', fontsize=24)
-    elif isinstance(group, int):
-        plt.title(f'Changes in Correction Rate for Group {group}', fontsize=24)
-
+    plt.title(f'Cumulative Accuracy for Cohort {group}', fontsize=24)
     plt.xlabel('Session Time (hours)', fontsize=16)
     plt.ylabel('Correct Rate (%)', fontsize=16)
     plt.yticks(range(0, 110, 10))
     plt.legend()
     legend = plt.legend(title='Mice', fontsize=10)
     legend.get_title().set_fontsize(12)
+    if export_path:
+        plt.savefig(export_path, bbox_inches='tight')
     plt.show()
 
 
@@ -164,7 +163,7 @@ def find_first_learned_time(data:pd.DataFrame, window_hours=2, accuracy_threshol
 
     
 def graph_group_stats(ctrl:list, exp:list, stats_name:str, unit:str, bar_width=0.2,
-                      err_width=14, dpi=100, exp_name=None, verbose=True):
+                      err_width=14, dpi=100, exp_name=None, verbose=True, export_path=None):
     """Plot bar graphs of average pellet for control and experiment groups
 
     Args:
@@ -220,4 +219,6 @@ def graph_group_stats(ctrl:list, exp:list, stats_name:str, unit:str, bar_width=0
     ax.set_xticklabels(['Control', exp_name])
 
     ax.legend()
+    if export_path:
+        plt.savefig(export_path, bbox_inches='tight')
     plt.show()
