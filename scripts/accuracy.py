@@ -178,8 +178,8 @@ def graph_group_stats(ctrl:list, exp:list, stats_name:str, unit:str, bar_width=0
     """
     ctrl_averages = np.mean(ctrl)
     exp_averages = np.mean(exp)
-    ctrl_std = np.std(ctrl, ddof=1)
-    exp_std = np.std(exp, ddof=1)
+    ctrl_std = np.std(ctrl) / np.sqrt(len(ctrl))
+    exp_std = np.std(exp) / np.sqrt(len(exp))
     
     exp_name = 'Experiment' if exp_name == None else exp_name
     

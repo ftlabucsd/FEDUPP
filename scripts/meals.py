@@ -60,7 +60,7 @@ def find_pellet_frequency(data: pd.DataFrame) -> pd.DataFrame:
     return grouped_data
 
 
-def graph_pellet_frequency(grouped_data: pd.DataFrame, bhv, num):
+def graph_pellet_frequency(grouped_data: pd.DataFrame, bhv, num, export_path=None):
     """graph histogram for pellet frequency
     histogram analysis
     """
@@ -99,6 +99,8 @@ def graph_pellet_frequency(grouped_data: pd.DataFrame, bhv, num):
     plt.yticks(range(0, 19, 2))
     plt.tight_layout()
     plt.legend()
+    if export_path:
+        plt.savefig(export_path, bbox_inches='tight')
     plt.show()
 
 def find_first_good_meal(data:pd.DataFrame, time_threshold, pellet_threshold, model_type='cnn'):
@@ -108,10 +110,10 @@ def find_first_good_meal(data:pd.DataFrame, time_threshold, pellet_threshold, mo
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     if model_type == 'lstm': 
         model = RNNClassifier(input_size=1, hidden_size=400, num_layers=2, num_classes=2).to(device)
-        model.load_state_dict(torch.load('../CASK_analysis/LSTM_from_CASK.pth'))
+        model.load_state_dict(torch.load('../data/LSTM_from_CASK.pth'))
     elif model_type == 'cnn':
         model = CNNClassifier(num_classes=2, maxlen=4).to(device)
-        model.load_state_dict(torch.load('../CASK_analysis/CNN_from_CASK.pth'))
+        model.load_state_dict(torch.load('../data/CNN_from_CASK.pth'))
     else:
         print('Only support lstm and cnn.')
         return
@@ -310,7 +312,7 @@ def extract_meals_for_model(data: pd.DataFrame, time_threshold=60,
     return meals, meal_len
 
 
-def graphing_cum_count(data: pd.DataFrame, meal: list, bhv, num, flip=False):
+def graphing_cum_count(data: pd.DataFrame, meal: list, bhv, num, flip=False, export_path=None):
     """
     graph the cumulative count and cumulative percentage of pellet consumption
     use two axis and mark meals on the graph
@@ -361,6 +363,8 @@ def graphing_cum_count(data: pd.DataFrame, meal: list, bhv, num, flip=False):
     patch_night = mpatches.Patch(color='grey', alpha=0.5, label='Inactive')
 
     plt.legend(handles=[patch_meal, patch_night], loc='upper right')
+    if export_path:
+        plt.savefig(export_path, bbox_inches='tight')
     plt.show()
 
 
@@ -407,59 +411,6 @@ def active_meal(meals: list) -> float:
     return round(cnt/len(meals), 4) 
 
 
-# def graph_group_stats(ctrl:list, exp:list, stats_name:str, unit:str, bar_width=0.2,
-#                       err_width=14, dpi=100, exp_name=None, verbose=True):
-#     """Plot bar graphs of average pellet for control and experiment groups
-
-#     Args:
-#         ctrl_pellet_avg (list): control data
-#         exp_pellet_avg (list): experiment data
-#         stats_name (str): the name of statistic you are graphing
-#         exp_name (_type_, optional): Name of the experiment group. Defaults to None.
-#         bar_width (float, optional): bar width of bar plot. Defaults to 0.2.
-#         err_width (int, optional): error bar width onthe bar. Defaults to 12.
-#         dpi (int, optional): dot per inch, higher dpi gives images with higher resolution. Defaults to 100.
-#         verbose (bool, optional): whether printing out information used in plotting. Defaults to False.
-#     """
-#     ctrl_averages = np.mean(ctrl)
-#     exp_averages = np.mean(exp)
-#     ctrl_std = np.std(ctrl, ddof=1)
-#     exp_std = np.std(exp, ddof=1)
-    
-#     exp_name = 'Experiment' if exp_name == None else exp_name
-    
-#     if verbose:
-#         print(f'Control Size: {len(ctrl)}')
-#         print(f'{exp_name} Size: {len(exp)}')
-#         print(f'Control Average: {ctrl_averages}')
-#         print(f'{exp_name} Average: {exp_averages}')
-#         print(f'Control Standard Deviation: {ctrl_std}')
-#         print(f'{exp_name} Standard Deviation: {exp_std}')
-
-#     fig, ax = plt.subplots(dpi=dpi)
-#     fig.set_size_inches(6, 6)
-#     x = [0.5, 1]
-    
-#     ax.bar(x=x[0], height=ctrl_averages, width=bar_width, color='blue', 
-#            label=f'Control (n = {len(ctrl)})',
-#            zorder=1, alpha=0.6, yerr=ctrl_std, capsize=err_width)
-    
-#     ax.bar(x=x[1], height=exp_averages, width=bar_width, color='orange', 
-#            label=f'{exp_name} (n = {len(exp)})',
-#            zorder=1, alpha=0.6, yerr=exp_std, capsize=err_width)
-
-
-
-#     ax.set_xlabel('Groups', fontsize=14)
-#     ax.set_ylabel(f'Averages ({unit})', fontsize=14)
-#     ax.set_title(f'{stats_name} of Control and {exp_name} Groups', fontsize=20)
-#     ax.set_xticks(x)
-#     ax.set_xticklabels(['Control', exp_name])
-
-#     ax.legend()
-#     plt.show()
-
-
 def print_meal_stats(data):
     total_meals = 0
     keep_meals = 0
@@ -470,18 +421,3 @@ def print_meal_stats(data):
             keep_meals += size
             print(f"Number of Pellets: {key}, n_meals: {size}")
     print(f"Total {total_meals} meals and keep {keep_meals}")
-
-
-# def preprocess_meal_data(data: defaultdict):
-#     new_data = []
-#     new_data.extend(data[3])
-#     new_data.extend(data[4])
-#     new_data.extend(data[5])
-#     for each in new_data:
-#         size = len(each)
-#         while size < 5:
-#             each.append(0)
-#             size += 1
-#     return np.array(new_data, dtype=np.float16)
-
-    

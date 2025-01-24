@@ -1,3 +1,4 @@
+import os
 from datetime import timedelta
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -193,7 +194,7 @@ def find_inactive_blocks(blocks:list, reverse):
     return night_blocks
 
 
-def graph_tranition_stats(data_stats: pd.DataFrame, blocks: list, sheet: str):
+def graph_tranition_stats(data_stats: pd.DataFrame, blocks: list, sheet: str, export_root=None):
     """Graph Statistics of each block in transition
     
     Visualize proportion of each transition, the accuracy and active poke of each block
@@ -270,13 +271,18 @@ def graph_tranition_stats(data_stats: pd.DataFrame, blocks: list, sheet: str):
 
     plt.xticks(data_stats['Block_Index'])
     plt.yticks(range(0, 100, 20))
-    fig.set_dpi(100)
+    fig.set_dpi(150)
     ax.grid(alpha=0.5, linestyle='--')
+    if export_root:
+        export_path = sheet.replace('.','')+'.svg'
+        export_path = os.path.join(export_root, 'Supplementary 2', export_path)
+        plt.savefig(export_path, bbox_inches='tight')
+        return
     plt.show()
     
 
 def graph_learning_trend_by_activity(data_stats: pd.DataFrame, blocks: list, path: str, 
-                                     block_prop=0.6, action_prop=0.5):
+                                     block_prop=0.6, action_prop=0.5, export=False):
     """
     Graph Statistics of first 60% block in transition
 
@@ -339,6 +345,9 @@ def graph_learning_trend_by_activity(data_stats: pd.DataFrame, blocks: list, pat
     else:
         fig.suptitle(f'Accuracy by Switch for Mouse {info[0]}', fontsize=18)
 
+    if export:
+        path = os.path.join('../export/Figure 4/Supplementary 5/', path.replace('.', '')+'.svg')
+        plt.savefig(path, bbox_inches='tight')
     plt.show()
 
     
@@ -445,7 +454,7 @@ def learning_result(blocks, action_prop=0.25) -> float:
     return np.mean(results)
 
 
-def graph_learning_score(ctrl:list, exp:list, width=0.4, exp_group_name=None, proportion=None):
+def graph_learning_score(ctrl:list, exp:list, width=0.4, exp_group_name=None, proportion=None, export=False):
     """
     Graph learning score of two groups
 
@@ -483,6 +492,8 @@ def graph_learning_score(ctrl:list, exp:list, width=0.4, exp_group_name=None, pr
     plt.title(f'Learning Score Control and {exp_name} Groups with {proportion} Data', fontsize=16)
 
     plt.legend()
+    if export:
+        plt.savefig(os.path.join('../export/Figure 4', 'score_diff.svg'), bbox_inches='tight')
     plt.show()
 
 
@@ -529,7 +540,7 @@ def graph_learning_results(ctrl:list, exp:list, width=0.4, exp_group_name=None, 
 
 
 def graph_group_stats(ctrl:list, exp:list, stats_name:str, unit:str, bar_width=0.2,
-                      err_width=14, dpi=100, exp_name=None, verbose=True, rev=True):
+                      err_width=14, dpi=100, exp_name=None, verbose=True, rev=True, export_name=None):
     """Plot bar graphs of average pellet for control and experiment groups
 
     Args:
@@ -544,8 +555,8 @@ def graph_group_stats(ctrl:list, exp:list, stats_name:str, unit:str, bar_width=0
     """
     ctrl_averages = np.mean(ctrl)
     exp_averages = np.mean(exp)
-    ctrl_std = np.std(ctrl, ddof=1)
-    exp_std = np.std(exp, ddof=1)
+    ctrl_std = np.std(ctrl) / np.sqrt(len(ctrl))
+    exp_std = np.std(exp) / np.sqrt(len(exp))
 
     exp_name = 'Experiment' if exp_name == None else exp_name
     exp_type = 'Reversal' if rev else 'FR1'
@@ -586,4 +597,7 @@ def graph_group_stats(ctrl:list, exp:list, stats_name:str, unit:str, bar_width=0
     ax.set_xticklabels(['Control', exp_name])
 
     ax.legend()
+    if export_name:
+        plt.savefig(os.path.join('../export/Figure 3', f'{export_name}.svg'), bbox_inches='tight')
+
     plt.show()

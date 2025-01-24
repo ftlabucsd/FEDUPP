@@ -6,6 +6,7 @@ from tools import get_bhv_num
 from preprocessing import get_retrieval_time, read_excel_by_sheet
 import numpy as np
 from direction_transition import split_data_to_blocks
+import os
 
 
 def count_interval(data: pd.DataFrame) -> list:
@@ -86,7 +87,7 @@ def mean_pellet_collect_time(path:str, sheet:str, remove_outlier=False, n_stds=3
     return pellet_times, np.mean(pellet_times), np.std(pellet_times)
 
 
-def plot_retrieval_time_by_block(path:str, sheet:str, day=3, n_stds=3):
+def plot_retrieval_time_by_block(path:str, sheet:str, day=3, n_stds=3, export=True):
     pellet_times = get_retrieval_time(path, sheet, day=10)
     mean = np.mean(pellet_times)
     std = np.std(pellet_times)
@@ -105,7 +106,7 @@ def plot_retrieval_time_by_block(path:str, sheet:str, day=3, n_stds=3):
     slope, intercept = np.polyfit(block_indices, temp, 1)
     best_fit_line = slope * block_indices + intercept
 
-    plt.figure(figsize=(6, 4))
+    plt.figure(figsize=(6, 4), dpi=120)
     plt.plot(time_by_block, marker='*')
     plt.plot(block_indices, best_fit_line, color='red', linestyle='--', 
              alpha=0.75, label=f'Best Fit Line (slope: {slope:.2f})')
@@ -116,6 +117,10 @@ def plot_retrieval_time_by_block(path:str, sheet:str, day=3, n_stds=3):
     plt.title(f'Retrieval Time of Group {info[0]} Mouse {info[1]}', fontsize=18)
     plt.grid()
     plt.legend()
+
+    if export:
+        plt.savefig(os.path.join('../export/Figure 3/Supplementary 4/', sheet.replace('.', '')+'.svg'), bbox_inches='tight')
+
     plt.show()
     return time_by_block, best_fit_line[-1]+slope, round(slope, 2)
     
