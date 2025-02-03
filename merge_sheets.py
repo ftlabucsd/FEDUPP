@@ -1,61 +1,65 @@
 import os
 import pandas as pd
+from pathlib import Path
 
-def categorize_and_append_data(root_directory, ctrl_samples):
-    # Define subcategory file mappings
+def categorize_and_append_data(root_directory):
     subcategory_files = {
-        'FR1_cask': 'FR1_cask.xlsx',
-        'FR1_ctrl': 'FR1_ctrl.xlsx',
-        'reversal_cask': 'reversal_cask.xlsx',
-        'reversal_ctrl': 'reversal_ctrl.xlsx'
+        'FR1_male': './data/FR1_male.xlsx',
+        'FR1_female': './data/FR1_female.xlsx',
+        'reversal_male': './data/reversal_male.xlsx',
+        'reversal_female': './data/reversal_female.xlsx'
     }
+    
+    # create empty files
+    for file in subcategory_files.values():
+        pd.DataFrame().to_excel(file, index=False)
+    
+    # Female_1, Male_1, etc
+    for cohort in os.listdir(root_directory):
+        cohort_path = os.path.join(root_directory, cohort)
+        session_idx = cohort[-1]
+        
+        if not os.path.isdir(cohort_path): continue
 
-    # Process each subfolder in the root directory
-    for subfolder in os.listdir(root_directory):
-        subfolder_path = os.path.join(root_directory, subfolder)
+        # Determine gender
+        group = 'female' if 'Fe' in cohort else 'male'
 
-        # Skip if not a directory
-        if not os.path.isdir(subfolder_path):
-            continue
+        # Process mice files - subfolders like C1M1, C2M3, etc
+        cnt = 1 # record mouse index
+        for subfolder in os.listdir(cohort_path):
+            mouse_path = os.path.join(cohort_path, subfolder)
+            if not os.path.isdir(mouse_path): continue
 
-        # Determine group (ctrl or cask)
-        group = 'ctrl' if subfolder in ctrl_samples else 'cask'
+            # process each csv file
+            for csv_file in os.listdir(mouse_path):
+                if csv_file.endswith('.csv') or csv_file.endswith('.CSV'):
+                    csv_path = os.path.join(mouse_path, csv_file)
+                    try:
+                        data = pd.read_csv(csv_path)
+                    except Exception as e:
+                        print(f"Error reading {csv_path}: {e}")
+                        continue
 
-        # Process CSV files in the subfolder
-        for csv_file in os.listdir(subfolder_path):
-            if csv_file.endswith('.csv') or csv_file.endswith('.CSV'):
-                csv_path = os.path.join(subfolder_path, csv_file)
+                    session_type = 'FR1' if 'FR1' in data['Session_type'].values[0] else 'reversal'
+                    print(f'Processing {subfolder} in {group} group of {session_type} data')
 
-                # Read CSV file
-                try:
-                    data = pd.read_csv(csv_path)
-                except Exception as e:
-                    print(f"Error reading {csv_path}: {e}")
-                    continue
+                    subcategory = f"{session_type}_{group}"
+                    excel_file = subcategory_files[subcategory]
+                    sheet_name = f'R{session_idx}M{cnt}'
 
-                session_type = 'FR1' if 'FR1' in data['Session_type'].values[0] else 'reversal'
-                print(f'Processing {subfolder} in {group} group of {session_type} data')
-
-                subcategory = f"{session_type}_{group}"
-                excel_file = subcategory_files[subcategory]
-                sheet_name = subfolder[:2] + '.' + subfolder[2:]
-
-                # Append data to a new sheet in the Excel file
-                try:
                     with pd.ExcelWriter(excel_file, engine='openpyxl', mode='a') as writer:
                         # Load workbook to check existing sheets
                         book = writer.book
+                        print(book)
                         if sheet_name in book.sheetnames:
                             print(f"Sheet {sheet_name} already exists in {excel_file}. Skipping...")
                             continue
-                        # Write to a new sheet
                         data.to_excel(writer, index=False, sheet_name=sheet_name)
                         print(f"Appended data to new sheet {sheet_name} in {excel_file}")
-                except Exception as e:
-                    print(f"Error writing to {excel_file}: {e}")
+            cnt += 1
+        cnt = 1 # reset index after each cohort
 
 
-root_directory = "./CASK BHV mice cages 5-9"  # Replace with your samples directory
-ctrl_samples = ["C5M2", "C6M1", "C6M4", "C7M1", "C8M1", "C8M4", "C9M1", "C9M3"]  # Replace with the list of control sample subfolder names
 
-categorize_and_append_data(root_directory, ctrl_samples)
+root_directory = "./wild_type_raw"  # Replace with your samples directory
+categorize_and_append_data(root_directory)
