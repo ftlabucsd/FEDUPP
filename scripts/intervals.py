@@ -87,7 +87,7 @@ def mean_pellet_collect_time(path:str, sheet:str, remove_outlier=False, n_stds=3
     return pellet_times, np.mean(pellet_times), np.std(pellet_times)
 
 
-def plot_retrieval_time_by_block(path:str, sheet:str, day=3, n_stds=3, export=True):
+def plot_retrieval_time_by_block(path:str, sheet:str, day=3, n_stds=3, export_root=None):
     pellet_times = get_retrieval_time(path, sheet, day=10)
     mean = np.mean(pellet_times)
     std = np.std(pellet_times)
@@ -118,8 +118,8 @@ def plot_retrieval_time_by_block(path:str, sheet:str, day=3, n_stds=3, export=Tr
     plt.grid()
     plt.legend()
 
-    if export:
-        plt.savefig(os.path.join('../export/Figure 3/Supplementary 4/', sheet.replace('.', '')+'.svg'), bbox_inches='tight')
+    if export_root:
+        plt.savefig(os.path.join(export_root, 'Supplementary 4/', sheet.replace('.', '')+'.svg'), bbox_inches='tight')
 
     plt.show()
     return time_by_block, best_fit_line[-1]+slope, round(slope, 2)

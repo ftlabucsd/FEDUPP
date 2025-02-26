@@ -6,7 +6,7 @@ from sklearn.metrics import silhouette_score
 import matplotlib.pyplot as plt
 import numpy as np
 import meals as ml
-from preprocessing import read_excel_by_sheet, get_all_sheet_names
+from preprocessing import read_excel_by_sheet
 import os
 import pickle
 import torch
@@ -26,15 +26,17 @@ def index2meal(data_div: defaultdict, data:list):
     return meal_by_category
 
 
-def extract_data_full_group(file_path):
-    sheets = get_all_sheet_names(file_path)
+def extract_data_full_group(file_path, sheets):
     data = defaultdict(list)
     for sheet in sheets:
-        each = read_excel_by_sheet(sheet, file_path, remove_trivial=False, collect_time=True)
-        each_acc_dict = ml.extract_meals_data(data=each, 
+        try:
+            each = read_excel_by_sheet(sheet, file_path, remove_trivial=False, collect_time=True)
+            each_acc_dict = ml.extract_meals_data(data=each, 
                                             time_threshold=60,
                                             pellet_threshold=2)
-
+        except ValueError:
+            continue
+        
         for key, item in each_acc_dict.items():
             data[key].extend(item)
 

@@ -13,8 +13,12 @@ def parent_directory_process(parent: str):
 
 
 def get_bhv_num(sheet: str) -> tuple:
-    parts = sheet.split('.')
-    return [parts[0][1:], sheet[-1]]
+    if '.' in sheet:
+        parts = sheet.split('.')
+        return [parts[0][1:], sheet[-1]]
+    else:
+        # R1M10 -> 1 and 10
+        return sheet[1], sheet[3:]
 
 
 def get_session_time(data: pd.DataFrame) -> float:

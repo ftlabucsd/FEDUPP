@@ -247,7 +247,7 @@ def graph_tranition_stats(data_stats: pd.DataFrame, blocks: list, sheet: str, ex
     ax.set_ylabel('Percentage(%)', color='black', fontsize=16)
 
     info = tl.get_bhv_num(sheet)
-    night_blocks = find_inactive_blocks(blocks, reverse=len(info) == 1)
+    night_blocks = find_inactive_blocks(blocks, reverse=False)
 
     for block_index in night_blocks:
         ax.axvspan(block_index - 0.5, block_index + 0.5, facecolor='gray', alpha=0.4)
@@ -282,7 +282,7 @@ def graph_tranition_stats(data_stats: pd.DataFrame, blocks: list, sheet: str, ex
     
 
 def graph_learning_trend_by_activity(data_stats: pd.DataFrame, blocks: list, path: str, 
-                                     block_prop=0.6, action_prop=0.5, export=False):
+                                     block_prop=0.6, action_prop=0.5, export_root=None):
     """
     Graph Statistics of first 60% block in transition
 
@@ -345,8 +345,8 @@ def graph_learning_trend_by_activity(data_stats: pd.DataFrame, blocks: list, pat
     else:
         fig.suptitle(f'Accuracy by Switch for Mouse {info[0]}', fontsize=18)
 
-    if export:
-        path = os.path.join('../export/Figure 4/Supplementary 5/', path.replace('.', '')+'.svg')
+    if export_root:
+        path = os.path.join(export_root, 'Supplementary 5/', path.replace('.', '')+'.svg')
         plt.savefig(path, bbox_inches='tight')
     plt.show()
 
@@ -454,7 +454,7 @@ def learning_result(blocks, action_prop=0.25) -> float:
     return np.mean(results)
 
 
-def graph_learning_score(ctrl:list, exp:list, width=0.4, exp_group_name=None, proportion=None, export=False):
+def graph_learning_score(ctrl:list, exp:list, width=0.4, group_names=None, proportion=None, export_path=None):
     """
     Graph learning score of two groups
 
@@ -470,13 +470,12 @@ def graph_learning_score(ctrl:list, exp:list, width=0.4, exp_group_name=None, pr
     ctrl_err = np.std(ctrl) / np.sqrt(len(ctrl))
     cask_err = np.std(exp) / np.sqrt(len(exp))
 
-    exp_name = 'Experiment' if exp_group_name==None else exp_group_name
-    groups = ['Control', exp_name]
+    ctrl_name, exp_name = group_names
 
     plt.figure(figsize=(7, 7))
-    plt.bar([1, 2], [ctrl_mean, cask_mean], yerr=[ctrl_err, cask_err], capsize=12, tick_label=groups, 
+    plt.bar([1, 2], [ctrl_mean, cask_mean], yerr=[ctrl_err, cask_err], capsize=12, tick_label=group_names, 
             width=width, color=['lightblue', 'yellow'], alpha=0.8, zorder=1, 
-            label=[f'Control (n = {len(ctrl)})', f'{exp_name} (n = {len(exp)})'])
+            label=[f'{ctrl_name} (n = {len(ctrl)})', f'{exp_name} (n = {len(exp)})'])
 
     # Add jitter to scatter points
     jitter_strength = width / 8
@@ -489,15 +488,15 @@ def graph_learning_score(ctrl:list, exp:list, width=0.4, exp_group_name=None, pr
 
     plt.xlabel('Groups', fontsize=14)
     plt.ylabel('Learning Score', fontsize=14)
-    plt.title(f'Learning Score Control and {exp_name} Groups with {proportion} Data', fontsize=16)
+    plt.title(f'Learning Score {ctrl_name} and {exp_name} Groups with {proportion} Data', fontsize=16)
 
     plt.legend()
-    if export:
-        plt.savefig(os.path.join('../export/Figure 4', 'score_diff.svg'), bbox_inches='tight')
+    if export_path:
+        plt.savefig(os.path.join(export_path, 'score_comparison.svg'), bbox_inches='tight')
     plt.show()
 
 
-def graph_learning_results(ctrl:list, exp:list, width=0.4, exp_group_name=None, proportion=None):
+def graph_learning_results(ctrl:list, exp:list, width=0.4, group_names=None, proportion=None):
     """
     Graph learning score of two groups
 
@@ -513,13 +512,12 @@ def graph_learning_results(ctrl:list, exp:list, width=0.4, exp_group_name=None, 
     ctrl_err = np.std(ctrl) / np.sqrt(len(ctrl))
     cask_err = np.std(exp) / np.sqrt(len(exp))
 
-    exp_name = 'Experiment' if exp_group_name==None else exp_group_name
-    groups = ['Control', exp_name]
+    ctrl_name, exp_name = group_names
 
     plt.figure(figsize=(7, 7))
-    plt.bar([1, 2], [ctrl_mean, cask_mean], yerr=[ctrl_err, cask_err], capsize=12, tick_label=groups, 
+    plt.bar([1, 2], [ctrl_mean, cask_mean], yerr=[ctrl_err, cask_err], capsize=12, tick_label=group_names, 
             width=width, color=['lightblue', 'yellow'], alpha=0.8, zorder=1, 
-            label=[f'Control (n = {len(ctrl)})', f'{exp_name} (n = {len(exp)})'])
+            label=[f'{ctrl_name} (n = {len(ctrl)})', f'{exp_name} (n = {len(exp)})'])
 
     # Add jitter to scatter points
     jitter_strength = width / 8
@@ -533,14 +531,14 @@ def graph_learning_results(ctrl:list, exp:list, width=0.4, exp_group_name=None, 
 
     plt.xlabel('Groups', fontsize=14)
     plt.ylabel('Mean Accuracy (%)', fontsize=14)
-    plt.title(f'Accuracy of Last {proportion} Data Control and {exp_name} Groups', fontsize=16)
+    plt.title(f'Accuracy of Last {proportion} Data {ctrl_name} and {exp_name} Groups', fontsize=16)
 
     plt.legend()
     plt.show()
 
 
 def graph_group_stats(ctrl:list, exp:list, stats_name:str, unit:str, bar_width=0.2,
-                      err_width=14, dpi=100, exp_name=None, verbose=True, rev=True, export_name=None):
+                      err_width=14, dpi=100, group_names=None, verbose=True, rev=True, export_name=None):
     """Plot bar graphs of average pellet for control and experiment groups
 
     Args:
@@ -558,15 +556,15 @@ def graph_group_stats(ctrl:list, exp:list, stats_name:str, unit:str, bar_width=0
     ctrl_std = np.std(ctrl) / np.sqrt(len(ctrl))
     exp_std = np.std(exp) / np.sqrt(len(exp))
 
-    exp_name = 'Experiment' if exp_name == None else exp_name
+    ctrl_name, exp_name = group_names
     exp_type = 'Reversal' if rev else 'FR1'
     
     if verbose:
-        print(f'Control Size: {len(ctrl)}')
+        print(f'{ctrl_name} Size: {len(ctrl)}')
         print(f'{exp_name} Size: {len(exp)}')
-        print(f'Control Average: {ctrl_averages}')
+        print(f'{ctrl_name} Average: {ctrl_averages}')
         print(f'{exp_name} Average: {exp_averages}')
-        print(f'Control Standard Deviation: {ctrl_std}')
+        print(f'{ctrl_name} Standard Deviation: {ctrl_std}')
         print(f'{exp_name} Standard Deviation: {exp_std}')
 
     fig, ax = plt.subplots(dpi=dpi)
@@ -574,7 +572,7 @@ def graph_group_stats(ctrl:list, exp:list, stats_name:str, unit:str, bar_width=0
     x = [0.5, 1]
     
     ax.bar(x=x[0], height=ctrl_averages, width=bar_width, color='blue', 
-           label=f'Control (n = {len(ctrl)})',
+           label=f'{ctrl_name} (n = {len(ctrl)})',
            zorder=1, alpha=0.6, yerr=ctrl_std, capsize=err_width)
 
     ax.bar(x=x[1], height=exp_averages, width=bar_width, color='orange', 
@@ -592,12 +590,12 @@ def graph_group_stats(ctrl:list, exp:list, stats_name:str, unit:str, bar_width=0
 
     ax.set_xlabel('Groups', fontsize=14)
     ax.set_ylabel(f'Averages ({unit})', fontsize=14)
-    ax.set_title(f'{stats_name} of Control and {exp_name} Groups in {exp_type}', fontsize=20)
+    ax.set_title(f'{stats_name} of {ctrl_name} and {exp_name} Groups in {exp_type}', fontsize=20)
     ax.set_xticks(x)
-    ax.set_xticklabels(['Control', exp_name])
+    ax.set_xticklabels(group_names)
 
     ax.legend()
     if export_name:
-        plt.savefig(os.path.join('../export/Figure 3', f'{export_name}.svg'), bbox_inches='tight')
+        plt.savefig(os.path.join('../WT_export/Figure 3', f'{export_name}.svg'), bbox_inches='tight')
 
     plt.show()

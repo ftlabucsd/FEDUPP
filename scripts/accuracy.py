@@ -163,7 +163,7 @@ def find_first_learned_time(data:pd.DataFrame, window_hours=2, accuracy_threshol
 
     
 def graph_group_stats(ctrl:list, exp:list, stats_name:str, unit:str, bar_width=0.2,
-                      err_width=14, dpi=100, exp_name=None, verbose=True, export_path=None):
+                      err_width=14, dpi=100, group_names=None, verbose=True, export_path=None):
     """Plot bar graphs of average pellet for control and experiment groups
 
     Args:
@@ -180,15 +180,16 @@ def graph_group_stats(ctrl:list, exp:list, stats_name:str, unit:str, bar_width=0
     exp_averages = np.mean(exp)
     ctrl_std = np.std(ctrl) / np.sqrt(len(ctrl))
     exp_std = np.std(exp) / np.sqrt(len(exp))
+    ctrl_name, exp_name = group_names
     
     exp_name = 'Experiment' if exp_name == None else exp_name
     
     if verbose:
-        print(f'Control Size: {len(ctrl)}')
+        print(f'{ctrl_name} Size: {len(ctrl)}')
         print(f'{exp_name} Size: {len(exp)}')
-        print(f'Control Average: {ctrl_averages}')
+        print(f'{ctrl_name} Average: {ctrl_averages}')
         print(f'{exp_name} Average: {exp_averages}')
-        print(f'Control Standard Deviation: {ctrl_std}')
+        print(f'{ctrl_name} Standard Deviation: {ctrl_std}')
         print(f'{exp_name} Standard Deviation: {exp_std}')
 
     fig, ax = plt.subplots(dpi=dpi)
@@ -196,7 +197,7 @@ def graph_group_stats(ctrl:list, exp:list, stats_name:str, unit:str, bar_width=0
     x = [0.5, 1]
     
     ax.bar(x=x[0], height=ctrl_averages, width=bar_width, color='blue', 
-           label=f'Control (n = {len(ctrl)})',
+           label=f'{ctrl_name} (n = {len(ctrl)})',
            zorder=1, alpha=0.6, yerr=ctrl_std, capsize=err_width)
     
     ax.bar(x=x[1], height=exp_averages, width=bar_width, color='orange', 
@@ -214,9 +215,9 @@ def graph_group_stats(ctrl:list, exp:list, stats_name:str, unit:str, bar_width=0
 
     ax.set_xlabel('Groups', fontsize=14)
     ax.set_ylabel(f'Averages ({unit})', fontsize=14)
-    ax.set_title(f'{stats_name} of Control and {exp_name} Groups', fontsize=20)
+    ax.set_title(f'{stats_name} of {ctrl_name} and {exp_name} Groups', fontsize=20)
     ax.set_xticks(x)
-    ax.set_xticklabels(['Control', exp_name])
+    ax.set_xticklabels(group_names)
 
     ax.legend()
     if export_path:

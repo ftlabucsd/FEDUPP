@@ -5,16 +5,42 @@ fr1_cask_path = '../data/FR1_cask.xlsx'
 rev_ctrl_path = '../data/reversal_ctrl.xlsx'
 rev_cask_path = '../data/reversal_cask.xlsx'
 
+fr1_male_path = '../data/FR1_male.xlsx'
+fr1_female_path = '../data/FR1_female.xlsx'
+rev_male_path = '../data/reversal_male.xlsx'
+rev_female_path = '../data/reversal_female.xlsx'
+
+
 fr1_ctrl_raw = get_all_sheet_names(fr1_ctrl_path)
 fr1_cask_raw = get_all_sheet_names(fr1_cask_path)
 rev_ctrl_raw = get_all_sheet_names(rev_ctrl_path)
 rev_cask_raw = get_all_sheet_names(rev_cask_path)
+
+fr1_male_raw = get_all_sheet_names(fr1_male_path)
+fr1_female_raw = get_all_sheet_names(fr1_female_path)
+rev_male_raw = get_all_sheet_names(rev_male_path)
+rev_female_raw = get_all_sheet_names(rev_female_path)
+
+fr1_male_raw.remove('R1M1')
+fr1_male_raw.remove('R2M12')
+
+fr1_female_raw.remove('R1M1')
+fr1_female_raw.remove('R1M7')
+fr1_female_raw.remove('R2M7')
+
+rev_male_raw.remove('R1M1')
+rev_male_raw.remove('R1M3')
 
 # general loop through
 fr1_ctrl_sheets = sorted(fr1_ctrl_raw)
 fr1_cask_sheets = sorted(fr1_cask_raw)
 rev_ctrl_sheets = sorted(rev_ctrl_raw)
 rev_cask_sheets = sorted(rev_cask_raw)
+
+fr1_male_sheets = sorted(fr1_male_raw)
+fr1_female_sheets = sorted(fr1_female_raw)
+rev_male_sheets = sorted(rev_male_raw)
+rev_female_sheets = sorted(rev_female_raw)
 
 # loop by cohorts
 # cohort 1: group 1-4; 
