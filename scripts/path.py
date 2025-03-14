@@ -30,6 +30,7 @@ fr1_female_raw.remove('R2M7')
 
 rev_male_raw.remove('R1M1')
 rev_male_raw.remove('R1M3')
+rev_male_raw.remove('R1M7')
 
 # general loop through
 fr1_ctrl_sheets = sorted(fr1_ctrl_raw)
