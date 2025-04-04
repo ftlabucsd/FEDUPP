@@ -161,21 +161,9 @@ def find_first_learned_time(data:pd.DataFrame, window_hours=2, accuracy_threshol
     # not reach high accuracy -> return session time
     return data.loc[len(data)-1, 'Time_passed'].total_seconds() / 3600
 
-    
+
 def graph_group_stats(ctrl:list, exp:list, stats_name:str, unit:str, bar_width=0.2,
                       err_width=14, dpi=100, group_names=None, verbose=True, export_path=None):
-    """Plot bar graphs of average pellet for control and experiment groups
-
-    Args:
-        ctrl_pellet_avg (list): control data
-        exp_pellet_avg (list): experiment data
-        stats_name (str): the name of statistic you are graphing
-        exp_name (_type_, optional): Name of the experiment group. Defaults to None.
-        bar_width (float, optional): bar width of bar plot. Defaults to 0.2.
-        err_width (int, optional): error bar width onthe bar. Defaults to 12.
-        dpi (int, optional): dot per inch, higher dpi gives images with higher resolution. Defaults to 100.
-        verbose (bool, optional): whether printing out information used in plotting. Defaults to False.
-    """
     ctrl_averages = np.mean(ctrl)
     exp_averages = np.mean(exp)
     ctrl_std = np.std(ctrl) / np.sqrt(len(ctrl))
@@ -220,6 +208,47 @@ def graph_group_stats(ctrl:list, exp:list, stats_name:str, unit:str, bar_width=0
     ax.set_xticklabels(group_names)
 
     ax.legend()
+    if export_path:
+        plt.savefig(export_path, bbox_inches='tight')
+    plt.show()
+    
+def graph_single_stats(data: list, stats_name: str, unit: str, bar_width=0.2,
+                       err_width=14, dpi=100, group_name=None, verbose=True, export_path=None):
+    # Compute average and standard error
+    average = np.mean(data)
+    std_error = np.std(data) / np.sqrt(len(data))
+    
+    if group_name is None:
+        group_name = 'Group'
+        
+    if verbose:
+        print(f'{group_name} Size: {len(data)}')
+        print(f'{group_name} Average: {average}')
+        print(f'{group_name} Standard Error: {std_error}')
+    
+    fig, ax = plt.subplots(dpi=dpi, figsize=(3, 6))
+    
+    x = 0.5
+    
+    ax.bar(x=x, height=average, width=bar_width, color='blue', 
+           label=f'{group_name} (n = {len(data)})',
+           zorder=1, alpha=0.6, yerr=std_error, capsize=err_width)
+    
+    jitter_strength = bar_width / 8
+    x_values = x + np.random.uniform(-jitter_strength, jitter_strength, size=len(data))
+    ax.scatter(x_values, data, marker='o', zorder=2, color='#1405eb', alpha=0.8)
+    
+    ax.set_xlabel('Groups', fontsize=14)
+    ax.set_ylabel(f'Averages ({unit})', fontsize=14)
+    ax.set_title(f'{stats_name} of {group_name}', fontsize=20)
+    
+    ax.set_xticks([x])
+    ax.set_xticklabels([group_name])
+    ax.set_xlim(0, 1) 
+    
+    ax.legend()
+    plt.tight_layout()
+    
     if export_path:
         plt.savefig(export_path, bbox_inches='tight')
     plt.show()

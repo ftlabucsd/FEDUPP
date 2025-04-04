@@ -23,7 +23,30 @@ def concatenate_csv_files(files:list, output_file:str):
     # Save the concatenated DataFrame to a new CSV file
     concatenated_df.to_csv(output_file, index=False)
     print(f'Concatenated file saved as {output_file}')
+
+
+def adjust_column(series):
+    if series.empty:
+        return series
+
+    offset = 0
+    adjusted = []
     
+    last_raw = series.iloc[0]
+    last_adjusted = series.iloc[0]
+    adjusted.append(last_adjusted)
+    
+    for raw in series.iloc[1:]:
+        if raw < last_raw:
+            offset = last_adjusted
+        new_val = raw + offset
+        adjusted.append(new_val)
+        
+        last_raw = raw
+        last_adjusted = new_val
+    
+    return adjusted
+ 
  
 def prep_pellet_count(path: str):
     """when combining two csv files, making the pellet count column increasing
@@ -32,37 +55,15 @@ def prep_pellet_count(path: str):
     Args:
         path (str): path of combined csv files
     """
-    df = pd.read_csv(path) 
-    base_pellet = 0
-    base_left = 0
-    base_right = 0
-    reach_base = False
-    prev_pellet = -1
-    prev_left = -1
-    prev_right = -1
-
-
-    for idx, row in df.iterrows():
-        if reach_base or prev_pellet > row['Pellet_Count']:
-            if not reach_base:
-                reach_base = True
-                base_pellet = prev_pellet
-                base_left = prev_left
-                base_right = prev_right
-            df.at[idx, 'Pellet_Count'] = row['Pellet_Count'] + base_pellet
-            df.at[idx, 'Left_Poke_Count'] = row['Left_Poke_Count'] + base_left
-            df.at[idx, 'Right_Poke_Count'] = row['Right_Poke_Count'] + base_right
-
-        else:
-            prev_pellet = row['Pellet_Count']
-            prev_right = row['Right_Poke_Count']
-            prev_left = row['Left_Poke_Count']
-    print(base_left, base_right ,base_pellet)
+    df = pd.read_csv(path)
+    columns_to_adjust = ["Pellet_Count", "Left_Poke_Count", "Right_Poke_Count"]
+    for col in columns_to_adjust:
+        df[col] = adjust_column(df[col])
     df.to_csv(path[:-4]+'_1.CSV', index=False)
 
 
-def check_data_by_date(path:str, sheet:str):
-    df = pd.read_excel(path, sheet)
+def check_data_by_date(path:str):
+    df = pd.read_csv(path)
     df['MM:DD:YYYY hh:mm:ss'] = pd.to_datetime(df['MM:DD:YYYY hh:mm:ss'])
 
     index_drop = (df['MM:DD:YYYY hh:mm:ss'].diff() < pd.Timedelta(0)).idxmax()
@@ -70,7 +71,7 @@ def check_data_by_date(path:str, sheet:str):
     df_part2 = df.iloc[index_drop:]
 
     df_corrected = pd.concat([df_part2, df_part1]).reset_index(drop=True)
-    df_corrected.to_csv(sheet+'.csv', index=False)
+    df_corrected.to_csv(path, index=False)
 
 
 def merge_csvs_to_excel(excel:str, csv_root:str):
@@ -144,7 +145,7 @@ if __name__ == '__main__':
     # split_ctrl_cask('../FR1_collection.xlsx')
     # check_data_by_date('../reversal_ctrl.xlsx', 'C1.M1')
     # copy_sheet('../reversal_cask.xlsx', '../reversal_ctrl.xlsx', 'C5.M2')
-    file_1 = '../wild_type_raw/Female_2/M4/FED000_121924_01.CSV'
-    file_2 = '../wild_type_raw/Female_2/M4/FED000_121924_02.CSV'
-    concatenate_csv_files([file_1, file_2], '../wild_type_raw/Female_2/M4/FED000_121924_03.CSV')
-    prep_pellet_count('../wild_type_raw/Female_2/M4/FED000_121924_03.CSV')
+    # file_1 = '../wild_type_raw/Female_2/M4/FED000_121924_01.CSV'
+    # file_2 = '../wild_type_raw/Female_2/M4/FED000_121924_02.CSV'
+    # concatenate_csv_files([file_1, file_2], '../wild_type_raw/Female_2/M4/FED000_121924_03.CSV')
+    prep_pellet_count('../Food Intake Data/M5_fen.csv')

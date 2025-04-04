@@ -18,6 +18,38 @@ def pad_meal(each:list):
         size += 1
     return each
 
+
+def get_daily_pellet_counts(df, time_column='Time', pellet_column='Pellet_Count'):
+    # df = pd.read_csv(input_csv)
+    df[time_column] = pd.to_datetime(df[time_column])
+    df = df.sort_values(time_column)
+    
+    df['date'] = df[time_column].dt.date
+    daily_last = df.groupby('date')[pellet_column].last().sort_index()
+
+    daily_counts = []
+    last_values = daily_last.tolist()
+    
+    if last_values:
+        daily_counts.append(last_values[0])
+        for prev, curr in zip(last_values, last_values[1:]):
+            daily_counts.append(curr - prev)
+    return daily_counts
+
+def plot_daily_pellet_counts(daily_counts_2d, group):
+    plt.figure(figsize=(10, 6))
+    
+    for i, counts in enumerate(daily_counts_2d):
+        plt.plot(counts, marker='o', label=f"Mouse {i+1}")
+    
+    plt.xlabel("Day Index")
+    plt.ylabel("Daily Pellet Count")
+    plt.title(f"Daily Pellet Count of {group} Group")
+    plt.legend()
+    plt.tight_layout()
+    plt.show()
+
+
 def pellet_flip(data: pd.DataFrame) -> pd.DataFrame:
     """return a dataframe with 10-min interval and pellet count in this interval
 

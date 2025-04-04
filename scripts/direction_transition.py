@@ -194,7 +194,7 @@ def find_inactive_blocks(blocks:list, reverse):
     return night_blocks
 
 
-def graph_tranition_stats(data_stats: pd.DataFrame, blocks: list, sheet: str, export_root=None):
+def graph_tranition_stats(data_stats: pd.DataFrame, blocks: list, sheet: str, export_path=None):
     """Graph Statistics of each block in transition
     
     Visualize proportion of each transition, the accuracy and active poke of each block
@@ -273,9 +273,7 @@ def graph_tranition_stats(data_stats: pd.DataFrame, blocks: list, sheet: str, ex
     plt.yticks(range(0, 100, 20))
     fig.set_dpi(150)
     ax.grid(alpha=0.5, linestyle='--')
-    if export_root:
-        export_path = sheet.replace('.','')+'.svg'
-        export_path = os.path.join(export_root, 'Supplementary 2', export_path)
+    if export_path:
         plt.savefig(export_path, bbox_inches='tight')
         return
     plt.show()
@@ -454,7 +452,7 @@ def learning_result(blocks, action_prop=0.25) -> float:
     return np.mean(results)
 
 
-def graph_learning_score(ctrl:list, exp:list, width=0.4, group_names=None, proportion=None, export_path=None):
+def graph_learning_score(ctrl:list, exp:list, width=0.4, group_names=None, proportion=None, export_path=None, verbose=True):
     """
     Graph learning score of two groups
 
@@ -469,8 +467,16 @@ def graph_learning_score(ctrl:list, exp:list, width=0.4, group_names=None, propo
     cask_mean = np.mean(exp)
     ctrl_err = np.std(ctrl) / np.sqrt(len(ctrl))
     cask_err = np.std(exp) / np.sqrt(len(exp))
-
     ctrl_name, exp_name = group_names
+    
+    if verbose:
+        print(f'{ctrl_name} Size: {len(ctrl)}')
+        print(f'{exp_name} Size: {len(exp)}')
+        print(f'{ctrl_name} Average: {ctrl_mean}')
+        print(f'{exp_name} Average: {cask_mean}')
+        print(f'{ctrl_name} Standard Deviation: {ctrl_err}')
+        print(f'{exp_name} Standard Deviation: {cask_err}')
+
 
     plt.figure(figsize=(7, 7))
     plt.bar([1, 2], [ctrl_mean, cask_mean], yerr=[ctrl_err, cask_err], capsize=12, tick_label=group_names, 
@@ -492,11 +498,59 @@ def graph_learning_score(ctrl:list, exp:list, width=0.4, group_names=None, propo
 
     plt.legend()
     if export_path:
-        plt.savefig(os.path.join(export_path, 'score_comparison.svg'), bbox_inches='tight')
+        plt.savefig(export_path, bbox_inches='tight')
+    plt.show()
+    
+
+def graph_learning_score_single(data: list, width=0.4, group_name=None, proportion=None, export_path=None, verbose=True):
+    """
+    Graph learning score for a single group
+
+    Args:
+        data (list): data of the group
+        width (float): width of the plotted bar
+        group_name (str, optional): name of the group. Defaults to 'Group' if not provided.
+        proportion (float): proportion of the data used to evaluate learning performance
+        export_path (str, optional): path to export the plot image
+    """
+    # Compute mean and standard error
+    mean_score = np.mean(data)
+    error = np.std(data) / np.sqrt(len(data))
+    
+    if verbose:
+        print(f'{group_name} Size: {len(data)}')
+        print(f'{group_name} Average: {mean_score}')
+        print(f'{group_name} Standard Error: {error}')
+    
+    
+    # Set default group name if none is provided
+    if group_name is None:
+        group_name = 'Group'
+    
+    plt.figure(figsize=(3, 6))
+    
+    # Plot the single bar at x=1
+    plt.bar([0.5], [mean_score], yerr=[error], capsize=12, tick_label=[group_name], 
+            width=width, color='lightblue', alpha=0.8, zorder=1,
+            label=f'{group_name} (n = {len(data)})')
+    
+    # Add jitter to scatter points to show individual data
+    jitter_strength = width / 8
+    x_values = 0.5 + np.random.uniform(-jitter_strength, jitter_strength, size=len(data))
+    plt.scatter(x_values, data, marker='o', zorder=2, color='#1405eb', alpha=0.8)
+    plt.xlim((0, 1))
+    plt.xlabel('Groups', fontsize=14)
+    plt.ylabel('Learning Score', fontsize=14)
+    plt.title(f'Learning Score for {group_name} with {proportion} Data', fontsize=16)
+    
+    plt.legend()
+    if export_path:
+        plt.savefig(export_path, bbox_inches='tight')
     plt.show()
 
 
-def graph_learning_results(ctrl:list, exp:list, width=0.4, group_names=None, proportion=None):
+
+def graph_learning_results(ctrl:list, exp:list, width=0.4, group_names=None, proportion=None, export_path=None, verbose=True):
     """
     Graph learning score of two groups
 
@@ -513,6 +567,15 @@ def graph_learning_results(ctrl:list, exp:list, width=0.4, group_names=None, pro
     cask_err = np.std(exp) / np.sqrt(len(exp))
 
     ctrl_name, exp_name = group_names
+    
+    if verbose:
+        print(f'{ctrl_name} Size: {len(ctrl)}')
+        print(f'{exp_name} Size: {len(exp)}')
+        print(f'{ctrl_name} Average: {ctrl_mean}')
+        print(f'{exp_name} Average: {cask_mean}')
+        print(f'{ctrl_name} Standard Deviation: {ctrl_err}')
+        print(f'{exp_name} Standard Deviation: {cask_err}')
+
 
     plt.figure(figsize=(7, 7))
     plt.bar([1, 2], [ctrl_mean, cask_mean], yerr=[ctrl_err, cask_err], capsize=12, tick_label=group_names, 
@@ -534,7 +597,56 @@ def graph_learning_results(ctrl:list, exp:list, width=0.4, group_names=None, pro
     plt.title(f'Accuracy of Last {proportion} Data {ctrl_name} and {exp_name} Groups', fontsize=16)
 
     plt.legend()
+    if export_path:
+        plt.savefig(export_path, bbox_inches='tight')
     plt.show()
+
+
+def graph_learning_results_single(data: list, width=0.4, group_name=None, proportion=None, export_path=None, verbose=True):
+    """
+    Graph learning result for a single group
+
+    Args:
+        data (list): data of the group
+        width (float): width of plotted bar
+        group_name (str, optional): name of the group (defaults to 'Group' if not provided)
+        proportion (float): proportion of the data we use to evaluate learning performance
+        export_path (str, optional): path to export the plot image
+    """
+    # Compute mean and standard error
+    mean_accuracy = np.mean(data)
+    error = np.std(data) / np.sqrt(len(data))
+    
+    if verbose:
+        print(f'{group_name} Size: {len(data)}')
+        print(f'{group_name} Average: {mean_accuracy}')
+        print(f'{group_name} Standard Error: {error}')
+    
+    # Set default group name if not provided
+    if group_name is None:
+        group_name = 'Group'
+    
+    plt.figure(figsize=(3, 6))
+    
+    # Plot the single bar at x=1
+    plt.bar([0.5], [mean_accuracy], yerr=[error], capsize=12, tick_label=[group_name],
+            width=width, color='lightblue', alpha=0.8, zorder=1,
+            label=f'{group_name} (n = {len(data)})')
+    
+    # Add jitter to scatter points to display individual data
+    jitter_strength = width / 8
+    x_values = 0.5 + np.random.uniform(-jitter_strength, jitter_strength, size=len(data))
+    plt.scatter(x_values, data, marker='o', zorder=2, color='#1405eb', alpha=0.8)
+    plt.xlim((0, 1))
+    plt.xlabel('Groups', fontsize=14)
+    plt.ylabel('Mean Accuracy (%)', fontsize=14)
+    plt.title(f'Accuracy of Last {proportion} Data {group_name}', fontsize=16)
+    
+    plt.legend()
+    if export_path:
+        plt.savefig(export_path, bbox_inches='tight')
+    plt.show()
+
 
 
 def graph_group_stats(ctrl:list, exp:list, stats_name:str, unit:str, bar_width=0.2,

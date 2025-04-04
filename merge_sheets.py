@@ -9,7 +9,7 @@ def categorize_and_append_data(root_directory):
         'reversal_male': './data/reversal_male.xlsx',
         'reversal_female': './data/reversal_female.xlsx'
     }
-    
+
     # create empty files
     for file in subcategory_files.values():
         pd.DataFrame().to_excel(file, index=False)

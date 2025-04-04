@@ -66,6 +66,42 @@ def read_excel_by_sheet(sheet, parent, convert_large=False, collect_time=True,
     return df
 
 
+def preprocess_csv(path, convert_large=False, collect_time=True,
+                        cumulative_accuracy=True, remove_trivial=False):
+    df = pd.read_csv(path)
+    if 'Cum_Sum' not in df.columns:
+        df['Cum_Sum'] = df['Pellet_Count'] / max(df['Pellet_Count'])
+
+    df = df[['MM:DD:YYYY hh:mm:ss', 'Event', 'Active_Poke', 'Pellet_Count', 
+            'Left_Poke_Count', 'Right_Poke_Count', 'Cum_Sum', 'Retrieval_Time']].rename(columns={
+            'MM:DD:YYYY hh:mm:ss': 'Time', 'Retrieval_Time': 'collect_time'
+            })
+
+    df = df.replace({'LeftWithPellet': 'Left', 'LeftDuringDispense': 'Left',
+                    'RightWithPellet': 'Right', 'RightDuringDispense': 'Right'})
+    df['Time'] = pd.to_datetime(df['Time'])
+    df = df.reset_index(drop=True)
+
+    if cumulative_accuracy:
+        df = calculate_accuracy_by_row(df, convert_large)
+
+    if collect_time:
+        df['collect_time'] = df['collect_time'].apply(convert_to_numeric)
+        max_value = get_max_numeric(df['collect_time'].copy())
+        df['collect_time'] = df['collect_time'].replace('Timed_out', max_value)
+        df['collect_time'] = df['collect_time'].fillna(0)
+        df['collect_time'] = pd.to_numeric(df['collect_time'])
+
+    if remove_trivial:
+        first_non_zero_index = df['Cum_Sum'].ne(0).idxmax()
+        df = df.loc[first_non_zero_index:]
+
+    df = df.reset_index(drop=True)
+    baseline_time = df['Time'].iloc[0]
+    df['Time_passed'] = df['Time'] - baseline_time
+    return df
+
+
 def calculate_accuracy_by_row(df:pd.DataFrame, convert_large=True):
     """calculate accuracy at each time stamp
 
