@@ -145,7 +145,11 @@ if __name__ == '__main__':
     # split_ctrl_cask('../FR1_collection.xlsx')
     # check_data_by_date('../reversal_ctrl.xlsx', 'C1.M1')
     # copy_sheet('../reversal_cask.xlsx', '../reversal_ctrl.xlsx', 'C5.M2')
-    # file_1 = '../wild_type_raw/Female_2/M4/FED000_121924_01.CSV'
-    # file_2 = '../wild_type_raw/Female_2/M4/FED000_121924_02.CSV'
-    # concatenate_csv_files([file_1, file_2], '../wild_type_raw/Female_2/M4/FED000_121924_03.CSV')
-    prep_pellet_count('../Food Intake Data/M5_fen.csv')
+    # file_1 = '../new_data/M1/FED000_022625_01.CSV'
+    # file_2 = '../new_data/M1/FED000_022625_03.CSV'
+    # concatenate_csv_files([file_1, file_2], '../new_data/M1/FED000_022625_04.CSV')
+    # prep_pellet_count('../Food Intake Data/M5_fen.csv')
+    update_excel_with_csv(excel_path='../data/reversal_female.xlsx', csv_path='../new_data/M1/FED000_022625_04.CSV', sheet_name='R3M1')
+    update_excel_with_csv(excel_path='../data/reversal_female.xlsx', csv_path='../new_data/M2/FED000_022625_01.CSV', sheet_name='R3M2')
+    update_excel_with_csv(excel_path='../data/reversal_female.xlsx', csv_path='../new_data/M3/FED000_022625_01.CSV', sheet_name='R3M3')
+    update_excel_with_csv(excel_path='../data/reversal_female.xlsx', csv_path='../new_data/M4/FED000_022625_01.CSV', sheet_name='R3M4')
