@@ -37,7 +37,7 @@ def get_daily_pellet_counts(df, time_column='Time', pellet_column='Pellet_Count'
     return daily_counts
 
 def plot_daily_pellet_counts(daily_counts_2d, group):
-    plt.figure(figsize=(10, 6))
+    plt.figure(figsize=(10, 6), dpi=150)
     
     for i, counts in enumerate(daily_counts_2d):
         plt.plot(counts, marker='o', label=f"Mouse {i+1}")
@@ -45,6 +45,7 @@ def plot_daily_pellet_counts(daily_counts_2d, group):
     plt.xlabel("Day Index")
     plt.ylabel("Daily Pellet Count")
     plt.title(f"Daily Pellet Count of {group} Group")
+    plt.grid()
     plt.legend()
     plt.tight_layout()
     plt.show()

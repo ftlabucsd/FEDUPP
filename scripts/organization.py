@@ -148,8 +148,8 @@ if __name__ == '__main__':
     # file_1 = '../new_data/M1/FED000_022625_01.CSV'
     # file_2 = '../new_data/M1/FED000_022625_03.CSV'
     # concatenate_csv_files([file_1, file_2], '../new_data/M1/FED000_022625_04.CSV')
-    # prep_pellet_count('../Food Intake Data/M5_fen.csv')
-    update_excel_with_csv(excel_path='../data/reversal_female.xlsx', csv_path='../new_data/M1/FED000_022625_04.CSV', sheet_name='R3M1')
-    update_excel_with_csv(excel_path='../data/reversal_female.xlsx', csv_path='../new_data/M2/FED000_022625_01.CSV', sheet_name='R3M2')
-    update_excel_with_csv(excel_path='../data/reversal_female.xlsx', csv_path='../new_data/M3/FED000_022625_01.CSV', sheet_name='R3M3')
-    update_excel_with_csv(excel_path='../data/reversal_female.xlsx', csv_path='../new_data/M4/FED000_022625_01.CSV', sheet_name='R3M4')
+    prep_pellet_count('../Food Intake Data/M5_fen.CSV')
+    # update_excel_with_csv(excel_path='../data/reversal_female.xlsx', csv_path='../new_data/M1/FED000_022625_04.CSV', sheet_name='R3M1')
+    # update_excel_with_csv(excel_path='../data/reversal_female.xlsx', csv_path='../new_data/M2/FED000_022625_01.CSV', sheet_name='R3M2')
+    # update_excel_with_csv(excel_path='../data/reversal_female.xlsx', csv_path='../new_data/M3/FED000_022625_01.CSV', sheet_name='R3M3')
+    # update_excel_with_csv(excel_path='../data/reversal_female.xlsx', csv_path='../new_data/M4/FED000_022625_01.CSV', sheet_name='R3M4')
