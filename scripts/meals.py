@@ -36,7 +36,7 @@ def get_daily_pellet_counts(df, time_column='Time', pellet_column='Pellet_Count'
             daily_counts.append(curr - prev)
     return daily_counts
 
-def plot_daily_pellet_counts(daily_counts_2d, group):
+def plot_daily_pellet_counts(daily_counts_2d, group, export_path=None):
     plt.figure(figsize=(10, 6), dpi=150)
     
     for i, counts in enumerate(daily_counts_2d):
@@ -48,6 +48,8 @@ def plot_daily_pellet_counts(daily_counts_2d, group):
     plt.grid()
     plt.legend()
     plt.tight_layout()
+    if export_path:
+        plt.savefig(export_path, bbox_inches='tight')
     plt.show()
 
 

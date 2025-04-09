@@ -1,7 +1,7 @@
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
-from preprocessing import read_excel_by_sheet
+from preprocessing import read_excel_by_sheet, preprocess_csv
 from tools import get_bhv_num, get_session_time
 import numpy as np
 from datetime import datetime, timedelta
@@ -19,6 +19,20 @@ def read_and_record(path:str, sheet:str, ending_corr:list, learned_time:list, ac
     ending_corr.append(closest_accuracy)
     learned_time.append(find_first_learned_time(df))
     acc_dict[sheet] = closest_accuracy
+    return df
+
+def rr_csv(csv_path, ending_corr:list, learned_time:list):
+    df = preprocess_csv(csv_path, collect_time=True, 
+                             cumulative_accuracy=True, remove_trivial=True, 
+                             convert_large=True)
+    target_time = timedelta(days=7)
+    df['time_diff'] = (df['Time_passed'] - target_time).abs()
+    closest_accuracy = df.loc[df['time_diff'].idxmin(), 'Percent_Correct']
+    df = df[:df['time_diff'].idxmin()]
+    df.drop(columns=['time_diff'], axis='columns')
+
+    ending_corr.append(closest_accuracy)
+    learned_time.append(find_first_learned_time(df))
     return df
 
 
