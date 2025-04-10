@@ -21,6 +21,7 @@ fr1_female_raw = get_all_sheet_names(fr1_female_path)
 rev_male_raw = get_all_sheet_names(rev_male_path)
 rev_female_raw = get_all_sheet_names(rev_female_path)
 
+rev_ctrl_raw.remove('C1.M1')
 fr1_male_raw.remove('R1M1')
 fr1_male_raw.remove('R2M12')
 

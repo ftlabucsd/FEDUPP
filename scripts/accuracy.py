@@ -186,14 +186,14 @@ def graph_group_stats(ctrl: list, exp: list, stats_name: str, unit: str,
 
     # Calculate summary statistics (for logging purposes)
     if verbose:
-        ctrl_averages = np.mean(ctrl)
-        exp_averages = np.mean(exp)
+        ctrl_average = np.mean(ctrl)
+        exp_average = np.mean(exp)
         ctrl_std = np.std(ctrl) / np.sqrt(len(ctrl))
         exp_std = np.std(exp) / np.sqrt(len(exp))
         print(f'{ctrl_name} Size: {len(ctrl)}')
         print(f'{exp_name} Size: {len(exp)}')
-        print(f'{ctrl_name} Average: {ctrl_averages}')
-        print(f'{exp_name} Average: {exp_averages}')
+        print(f'{ctrl_name} Average: {ctrl_average}')
+        print(f'{exp_name} Average: {exp_average}')
         print(f'{ctrl_name} Standard Error: {ctrl_std}')
         print(f'{exp_name} Standard Error: {exp_std}')
 
@@ -201,17 +201,26 @@ def graph_group_stats(ctrl: list, exp: list, stats_name: str, unit: str,
     fig, ax = plt.subplots(dpi=dpi)
     fig.set_size_inches(6, 6)
     
-    # Define x positions for the groups. (You can adjust these values as needed.)
+    # Define fixed x positions for the two groups
     x_positions = [0.5, 1.0]
     
-    # Create the violin plots. Note that violinplot expects a list of datasets.
+    # Create the violin plots. Note: violinplot expects a list of datasets.
     data = [ctrl, exp]
     parts = ax.violinplot(data, positions=x_positions, widths=violin_width, 
                             showmeans=False, showmedians=False, showextrema=False)
-    ax.scatter([x_positions[0]]*len(ctrl), ctrl, color='#18c1f5')
-    ax.scatter([x_positions[1]]*len(exp), exp, color='#36d15a')
     
-    # Customize the appearance of each violin using the returned 'bodies'
+    # Add jitter to scatter points: compute jitter strength from violin_width.
+    jitter_strength = violin_width / 8  # adjust factor as needed
+    
+    # Jittered x-values for each group
+    x_ctrl = x_positions[0] + np.random.uniform(-jitter_strength, jitter_strength, size=len(ctrl))
+    x_exp = x_positions[1] + np.random.uniform(-jitter_strength, jitter_strength, size=len(exp))
+    
+    # Plot the scatter points with jitter
+    ax.scatter(x_ctrl, ctrl, marker='o', zorder=3, color='#18c1f5', alpha=0.8)
+    ax.scatter(x_exp, exp, marker='o', zorder=3, color='#36d15a', alpha=0.8)
+    
+    # Customize the appearance of each violin
     for i, violin in enumerate(parts['bodies']):
         color = '#38bcf5' if i == 0 else '#38f5a6'
         violin.set_facecolor(color)
@@ -223,9 +232,8 @@ def graph_group_stats(ctrl: list, exp: list, stats_name: str, unit: str,
     exp_patch = mpatches.Patch(color='#38f5a6', alpha=0.6, label=f'{exp_name} (n = {len(exp)})')
     ax.legend(handles=[ctrl_patch, exp_patch])
     
-    # Set the labels and title.
+    # Set labels and title.
     ax.set_xlabel('Groups', fontsize=14)
-    # The y-axis label now represents the measured statistic's units.
     ax.set_ylabel(f'{stats_name} ({unit})', fontsize=14)
     ax.set_title(f'{stats_name} Distribution for {ctrl_name} and {exp_name} Groups', fontsize=20)
     
@@ -236,7 +244,6 @@ def graph_group_stats(ctrl: list, exp: list, stats_name: str, unit: str,
     if export_path:
         plt.savefig(export_path, bbox_inches='tight')
     plt.show()
-
 
 def graph_single_stats(data: list, stats_name: str, unit: str, 
                        violin_width=0.25, dpi=150, group_name=None, verbose=True, export_path=None):
@@ -260,21 +267,23 @@ def graph_single_stats(data: list, stats_name: str, unit: str,
     x_positions = [0.5]
     
     # Create the violin plot for the single dataset.
-    # Note that violinplot expects a list of datasets.
     parts = ax.violinplot([data], positions=x_positions, widths=violin_width, 
                             showmeans=False, showmedians=False, showextrema=False)
     
-    # Overlay individual data points as a scatter plot
-    ax.scatter([x_positions[0]] * len(data), data, marker='o', zorder=2, color='#18c1f5', alpha=0.8)
-
-    # Customize the appearance of the violin plot. Since we only have one violin, we assign one color.
+    # Add jitter to the data points scatter overlay
+    jitter_strength = violin_width / 8  # adjust factor as needed
+    x_jittered = x_positions[0] + np.random.uniform(-jitter_strength, jitter_strength, size=len(data))
+    
+    ax.scatter(x_jittered, data, marker='o', zorder=3, color='#18c1f5', alpha=0.8)
+    
+    # Customize the appearance of the violin plot.
     for i, violin in enumerate(parts['bodies']):
         color = '#38bcf5'
         violin.set_facecolor(color)
         violin.set_edgecolor('black')
         violin.set_alpha(0.6)
     
-    # Create a custom legend patch for the single group.
+    # Create a custom legend patch.
     group_patch = mpatches.Patch(color='#38bcf5', alpha=0.6, label=f'{group_name} (n = {len(data)})')
     ax.legend(handles=[group_patch])
     
@@ -287,6 +296,7 @@ def graph_single_stats(data: list, stats_name: str, unit: str,
     ax.set_xticks(x_positions)
     ax.set_xticklabels([group_name])
     
+    plt.xlim((0, 1))
     if export_path:
         plt.savefig(export_path, bbox_inches='tight')
     plt.show()
