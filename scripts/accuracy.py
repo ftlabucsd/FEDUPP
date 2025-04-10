@@ -5,6 +5,7 @@ from preprocessing import read_excel_by_sheet, preprocess_csv
 from tools import get_bhv_num, get_session_time
 import numpy as np
 from datetime import datetime, timedelta
+import matplotlib.patches as mpatches
 
 def read_and_record(path:str, sheet:str, ending_corr:list, learned_time:list, acc_dict:dict):
     df = read_excel_by_sheet(sheet, path, collect_time=True, 
@@ -176,92 +177,115 @@ def find_first_learned_time(data:pd.DataFrame, window_hours=2, accuracy_threshol
     return data.loc[len(data)-1, 'Time_passed'].total_seconds() / 3600
 
 
-def graph_group_stats(ctrl:list, exp:list, stats_name:str, unit:str, bar_width=0.2,
-                      err_width=14, dpi=100, group_names=None, verbose=True, export_path=None):
-    ctrl_averages = np.mean(ctrl)
-    exp_averages = np.mean(exp)
-    ctrl_std = np.std(ctrl) / np.sqrt(len(ctrl))
-    exp_std = np.std(exp) / np.sqrt(len(exp))
+def graph_group_stats(ctrl: list, exp: list, stats_name: str, unit: str, 
+                      violin_width=0.25, dpi=150, group_names=None, verbose=True, export_path=None):
+    # Set default group names if not provided
+    if group_names is None or len(group_names) < 2:
+        group_names = ['Control', 'Experiment']
     ctrl_name, exp_name = group_names
-    
-    exp_name = 'Experiment' if exp_name == None else exp_name
-    
+
+    # Calculate summary statistics (for logging purposes)
     if verbose:
+        ctrl_averages = np.mean(ctrl)
+        exp_averages = np.mean(exp)
+        ctrl_std = np.std(ctrl) / np.sqrt(len(ctrl))
+        exp_std = np.std(exp) / np.sqrt(len(exp))
         print(f'{ctrl_name} Size: {len(ctrl)}')
         print(f'{exp_name} Size: {len(exp)}')
         print(f'{ctrl_name} Average: {ctrl_averages}')
         print(f'{exp_name} Average: {exp_averages}')
-        print(f'{ctrl_name} Standard Deviation: {ctrl_std}')
-        print(f'{exp_name} Standard Deviation: {exp_std}')
+        print(f'{ctrl_name} Standard Error: {ctrl_std}')
+        print(f'{exp_name} Standard Error: {exp_std}')
 
+    # Create the figure and axis
     fig, ax = plt.subplots(dpi=dpi)
     fig.set_size_inches(6, 6)
-    x = [0.5, 1]
     
-    ax.bar(x=x[0], height=ctrl_averages, width=bar_width, color='blue', 
-           label=f'{ctrl_name} (n = {len(ctrl)})',
-           zorder=1, alpha=0.6, yerr=ctrl_std, capsize=err_width)
+    # Define x positions for the groups. (You can adjust these values as needed.)
+    x_positions = [0.5, 1.0]
     
-    ax.bar(x=x[1], height=exp_averages, width=bar_width, color='orange', 
-           label=f'{exp_name} (n = {len(exp)})',
-           zorder=1, alpha=0.6, yerr=exp_std, capsize=err_width)
+    # Create the violin plots. Note that violinplot expects a list of datasets.
+    data = [ctrl, exp]
+    parts = ax.violinplot(data, positions=x_positions, widths=violin_width, 
+                            showmeans=False, showmedians=False, showextrema=False)
+    ax.scatter([x_positions[0]]*len(ctrl), ctrl, color='#18c1f5')
+    ax.scatter([x_positions[1]]*len(exp), exp, color='#36d15a')
     
-    # Add jitter to scatter points
-    jitter_strength = bar_width / 8
-    x_values_ctrl = x[0] + np.random.uniform(-jitter_strength, jitter_strength, size=len(ctrl))
-    x_values_exp = x[1] + np.random.uniform(-jitter_strength, jitter_strength, size=len(exp))
+    # Customize the appearance of each violin using the returned 'bodies'
+    for i, violin in enumerate(parts['bodies']):
+        color = '#38bcf5' if i == 0 else '#38f5a6'
+        violin.set_facecolor(color)
+        violin.set_edgecolor('black')
+        violin.set_alpha(0.6)
 
-    # Plot scatter points
-    ax.scatter(x_values_ctrl, ctrl, marker='o', zorder=2, color='#1405eb', alpha=0.8)
-    ax.scatter(x_values_exp, exp, marker='o', zorder=2, color='#f28211', alpha=0.8)
-
+    # Create custom legend patches.
+    ctrl_patch = mpatches.Patch(color='#38bcf5', alpha=0.6, label=f'{ctrl_name} (n = {len(ctrl)})')
+    exp_patch = mpatches.Patch(color='#38f5a6', alpha=0.6, label=f'{exp_name} (n = {len(exp)})')
+    ax.legend(handles=[ctrl_patch, exp_patch])
+    
+    # Set the labels and title.
     ax.set_xlabel('Groups', fontsize=14)
-    ax.set_ylabel(f'Averages ({unit})', fontsize=14)
-    ax.set_title(f'{stats_name} of {ctrl_name} and {exp_name} Groups', fontsize=20)
-    ax.set_xticks(x)
+    # The y-axis label now represents the measured statistic's units.
+    ax.set_ylabel(f'{stats_name} ({unit})', fontsize=14)
+    ax.set_title(f'{stats_name} Distribution for {ctrl_name} and {exp_name} Groups', fontsize=20)
+    
+    # Set the x-ticks and tick labels.
+    ax.set_xticks(x_positions)
     ax.set_xticklabels(group_names)
-
-    ax.legend()
+    
     if export_path:
         plt.savefig(export_path, bbox_inches='tight')
     plt.show()
-    
-def graph_single_stats(data: list, stats_name: str, unit: str, bar_width=0.2,
-                       err_width=14, dpi=100, group_name=None, verbose=True, export_path=None):
-    # Compute average and standard error
+
+
+def graph_single_stats(data: list, stats_name: str, unit: str, 
+                       violin_width=0.25, dpi=150, group_name=None, verbose=True, export_path=None):
+    # Calculate summary statistics (for logging purposes)
     average = np.mean(data)
     std_error = np.std(data) / np.sqrt(len(data))
-    
+
     if group_name is None:
         group_name = 'Group'
-        
+    
     if verbose:
         print(f'{group_name} Size: {len(data)}')
         print(f'{group_name} Average: {average}')
         print(f'{group_name} Standard Error: {std_error}')
     
-    fig, ax = plt.subplots(dpi=dpi, figsize=(3, 6))
+    # Create the figure and axis
+    fig, ax = plt.subplots(dpi=dpi)
+    fig.set_size_inches(6, 6)
     
-    x = 0.5
+    # Define the x position for the group (only one group, so a single x value)
+    x_positions = [0.5]
     
-    ax.bar(x=x, height=average, width=bar_width, color='blue', 
-           label=f'{group_name} (n = {len(data)})',
-           zorder=1, alpha=0.6, yerr=std_error, capsize=err_width)
+    # Create the violin plot for the single dataset.
+    # Note that violinplot expects a list of datasets.
+    parts = ax.violinplot([data], positions=x_positions, widths=violin_width, 
+                            showmeans=False, showmedians=False, showextrema=False)
     
-    jitter_strength = bar_width / 8
-    x_values = x + np.random.uniform(-jitter_strength, jitter_strength, size=len(data))
-    ax.scatter(x_values, data, marker='o', zorder=2, color='#1405eb', alpha=0.8)
+    # Overlay individual data points as a scatter plot
+    ax.scatter([x_positions[0]] * len(data), data, marker='o', zorder=2, color='#18c1f5', alpha=0.8)
+
+    # Customize the appearance of the violin plot. Since we only have one violin, we assign one color.
+    for i, violin in enumerate(parts['bodies']):
+        color = '#38bcf5'
+        violin.set_facecolor(color)
+        violin.set_edgecolor('black')
+        violin.set_alpha(0.6)
     
+    # Create a custom legend patch for the single group.
+    group_patch = mpatches.Patch(color='#38bcf5', alpha=0.6, label=f'{group_name} (n = {len(data)})')
+    ax.legend(handles=[group_patch])
+    
+    # Labeling the axes and the plot title.
     ax.set_xlabel('Groups', fontsize=14)
-    ax.set_ylabel(f'Averages ({unit})', fontsize=14)
-    ax.set_title(f'{stats_name} of {group_name}', fontsize=20)
+    ax.set_ylabel(f'{stats_name} ({unit})', fontsize=14)
+    ax.set_title(f'{stats_name} Distribution for {group_name}', fontsize=20)
     
-    ax.set_xticks([x])
+    # Set the x-ticks and labels.
+    ax.set_xticks(x_positions)
     ax.set_xticklabels([group_name])
-    ax.set_xlim(0, 1) 
-    
-    ax.legend()
-    plt.tight_layout()
     
     if export_path:
         plt.savefig(export_path, bbox_inches='tight')
