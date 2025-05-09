@@ -452,258 +452,286 @@ def learning_result(blocks, action_prop=0.25) -> float:
     return np.mean(results)
 
 
-def graph_learning_score(ctrl: list, exp: list, width=0.4, group_names=None, 
-                         proportion=None, export_path=None, verbose=True):
+
+def graph_learning_score(ctrl: list,
+                         exp: list,
+                         width=0.4,
+                         group_names=None,
+                         proportion=None,
+                         export_path=None,
+                         verbose=True):
     """
-    Graph learning score of two groups using violin plots.
-    
-    Args:
-        ctrl (list): data of control group
-        exp (list): data of experiment group
-        width (float): width of the plotted violins
-        group_names (list): names of the groups (expects two names)
-        proportion (float): proportion of the data we use to evaluate learning performance
-        export_path (str): path to export the plot image
-        verbose (bool): if True, prints summary statistics
+    Graph learning score of two groups using violin + box + scatter.
+    Colors: lightblue violin / #1405eb scatter for ctrl; yellow violin / #f28211 scatter for exp.
     """
-    # Calculate means and standard errors (for logging)
-    ctrl_mean = np.mean(ctrl)
-    exp_mean = np.mean(exp)
-    ctrl_err = np.std(ctrl) / np.sqrt(len(ctrl))
-    exp_err = np.std(exp) / np.sqrt(len(exp))
-    
-    # Set default group names if not provided
+    # summary stats
+    ctrl_mean, exp_mean = np.mean(ctrl), np.mean(exp)
+    ctrl_se,   exp_se   = np.std(ctrl)/np.sqrt(len(ctrl)), np.std(exp)/np.sqrt(len(exp))
+
     if group_names is None or len(group_names) < 2:
         group_names = ['Control', 'Experiment']
     ctrl_name, exp_name = group_names
 
     if verbose:
-        print(f'{ctrl_name} Size: {len(ctrl)}')
-        print(f'{exp_name} Size: {len(exp)}')
-        print(f'{ctrl_name} Average: {ctrl_mean}')
-        print(f'{exp_name} Average: {exp_mean}')
-        print(f'{ctrl_name} Standard Error: {ctrl_err}')
-        print(f'{exp_name} Standard Error: {exp_err}')
-    
-    plt.figure(figsize=(7, 7))
-    
-    # Define x positions for groups (using 1 and 2 as before)
+        print(f'{ctrl_name} Size: {len(ctrl)}   Avg: {ctrl_mean:.3f}   SE: {ctrl_se:.3f}')
+        print(f'{exp_name}  Size: {len(exp)}   Avg: {exp_mean:.3f}   SE: {exp_se:.3f}')
+
+    # plot setup
+    fig, ax = plt.subplots(figsize=(7,7))
     x_positions = [1, 2]
-    
-    # Create the violin plots (the data must be provided as a list of datasets)
-    parts = plt.violinplot([ctrl, exp], positions=x_positions, widths=width, 
-                            showmedians=False, showmeans=False, showextrema=False)
-    
-    # Customize each violin's appearance using desired colors 
+    data = [ctrl, exp]
+
+    # violin
+    parts = ax.violinplot(data,
+                          positions=x_positions,
+                          widths=width,
+                          showmeans=False,
+                          showmedians=False,
+                          showextrema=False)
     for i, violin in enumerate(parts['bodies']):
-        # Use original bar colors: 'lightblue' for control, 'yellow' for experiment
-        color = 'lightblue' if i == 0 else 'yellow'
-        violin.set_facecolor(color)
+        face = 'lightblue' if i == 0 else 'yellow'
+        violin.set_facecolor(face)
         violin.set_edgecolor('black')
         violin.set_alpha(0.8)
-    
-    # Add jittered scatter points
-    jitter_strength = width / 8
-    x_values_ctrl = 1 + np.random.uniform(-jitter_strength, jitter_strength, size=len(ctrl))
-    x_values_exp = 2 + np.random.uniform(-jitter_strength, jitter_strength, size=len(exp))
-    plt.scatter(x_values_ctrl, ctrl, marker='o', zorder=3, color='#1405eb', alpha=0.8)
-    plt.scatter(x_values_exp, exp, marker='o', zorder=3, color='#f28211', alpha=0.8)
-    
-    # Custom legend patches
-    ctrl_patch = mpatches.Patch(color='lightblue', alpha=0.8, label=f'{ctrl_name} (n = {len(ctrl)})')
-    exp_patch = mpatches.Patch(color='yellow', alpha=0.8, label=f'{exp_name} (n = {len(exp)})')
-    plt.legend(handles=[ctrl_patch, exp_patch])
-    
-    # Set labels, title, and x-axis ticks
-    plt.xlabel('Groups', fontsize=14)
-    plt.ylabel('Learning Score', fontsize=14)
-    plt.title(f'Learning Score {ctrl_name} and {exp_name} Groups with {proportion} Data', fontsize=16)
-    plt.xticks(x_positions, group_names)
-    
+
+    # inset boxplot
+    ax.boxplot(data,
+               positions=x_positions,
+               widths=width*0.5,
+               showfliers=False,
+               patch_artist=True,
+               boxprops=dict(facecolor='white', edgecolor='black'),
+               medianprops=dict(color='black'),
+               whiskerprops=dict(color='black'),
+               capprops=dict(color='black'))
+
+    # jittered scatters
+    jitter = width/8
+    x_ctrl = 1 + np.random.uniform(-jitter, jitter, size=len(ctrl))
+    x_exp  = 2 + np.random.uniform(-jitter, jitter, size=len(exp))
+    ax.scatter(x_ctrl, ctrl, marker='o', zorder=3, color='#1405eb', alpha=0.8)
+    ax.scatter(x_exp,  exp,  marker='o', zorder=3, color='#f28211', alpha=0.8)
+
+    # legend
+    c_patch = mpatches.Patch(color='lightblue', alpha=0.8, label=f'{ctrl_name} (n={len(ctrl)})')
+    e_patch = mpatches.Patch(color='yellow',    alpha=0.8, label=f'{exp_name} (n={len(exp)})')
+    ax.legend(handles=[c_patch, e_patch])
+
+    # labels & title
+    ax.set_ylim(20, 65)
+    ax.set_xlabel('Groups', fontsize=14)
+    ax.set_ylabel('Learning Score', fontsize=14)
+    ax.set_title(f'Learning Score of {ctrl_name} vs {exp_name} ({proportion} data)', fontsize=16)
+    ax.set_xticks(x_positions)
+    ax.set_xticklabels(group_names)
+
     if export_path:
         plt.savefig(export_path, bbox_inches='tight')
     plt.show()
 
-    
-def graph_learning_score_single(data: list, width=0.4, group_name=None, proportion=None, 
-                                export_path=None, verbose=True):
+
+def graph_learning_score_single(data: list,
+                                width=0.4,
+                                group_name=None,
+                                proportion=None,
+                                export_path=None,
+                                verbose=True):
     """
-    Graph learning score for a single group using a violin plot.
-    
-    Args:
-        data (list): data of the group
-        width (float): width of the plotted violin
-        group_name (str): name of the group (defaults to 'Group' if not provided)
-        proportion (float): proportion of the data used to evaluate learning performance
-        export_path (str): path to export the plot image
-        verbose (bool): if True, prints summary statistics
+    Graph learning score for a single group using violin + box + scatter.
+    Colors: lightblue violin / #1405eb scatter.
     """
-    # Compute mean and standard error
-    mean_score = np.mean(data)
-    error = np.std(data) / np.sqrt(len(data))
-    
+    mean_val = np.mean(data)
+    se_val   = np.std(data)/np.sqrt(len(data))
     if group_name is None:
         group_name = 'Group'
-    
     if verbose:
-        print(f'{group_name} Size: {len(data)}')
-        print(f'{group_name} Average: {mean_score}')
-        print(f'{group_name} Standard Error: {error}')
-    
-    plt.figure(figsize=(3, 6))
-    
-    # Define the x position for the single group and plot the violin
-    x_positions = [0.5]
-    parts = plt.violinplot([data], positions=x_positions, widths=width, 
-                           showmedians=False, showmeans=False, showextrema=False)
+        print(f'{group_name} Size: {len(data)}   Avg: {mean_val:.3f}   SE: {se_val:.3f}')
+
+    fig, ax = plt.subplots(figsize=(3,6))
+    x = 0.5
+
+    # violin
+    parts = ax.violinplot([data],
+                          positions=[x],
+                          widths=width,
+                          showmeans=False,
+                          showmedians=False,
+                          showextrema=False)
     for violin in parts['bodies']:
         violin.set_facecolor('lightblue')
         violin.set_edgecolor('black')
         violin.set_alpha(0.8)
-    
-    # Add jittered scatter points
-    jitter_strength = width / 8
-    x_values = 0.5 + np.random.uniform(-jitter_strength, jitter_strength, size=len(data))
-    plt.scatter(x_values, data, marker='o', zorder=3, color='#1405eb', alpha=0.8)
-    
-    # Set x-axis limits and ticks
-    plt.xlim(0, 1)
-    plt.xticks(x_positions, [group_name])
-    
-    plt.xlabel('Groups', fontsize=14)
-    plt.ylabel('Learning Score', fontsize=14)
-    plt.title(f'Learning Score for {group_name} with {proportion} Data', fontsize=16)
-    
-    # Custom legend patch
-    group_patch = mpatches.Patch(color='lightblue', alpha=0.8, label=f'{group_name} (n = {len(data)})')
-    plt.legend(handles=[group_patch])
-    
+
+    # inset boxplot
+    ax.boxplot([data],
+               positions=[x],
+               widths=width*0.5,
+               showfliers=False,
+               patch_artist=True,
+               boxprops=dict(facecolor='white', edgecolor='black'),
+               medianprops=dict(color='black'),
+               whiskerprops=dict(color='black'),
+               capprops=dict(color='black'))
+
+    # scatter
+    jitter = width/8
+    x_vals = x + np.random.uniform(-jitter, jitter, size=len(data))
+    ax.scatter(x_vals, data, marker='o', zorder=3, color='#1405eb', alpha=0.8)
+
+    # formatting
+    ax.set_xlim(0,1)
+    ax.set_ylim(20, 65)
+    ax.set_xticks([x])
+    ax.set_xticklabels([group_name])
+    ax.set_xlabel('Group', fontsize=14)
+    ax.set_ylabel('Learning Score', fontsize=14)
+    ax.set_title(f'Learning Score of {group_name} of {proportion} data', fontsize=16)
+
+    # legend
+    patch = mpatches.Patch(color='lightblue', alpha=0.8, label=f'{group_name} (n={len(data)})')
+    ax.legend(handles=[patch])
+
     if export_path:
         plt.savefig(export_path, bbox_inches='tight')
     plt.show()
-    
-    
-def graph_learning_results(ctrl: list, exp: list, width=0.4, group_names=None, 
-                           proportion=None, export_path=None, verbose=True):
+
+
+def graph_learning_results(ctrl: list,
+                           exp: list,
+                           width=0.4,
+                           group_names=None,
+                           proportion=None,
+                           export_path=None,
+                           verbose=True):
     """
-    Graph learning results (accuracy) of two groups using violin plots.
-    
-    Args:
-        ctrl (list): data of control group
-        exp (list): data of experiment group
-        width (float): width of plotted violins
-        group_names (list): names of the groups (expects two names)
-        proportion (float): proportion of the data we use to evaluate learning performance
-        export_path (str): path to export the plot image
-        verbose (bool): if True, prints summary statistics
+    Graph accuracy of two groups using violin + box + scatter.
+    Colors: lightblue violin / #1405eb scatter for ctrl; yellow violin / #f28211 scatter for exp.
     """
-    ctrl_mean = np.mean(ctrl)
-    exp_mean = np.mean(exp)
-    ctrl_err = np.std(ctrl) / np.sqrt(len(ctrl))
-    exp_err = np.std(exp) / np.sqrt(len(exp))
-    
+    ctrl_mean, exp_mean = np.mean(ctrl), np.mean(exp)
+    ctrl_se,   exp_se   = np.std(ctrl)/np.sqrt(len(ctrl)), np.std(exp)/np.sqrt(len(exp))
+
     if group_names is None or len(group_names) < 2:
         group_names = ['Control', 'Experiment']
     ctrl_name, exp_name = group_names
 
     if verbose:
-        print(f'{ctrl_name} Size: {len(ctrl)}')
-        print(f'{exp_name} Size: {len(exp)}')
-        print(f'{ctrl_name} Average: {ctrl_mean}')
-        print(f'{exp_name} Average: {exp_mean}')
-        print(f'{ctrl_name} Standard Error: {ctrl_err}')
-        print(f'{exp_name} Standard Error: {exp_err}')
-    
-    plt.figure(figsize=(7, 7))
-    
-    # Define x positions for the groups (using 1 and 2)
-    x_positions = [1, 2]
-    
-    # Create the violin plots
-    parts = plt.violinplot([ctrl, exp], positions=x_positions, widths=width, 
-                           showmedians=False, showmeans=False, showextrema=False)
-    
-    # Customize each violin's appearance:
+        print(f'{ctrl_name} Size: {len(ctrl)}   Avg: {ctrl_mean:.3f}   SE: {ctrl_se:.3f}')
+        print(f'{exp_name}  Size: {len(exp)}   Avg: {exp_mean:.3f}   SE: {exp_se:.3f}')
+
+    fig, ax = plt.subplots(figsize=(7,7))
+    x_positions = [1,2]
+    data = [ctrl, exp]
+
+    # violin
+    parts = ax.violinplot(data,
+                          positions=x_positions,
+                          widths=width,
+                          showmeans=False,
+                          showmedians=False,
+                          showextrema=False)
     for i, violin in enumerate(parts['bodies']):
-        color = 'lightblue' if i == 0 else 'yellow'
-        violin.set_facecolor(color)
+        face = 'lightblue' if i == 0 else 'yellow'
+        violin.set_facecolor(face)
         violin.set_edgecolor('black')
         violin.set_alpha(0.8)
-    
-    # Add jittered scatter points
-    jitter_strength = width / 8
-    x_values_ctrl = 1 + np.random.uniform(-jitter_strength, jitter_strength, size=len(ctrl))
-    x_values_exp = 2 + np.random.uniform(-jitter_strength, jitter_strength, size=len(exp))
-    plt.scatter(x_values_ctrl, ctrl, marker='o', zorder=3, color='#1405eb', alpha=0.8)
-    plt.scatter(x_values_exp, exp, marker='o', zorder=3, color='#f28211', alpha=0.8)
-    
-    # Custom legend patches
-    ctrl_patch = mpatches.Patch(color='lightblue', alpha=0.8, label=f'{ctrl_name} (n = {len(ctrl)})')
-    exp_patch = mpatches.Patch(color='yellow', alpha=0.8, label=f'{exp_name} (n = {len(exp)})')
-    plt.legend(handles=[ctrl_patch, exp_patch])
-    
-    plt.xlabel('Groups', fontsize=14)
-    plt.ylabel('Mean Accuracy (%)', fontsize=14)
-    plt.title(f'Accuracy of Last {proportion} Data {ctrl_name} and {exp_name} Groups', fontsize=16)
-    plt.xticks(x_positions, group_names)
-    
+
+    # inset boxplot
+    ax.boxplot(data,
+               positions=x_positions,
+               widths=width*0.5,
+               showfliers=False,
+               patch_artist=True,
+               boxprops=dict(facecolor='white', edgecolor='black'),
+               medianprops=dict(color='black'),
+               whiskerprops=dict(color='black'),
+               capprops=dict(color='black'))
+
+    # scatter
+    jitter = width/8
+    x_ctrl = 1 + np.random.uniform(-jitter, jitter, size=len(ctrl))
+    x_exp  = 2 + np.random.uniform(-jitter, jitter, size=len(exp))
+    ax.scatter(x_ctrl, ctrl, marker='o', zorder=3, color='#1405eb', alpha=0.8)
+    ax.scatter(x_exp,  exp,  marker='o', zorder=3, color='#f28211', alpha=0.8)
+
+    # legend
+    c_patch = mpatches.Patch(color='lightblue', alpha=0.8, label=f'{ctrl_name} (n={len(ctrl)})')
+    e_patch = mpatches.Patch(color='yellow',    alpha=0.8, label=f'{exp_name} (n={len(exp)})')
+    ax.legend(handles=[c_patch, e_patch])
+
+    # labels & title
+    ax.set_ylim(45, 75)
+    ax.set_xlabel('Groups', fontsize=14)
+    ax.set_ylabel('Mean Accuracy (%)', fontsize=14)
+    ax.set_title(f'Learning Result of {ctrl_name} vs {exp_name} (last {proportion} data)', fontsize=16)
+    ax.set_xticks(x_positions)
+    ax.set_xticklabels(group_names)
+
     if export_path:
         plt.savefig(export_path, bbox_inches='tight')
     plt.show()
 
 
-def graph_learning_results_single(data: list, width=0.4, group_name=None, proportion=None, 
-                                  export_path=None, verbose=True):
+def graph_learning_results_single(data: list,
+                                  width=0.4,
+                                  group_name=None,
+                                  proportion=None,
+                                  export_path=None,
+                                  verbose=True):
     """
-    Graph learning result for a single group (accuracy) using a violin plot.
-    
-    Args:
-        data (list): data of the group
-        width (float): width of the plotted violin
-        group_name (str): name of the group (defaults to 'Group' if not provided)
-        proportion (float): proportion of the data we use to evaluate learning performance
-        export_path (str): path to export the plot image
-        verbose (bool): if True, prints summary statistics
+    Graph accuracy for a single group using violin + box + scatter.
+    Colors: lightblue violin / #1405eb scatter.
     """
-    # Compute mean and standard error
-    mean_accuracy = np.mean(data)
-    error = np.std(data) / np.sqrt(len(data))
-    
+    mean_val = np.mean(data)
+    se_val   = np.std(data)/np.sqrt(len(data))
     if group_name is None:
         group_name = 'Group'
-    
     if verbose:
-        print(f'{group_name} Size: {len(data)}')
-        print(f'{group_name} Average: {mean_accuracy}')
-        print(f'{group_name} Standard Error: {error}')
-    
-    plt.figure(figsize=(3, 6))
-    
-    # Define the x position and create the violin plot
-    x_positions = [0.5]
-    parts = plt.violinplot([data], positions=x_positions, widths=width, 
-                           showmedians=False, showmeans=False, showextrema=False)
+        print(f'{group_name} Size: {len(data)}   Avg: {mean_val:.3f}   SE: {se_val:.3f}')
+
+    fig, ax = plt.subplots(figsize=(3,6))
+    x = 0.5
+
+    # violin
+    parts = ax.violinplot([data],
+                          positions=[x],
+                          widths=width,
+                          showmeans=False,
+                          showmedians=False,
+                          showextrema=False)
     for violin in parts['bodies']:
         violin.set_facecolor('lightblue')
         violin.set_edgecolor('black')
         violin.set_alpha(0.8)
-    
-    # Add jittered scatter points
-    jitter_strength = width / 8
-    x_values = 0.5 + np.random.uniform(-jitter_strength, jitter_strength, size=len(data))
-    plt.scatter(x_values, data, marker='o', zorder=3, color='#1405eb', alpha=0.8)
-    
-    plt.xlim(0, 1)
-    plt.xticks(x_positions, [group_name])
-    
-    plt.xlabel('Groups', fontsize=14)
-    plt.ylabel('Mean Accuracy (%)', fontsize=14)
-    plt.title(f'Accuracy of Last {proportion} Data {group_name}', fontsize=16)
-    
-    # Custom legend patch
-    group_patch = mpatches.Patch(color='lightblue', alpha=0.8, label=f'{group_name} (n = {len(data)})')
-    plt.legend(handles=[group_patch])
-    
+
+    # inset boxplot
+    ax.boxplot([data],
+               positions=[x],
+               widths=width*0.5,
+               showfliers=False,
+               patch_artist=True,
+               boxprops=dict(facecolor='white', edgecolor='black'),
+               medianprops=dict(color='black'),
+               whiskerprops=dict(color='black'),
+               capprops=dict(color='black'))
+
+    # scatter
+    jitter = width/8
+    x_vals = x + np.random.uniform(-jitter, jitter, size=len(data))
+    ax.scatter(x_vals, data, marker='o', zorder=3, color='#1405eb', alpha=0.8)
+
+    # formatting
+    ax.set_xlim(0,1)
+    ax.set_ylim(45, 75)
+    ax.set_xticks([x])
+    ax.set_xticklabels([group_name])
+    ax.set_xlabel('Group', fontsize=14)
+    ax.set_ylabel('Mean Accuracy (%)', fontsize=14)
+    ax.set_title(f'Learning Result of {group_name} (last {proportion} data)', fontsize=16)
+
+    # legend
+    patch = mpatches.Patch(color='lightblue', alpha=0.8, label=f'{group_name} (n={len(data)})')
+    ax.legend(handles=[patch])
+
     if export_path:
         plt.savefig(export_path, bbox_inches='tight')
     plt.show()

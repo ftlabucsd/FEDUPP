@@ -177,126 +177,152 @@ def find_first_learned_time(data:pd.DataFrame, window_hours=2, accuracy_threshol
     return data.loc[len(data)-1, 'Time_passed'].total_seconds() / 3600
 
 
-def graph_group_stats(ctrl: list, exp: list, stats_name: str, unit: str, 
-                      violin_width=0.25, dpi=150, group_names=None, verbose=True, export_path=None):
-    # Set default group names if not provided
+def graph_group_stats(ctrl: list,
+                      exp: list,
+                      stats_name: str,
+                      unit: str,
+                      violin_width=0.25,
+                      dpi=150,
+                      group_names=None,
+                      verbose=True,
+                      export_path=None):
+    # Default group names
     if group_names is None or len(group_names) < 2:
         group_names = ['Control', 'Experiment']
     ctrl_name, exp_name = group_names
 
-    # Calculate summary statistics (for logging purposes)
+    # Summary statistics
     if verbose:
-        ctrl_average = np.mean(ctrl)
-        exp_average = np.mean(exp)
-        ctrl_std = np.std(ctrl) / np.sqrt(len(ctrl))
-        exp_std = np.std(exp) / np.sqrt(len(exp))
+        ctrl_avg = np.mean(ctrl)
+        exp_avg  = np.mean(exp)
+        ctrl_se  = np.std(ctrl) / np.sqrt(len(ctrl))
+        exp_se   = np.std(exp) / np.sqrt(len(exp))
         print(f'{ctrl_name} Size: {len(ctrl)}')
         print(f'{exp_name} Size: {len(exp)}')
-        print(f'{ctrl_name} Average: {ctrl_average}')
-        print(f'{exp_name} Average: {exp_average}')
-        print(f'{ctrl_name} Standard Error: {ctrl_std}')
-        print(f'{exp_name} Standard Error: {exp_std}')
+        print(f'{ctrl_name} Average: {ctrl_avg:.3f}')
+        print(f'{exp_name} Average: {exp_avg:.3f}')
+        print(f'{ctrl_name} SE: {ctrl_se:.3f}')
+        print(f'{exp_name} SE: {exp_se:.3f}')
 
-    # Create the figure and axis
+    # Figure setup
     fig, ax = plt.subplots(dpi=dpi)
     fig.set_size_inches(6, 6)
-    
-    # Define fixed x positions for the two groups
+
+    # X positions for the two groups
     x_positions = [0.5, 1.0]
-    
-    # Create the violin plots. Note: violinplot expects a list of datasets.
     data = [ctrl, exp]
-    parts = ax.violinplot(data, positions=x_positions, widths=violin_width, 
-                            showmeans=False, showmedians=False, showextrema=False)
-    
-    # Add jitter to scatter points: compute jitter strength from violin_width.
-    jitter_strength = violin_width / 8  # adjust factor as needed
-    
-    # Jittered x-values for each group
-    x_ctrl = x_positions[0] + np.random.uniform(-jitter_strength, jitter_strength, size=len(ctrl))
-    x_exp = x_positions[1] + np.random.uniform(-jitter_strength, jitter_strength, size=len(exp))
-    
-    # Plot the scatter points with jitter
-    ax.scatter(x_ctrl, ctrl, marker='o', zorder=3, color='#18c1f5', alpha=0.8)
-    ax.scatter(x_exp, exp, marker='o', zorder=3, color='#36d15a', alpha=0.8)
-    
-    # Customize the appearance of each violin
+
+    # 1) Violin plots (no interior lines/extrema)
+    parts = ax.violinplot(data,
+                          positions=x_positions,
+                          widths=violin_width,
+                          showmeans=False,
+                          showmedians=False,
+                          showextrema=False)
     for i, violin in enumerate(parts['bodies']):
         color = '#38bcf5' if i == 0 else '#38f5a6'
         violin.set_facecolor(color)
         violin.set_edgecolor('black')
         violin.set_alpha(0.6)
 
-    # Create custom legend patches.
-    ctrl_patch = mpatches.Patch(color='#38bcf5', alpha=0.6, label=f'{ctrl_name} (n = {len(ctrl)})')
-    exp_patch = mpatches.Patch(color='#38f5a6', alpha=0.6, label=f'{exp_name} (n = {len(exp)})')
+    # 2) Boxplots inside the violins
+    ax.boxplot(data,
+               positions=x_positions,
+               widths=violin_width * 0.5,
+               showfliers=False,
+               patch_artist=True,
+               boxprops=dict(facecolor='white', edgecolor='black'),
+               medianprops=dict(color='black'),
+               whiskerprops=dict(color='black'),
+               capprops=dict(color='black'))
+
+    # 3) Scatter individual points (jittered)
+    jitter_strength = violin_width / 8
+    scatter_colors = ['#18c1f5', '#36d15a']
+    for x, group_data, c in zip(x_positions, data, scatter_colors):
+        x_j = x + np.random.uniform(-jitter_strength, jitter_strength, size=len(group_data))
+        ax.scatter(x_j, group_data, marker='o', zorder=3, color=c, alpha=0.8)
+
+    # Legend
+    ctrl_patch = mpatches.Patch(color='#38bcf5', alpha=0.6, label=f'{ctrl_name} (n={len(ctrl)})')
+    exp_patch  = mpatches.Patch(color='#38f5a6', alpha=0.6, label=f'{exp_name} (n={len(exp)})')
     ax.legend(handles=[ctrl_patch, exp_patch])
-    
-    # Set labels and title.
+
+    # Labels & title
     ax.set_xlabel('Groups', fontsize=14)
     ax.set_ylabel(f'{stats_name} ({unit})', fontsize=14)
-    ax.set_title(f'{stats_name} Distribution for {ctrl_name} and {exp_name} Groups', fontsize=20)
-    
-    # Set the x-ticks and tick labels.
+    ax.set_title(f'{stats_name} Distribution: {ctrl_name} vs. {exp_name}', fontsize=20)
+
+    # X‐axis ticks
     ax.set_xticks(x_positions)
     ax.set_xticklabels(group_names)
-    
+    ax.set_xlim(0, 1.5)
+
+    # Save or display
     if export_path:
         plt.savefig(export_path, bbox_inches='tight')
     plt.show()
 
+
 def graph_single_stats(data: list, stats_name: str, unit: str, 
                        violin_width=0.25, dpi=150, group_name=None, verbose=True, export_path=None):
-    # Calculate summary statistics (for logging purposes)
+    # Summary stats
     average = np.mean(data)
     std_error = np.std(data) / np.sqrt(len(data))
 
     if group_name is None:
         group_name = 'Group'
-    
     if verbose:
         print(f'{group_name} Size: {len(data)}')
-        print(f'{group_name} Average: {average}')
-        print(f'{group_name} Standard Error: {std_error}')
+        print(f'{group_name} Average: {average:.3f}')
+        print(f'{group_name} SE: {std_error:.3f}')
     
-    # Create the figure and axis
+    # Set up figure
     fig, ax = plt.subplots(dpi=dpi)
     fig.set_size_inches(6, 6)
-    
-    # Define the x position for the group (only one group, so a single x value)
-    x_positions = [0.5]
-    
-    # Create the violin plot for the single dataset.
-    parts = ax.violinplot([data], positions=x_positions, widths=violin_width, 
-                            showmeans=False, showmedians=False, showextrema=False)
-    
-    # Add jitter to the data points scatter overlay
-    jitter_strength = violin_width / 8  # adjust factor as needed
-    x_jittered = x_positions[0] + np.random.uniform(-jitter_strength, jitter_strength, size=len(data))
-    
-    ax.scatter(x_jittered, data, marker='o', zorder=3, color='#18c1f5', alpha=0.8)
-    
-    # Customize the appearance of the violin plot.
-    for i, violin in enumerate(parts['bodies']):
-        color = '#38bcf5'
-        violin.set_facecolor(color)
-        violin.set_edgecolor('black')
-        violin.set_alpha(0.6)
-    
-    # Create a custom legend patch.
-    group_patch = mpatches.Patch(color='#38bcf5', alpha=0.6, label=f'{group_name} (n = {len(data)})')
-    ax.legend(handles=[group_patch])
-    
-    # Labeling the axes and the plot title.
+    x = 0.5  # single group position
+
+    # 1) Violin (no interior lines)
+    parts = ax.violinplot([data],
+                          positions=[x],
+                          widths=violin_width,
+                          showmeans=False,
+                          showmedians=False,
+                          showextrema=False)
+    for pc in parts['bodies']:
+        pc.set_facecolor('#38bcf5')
+        pc.set_edgecolor('black')
+        pc.set_alpha(0.6)
+
+    # 2) Boxplot inside
+    ax.boxplot(data,
+               positions=[x],
+               widths=violin_width * 0.5,
+               showfliers=False,
+               patch_artist=True,
+               boxprops=dict(facecolor='white', edgecolor='black'),
+               medianprops=dict(color='black'),
+               whiskerprops=dict(color='black'),
+               capprops=dict(color='black'))
+
+    # 3) Scatter the individual points (jittered)
+    jitter_strength = violin_width / 8
+    x_jittered = x + np.random.uniform(-jitter_strength, jitter_strength, size=len(data))
+    ax.scatter(x_jittered, data, marker='o', zorder=3, color='blue', alpha=0.8)
+
+    # Legend
+    patch = mpatches.Patch(color='#38bcf5', alpha=0.6, label=f'{group_name} (n = {len(data)})')
+    ax.legend(handles=[patch])
+
+    # Labels & formatting
     ax.set_xlabel('Groups', fontsize=14)
     ax.set_ylabel(f'{stats_name} ({unit})', fontsize=14)
     ax.set_title(f'{stats_name} Distribution for {group_name}', fontsize=20)
-    
-    # Set the x-ticks and labels.
-    ax.set_xticks(x_positions)
+    ax.set_xticks([x])
     ax.set_xticklabels([group_name])
-    
-    plt.xlim((0, 1))
+    ax.set_xlim(0, 1)
+
+    # Save or show
     if export_path:
         plt.savefig(export_path, bbox_inches='tight')
     plt.show()

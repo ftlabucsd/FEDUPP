@@ -145,10 +145,10 @@ def find_first_good_meal(data:pd.DataFrame, time_threshold, pellet_threshold, mo
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
     if model_type == 'lstm': 
         model = RNNClassifier(input_size=1, hidden_size=400, num_layers=2, num_classes=2).to(device)
-        model.load_state_dict(torch.load('../data/LSTM_from_CASK.pth'))
+        model.load_state_dict(torch.load('../data/LSTM_from_CASK.pth', map_location='cpu'))
     elif model_type == 'cnn':
         model = CNNClassifier(num_classes=2, maxlen=4).to(device)
-        model.load_state_dict(torch.load('../data/CNN_from_CASK.pth'))
+        model.load_state_dict(torch.load('../data/CNN_from_CASK.pth', map_location='cpu'))
     else:
         print('Only support lstm and cnn.')
         return
