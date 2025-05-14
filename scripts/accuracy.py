@@ -11,7 +11,7 @@ def read_and_record(path:str, sheet:str, ending_corr:list, learned_time:list, ac
     df = read_excel_by_sheet(sheet, path, collect_time=True, 
                              cumulative_accuracy=True, remove_trivial=True, 
                              convert_large=True)
-    target_time = timedelta(hours=24)
+    target_time = timedelta(hours=24, minutes=30)
     df['time_diff'] = (df['Time_passed'] - target_time).abs()
     closest_accuracy = df.loc[df['time_diff'].idxmin(), 'Percent_Correct']
     df = df[:df['time_diff'].idxmin()]
@@ -37,29 +37,100 @@ def rr_csv(csv_path, ending_corr:list, learned_time:list):
     return df
 
 
-def graph_cumulative_acc(mice: list, group=None, export_path=None):
+def plot_cumulative_accuracy(
+    groups: list,
+    group_labels: list = None,
+    bin_size_sec: int = 10,
+    export_path: str = None
+):
     """
-    Graph the line plot for cumulative accuracy of certain group of mice
+    Plot mean ± SEM of Percent_Correct for one or more cohorts,
+    resampled onto a common time grid of `bin_size_sec` seconds.
 
-    Parameters:
-    mice: list of data pd.Dataframe data of mice in the group
-    group: group number to display on the output plot
+    Args:
+        groups:       list of cohorts; each cohort is a list of DataFrames.
+        group_labels: names for each cohort; defaults to G1, G2, …
+        bin_size_sec: bin width in seconds for resampling (default 10 s).
+        export_path:  file path to save the figure (optional).
     """
-    plt.figure(figsize=(15, 5), dpi=150)
+    if group_labels is None:
+        group_labels = [f"G{idx+1}" for idx in range(len(groups))]
 
-    cnt = 1
-    for each in mice:
-        each['Time_passed_hours'] = each['Time_passed'].dt.total_seconds() / 3600
-        sns.lineplot(data=each, x='Time_passed_hours', y='Percent_Correct', label=f'M{cnt}')
-        cnt += 1
-    plt.grid()
-    plt.title(f'Cumulative Accuracy for Cohort {group}', fontsize=24)
-    plt.xlabel('Session Time (hours)', fontsize=16)
-    plt.ylabel('Correct Rate (%)', fontsize=16)
-    plt.yticks(range(0, 110, 10))
-    plt.legend()
-    legend = plt.legend(title='Mice', fontsize=10)
-    legend.get_title().set_fontsize(12)
+    # colors for up to two groups; you can extend this list for more
+    palette = ['#425df5', '#f55442', '#42f58c', '#f5e142']
+
+    fig, ax = plt.subplots(figsize=(16, 6), dpi=150)
+
+    for grp_idx, (group, label) in enumerate(zip(groups, group_labels)):
+        binned_series = []
+
+        for subj_idx, df in enumerate(group):
+            
+            ts = df.set_index('Time_passed')['Percent_Correct']
+
+            # 1) resample onto a regular grid of bin_size_sec
+            resampled = (
+                ts
+                .resample(f"{bin_size_sec}S")
+                .mean()   # average within each bin
+                .ffill()  # forward-fill so it's truly cumulative
+            )
+
+            # 2) convert index from Timestamp to hours
+            hours = resampled.index.view('int64') / 1e9 / 3600
+            resampled.index = hours
+
+            # name it uniquely so concat keeps columns separate
+            resampled.name = f"{label}_{subj_idx}"
+            binned_series.append(resampled)
+
+        # 3) build wide DataFrame: rows=bins, cols=subjects
+        all_binned = pd.concat(binned_series, axis=1)
+
+        # 4) compute count, mean, std, sem
+        cutoff = 24 * 3600 // bin_size_sec
+        counts  = all_binned.count(axis=1).iloc[:cutoff]
+        mean_pc = all_binned.mean(axis=1).iloc[:cutoff]
+        std_pc  = all_binned.std(axis=1, ddof=0).iloc[:cutoff]
+        sem_pc  = std_pc / np.sqrt(counts)
+
+        # optionally mask SEM where too few subjects
+        sem_pc[counts < 2] = np.nan
+
+        # 5) plot
+        color = palette[grp_idx % len(palette)]
+        ax.plot(
+            mean_pc.index,
+            mean_pc.values,
+            label=f"{label} (n={len(group)})",
+            color=color,
+            linewidth=2
+        )
+        ax.fill_between(
+            mean_pc.index,
+            mean_pc.values - sem_pc.values,
+            mean_pc.values + sem_pc.values,
+            alpha=0.3,
+            color=color
+        )
+
+    # cosmetics
+    ax.set_xlabel("Time Passed (hours)", fontsize=24)
+    ax.set_ylabel("Percent Correct",    fontsize=24)
+    ax.set_ylim(30, 100)
+    ax.set_xticks([0, 4, 8, 12, 16, 20, 24])
+    ax.grid(True, linestyle='--', alpha=0.4)
+
+    title = "Cumulative Accuracy"
+    if len(group_labels) == 1:
+        title += f" for Cohort {group_labels[0]}"
+    else:
+        title += " for " + " vs. ".join(group_labels)
+    ax.set_title(title, fontsize=32)
+
+    ax.legend(fontsize=16, loc='upper left')
+
+    plt.tight_layout()
     if export_path:
         plt.savefig(export_path, bbox_inches='tight')
     plt.show()
