@@ -221,7 +221,7 @@ def graph_tranition_stats(data_stats: pd.DataFrame, blocks: list, sheet: str, ex
     bars2 = ax.bar(data_stats['Block_Index'][1::2], data_stats['Success_Rate'][1::2],
                 color='lightblue' if data_stats['Active_Poke'][1] == 'Right' else 'pink', alpha=0.7)
 
-    labels = data_stats['First_Meal_Time']
+    labels = data_stats['First_Good_Meal_Time']
     total_times = data_stats['Block_Time']
     for bar, label, total in zip(bars1, labels[::2], total_times[::2]):
         ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 1.75,  # Add small offset (0.01) to bar height
@@ -235,7 +235,7 @@ def graph_tranition_stats(data_stats: pd.DataFrame, blocks: list, sheet: str, ex
         ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.01,  # Add small offset (0.01) to bar height
                 total, ha='center', va='bottom', fontsize=12)
     
-    plt.annotate('First Meal Time (min) \n Block Length', 
+    plt.annotate('First Accurate Meal Time (min) \n Block Length', 
             xy=(bars1[0].get_x()+0.4, bars1[0].get_height() + 4.2), 
             xytext=(-90, 20),
             textcoords='offset points',
