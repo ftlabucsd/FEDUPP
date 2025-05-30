@@ -114,12 +114,13 @@ def get_transition_info(blocks: list, meal_config:list, reverse:bool) -> pd.Data
         active_poke = block.iloc[0]['Active_Poke']
 
         times = block['Time'].tolist()
+        block_time = round((times[-1] - times[0]).total_seconds() / 60, 2)
         meals,_ = find_meals_paper(block, meal_config[0], meal_config[1])
         time = round((meals[0][0] - times[0]).total_seconds() / 60, 2) if len(meals) > 0 else 'no meal'
-        
-        _, first_meal_time = find_first_good_meal(block, 60, 2, 'cnn')
-        if first_meal_time is None:
-            meal_1_good = round((times[-1] - times[0]).total_seconds() / 60, 2)
+
+        _, first_meal_time = find_first_good_meal(block, 60, 2, 'lstm')
+        if first_meal_time is None or first_meal_time > times[-1]:
+            meal_1_good = block_time
         else:
             meal_1_good = round((first_meal_time - times[0]).total_seconds() / 60, 2)
 
@@ -133,8 +134,8 @@ def get_transition_info(blocks: list, meal_config:list, reverse:bool) -> pd.Data
             'Success_Rate' : round(transitions.get('success_count')/size * 100, 2),
             'Active_Poke' : active_poke,
             'First_Meal_Time': time,
-            'First_Good_Meal_Time': meal_1_good,
-            'Block_Time': round((times[-1] - times[0]).total_seconds() / 60, 2),
+            'First_Good_Meal_Time': min(meal_1_good, block_time),
+            'Block_Time': block_time,
             'Incorrect_Pokes': size - transitions.get('success_count'),
             'Active': not (i in inactives)
         }
@@ -167,11 +168,7 @@ def first_meal_stats(data_stats: pd.DataFrame, ignore_inactive=False):
         total_list = total_list[active_idx]
         good_meal_list = good_meal_list[active_idx]
         
-    # print(time_list, total_list)
     avg_ratio = np.mean(good_meal_list/total_list)
-    # print(good_meal_list)
-    # print(total_list)
-    # print(good_meal_list/total_list)
     avg_time = np.mean(time_list)
     avg_good_time = np.median(good_meal_list)
     return avg_ratio, avg_time, avg_good_time
@@ -731,6 +728,214 @@ def graph_learning_results_single(data: list,
     # legend
     patch = mpatches.Patch(color='lightblue', alpha=0.8, label=f'{group_name} (n={len(data)})')
     ax.legend(handles=[patch])
+
+    if export_path:
+        plt.savefig(export_path, bbox_inches='tight')
+    plt.show()
+    
+
+def plot_learning_score_trend(
+    blocks_groups: list,
+    group_labels: list = None,
+    proportions: np.ndarray = None,
+    block_prop: float = 1.0,
+    export_path: str = None
+):
+    """
+    Plot mean ± SEM of learning_score for one or more groups,
+    evaluated at a grid of action_prop values.
+
+    Args:
+        blocks_groups: list of groups; each group is a list of `blocks` (one per subject)
+        group_labels:   names for each group; defaults to G1, G2, …
+        proportions:    1D array of action_prop values; defaults to np.linspace(0.05,1.0,20)
+        block_prop:     the block_prop to pass into learning_score (default 1.0)
+        export_path:    file path to save the figure (optional)
+    """
+    # default labels
+    if group_labels is None:
+        group_labels = [f"G{idx+1}" for idx in range(len(blocks_groups))]
+    # default sweep of action proportions (5%,10%,…,100%)
+    if proportions is None:
+        proportions = np.linspace(0.05, 1.0, 20)
+
+    # a simple palette for up to 4 groups
+    palette = ['#425df5', '#f55442', '#42f58c', '#f5e142']
+
+    fig, ax = plt.subplots(figsize=(16, 6), dpi=150)
+
+    for grp_idx, (blocks_list, label) in enumerate(zip(blocks_groups, group_labels)):
+        # build an (n_subjects × n_props) array of scores
+        score_matrix = np.array([
+            [learning_score(blocks, block_prop=block_prop, action_prop=p)
+             for p in proportions]
+            for blocks in blocks_list
+        ])
+        # compute mean and SEM across subjects
+        mean_scores = score_matrix.mean(axis=0)
+        sem_scores  = score_matrix.std(axis=0, ddof=0) / np.sqrt(score_matrix.shape[0])
+
+        color = palette[grp_idx % len(palette)]
+        ax.plot(
+            proportions,
+            mean_scores,
+            label=f"{label} (n={len(blocks_list)})",
+            color=color,
+            linewidth=2
+        )
+        ax.fill_between(
+            proportions,
+            mean_scores - sem_scores,
+            mean_scores + sem_scores,
+            alpha=0.3,
+            color=color
+        )
+
+    ax.set_xticks([0, 0.25, 0.50, 0.75, 1.0])
+    ax.set_xlabel("Action Proportion", fontsize=18)
+    ax.set_ylabel("Learning Score",    fontsize=18)
+    ax.set_title("Learning Score vs Action Proportion", fontsize=22)
+    ax.legend(fontsize=14, loc='best')
+    ax.grid(True, linestyle='--', alpha=0.4)
+
+    plt.tight_layout()
+    if export_path:
+        plt.savefig(export_path, bbox_inches='tight')
+    plt.show()
+
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+
+def find_meal_pellet_counts(
+    data: pd.DataFrame,
+    time_threshold: float = 60,
+    pellet_threshold: int = 2
+) -> list[int]:
+    """
+    Scan through all 'Pellet' events in `data` and return a list of
+    pellet‐counts for each meal. A meal is defined as a run of pellet
+    events where each is ≤ time_threshold seconds from the start.
+    Only runs with ≥ pellet_threshold pellets are counted.
+    """
+    # narrow to pellet rows & compute retrieval timestamps
+    df = data.loc[data['Event'] == 'Pellet'] .copy()
+    df['retrieval_timestamp'] = (
+        df['Time'] + pd.to_timedelta(df['collect_time'], unit='m')
+    )
+
+    meals = []
+    pellet_cnt = 0
+    meal_start_time = None
+
+    for _, row in df.iterrows():
+        t = row['retrieval_timestamp']
+        if meal_start_time is None:
+            # start new meal
+            meal_start_time = t
+            pellet_cnt = 1
+        else:
+            # still in same meal?
+            if (t - meal_start_time).total_seconds() <= time_threshold:
+                pellet_cnt += 1
+            else:
+                # close out old meal
+                if pellet_cnt >= pellet_threshold:
+                    meals.append(pellet_cnt)
+                # start a fresh meal
+                meal_start_time = t
+                pellet_cnt = 1
+
+    # final meal
+    if pellet_cnt >= pellet_threshold:
+        meals.append(pellet_cnt)
+
+    return meals
+
+
+def pellet_ratio_for_block(
+    block: pd.DataFrame,
+    proportion: float,
+    time_threshold: float = 60,
+    pellet_threshold: int = 2
+) -> float:
+    """
+    Take the first `proportion` of rows in block, count how many pellet‐events
+    fall into “meals” (via find_meal_pellet_counts), and return
+    (pellets_in_meals) / (total_pellets) in that slice.
+    """
+    n = int(len(block) * proportion)
+    sub = block.iloc[:n]
+
+    total_pellets = (sub['Event'] == 'Pellet').sum()
+    if total_pellets == 0:
+        return np.nan
+
+    meal_counts = find_meal_pellet_counts(
+        sub,
+        time_threshold=time_threshold,
+        pellet_threshold=pellet_threshold
+    )
+    pellets_in_meals = sum(meal_counts)
+    return pellets_in_meals / total_pellets
+
+
+def plot_pellet_ratio_trend(
+    blocks_groups: list[list[pd.DataFrame]],
+    group_labels: list[str] = None,
+    proportions: np.ndarray = None,
+    time_threshold: float = 60,
+    pellet_threshold: int = 2,
+    export_path: str = None
+):
+    """
+    For each group (list of block‐lists), sweep `proportions` and compute
+    the pellet‐in‐meal ratio per block, then plot mean±SEM across blocks.
+    """
+    if group_labels is None:
+        group_labels = [f"G{g+1}" for g in range(len(blocks_groups))]
+    if proportions is None:
+        proportions = np.linspace(0.05, 1.0, 20)
+
+    palette = ['#425df5', '#f55442', '#42f58c', '#f5e142']
+    fig, ax = plt.subplots(figsize=(16, 6), dpi=150)
+
+    for gi, (blocks_list, label) in enumerate(zip(blocks_groups, group_labels)):
+        # build matrix: rows=subjects, cols=proportions
+        mat = np.array([
+            [
+                # average this sample’s block‐wise ratios at proportion p
+                np.nanmean([
+                    pellet_ratio_for_block(
+                        block_df, p,
+                        time_threshold=time_threshold,
+                        pellet_threshold=pellet_threshold
+                    )
+                    for block_df in sample_blocks
+                ])
+                for p in proportions
+            ]
+            for sample_blocks in blocks_list
+        ])
+
+        mean_ratios = np.nanmean(mat, axis=0)
+        sem_ratios  = np.nanstd(mat, axis=0, ddof=0) / np.sqrt(np.sum(~np.isnan(mat), axis=0))
+
+        c = palette[gi % len(palette)]
+        ax.plot(proportions * 100, mean_ratios, label=f"{label} (n={len(blocks_list)})", color=c, linewidth=2)
+        ax.fill_between(proportions * 100,
+                        mean_ratios - sem_ratios,
+                        mean_ratios + sem_ratios,
+                        alpha=0.3, color=c)
+
+    ax.set_xlabel("Action Proportion (%)", fontsize=18)
+    ax.set_ylabel("Pellet‐in‐Meal Ratio", fontsize=18)
+    ax.set_title("Pellet‐in‐Meal Ratio vs Action Proportion", fontsize=22)
+    ax.set_xlim(0, 100)
+    ax.set_ylim(0, 1)
+    ax.grid(True, linestyle='--', alpha=0.4)
+    ax.legend(fontsize=14, loc='best')
+    plt.tight_layout()
 
     if export_path:
         plt.savefig(export_path, bbox_inches='tight')

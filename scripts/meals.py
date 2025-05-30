@@ -191,18 +191,20 @@ def find_first_good_meal(data:pd.DataFrame, time_threshold, pellet_threshold, mo
     idx = -1
     if len(temp_list) == 0: # no model-recognizable meal
         for each in meals_with_acc: # search meal with average accuracy of at least 75%
-            if np.mean(each[1]) >= 70:
+            if np.mean(each[1]) >= 80:
                 first_good_meal_index = idx+1
                 break
             idx += 1
         # if no high-accuracy meal, then use max time
-        if first_good_meal_index == None: first_good_meal_index = len(meals_with_acc) - 1
+        if first_good_meal_index == None: return 0, None
     else:
         meal_data = np.stack(temp_list)
         predicted = predict(model, meal_data)
         indices = np.where(predicted == 0)[0]
-        first_good_meal_index = np.where(predicted==0)[0][0] if indices.size > 0 else len(meals_with_acc) - 1
-
+        if indices.size > 0:
+            first_good_meal_index = np.where(predicted==0)[0][0]
+        else:
+            return 0, None
     return meals_with_acc, pd.to_datetime(meals_with_acc[first_good_meal_index][0])
 
 def extract_meal_acc_each(events: pd.DataFrame):
@@ -219,11 +221,8 @@ def extract_meal_acc_each(events: pd.DataFrame):
     return acc
 
 
-def extract_meals_data(data: pd.DataFrame, time_threshold=130, 
-                       pellet_threshold=3, verbose=False) -> list:
-    """
-    find meals in the behaviors. 5 pellets in 10 minutes is considered as a meal
-    """
+def extract_meals_data(data: pd.DataFrame, time_threshold=60, 
+                       pellet_threshold=2, verbose=False) -> list:
     df = data[data['Event'] == 'Pellet'].copy()
     df['retrieval_timestamp'] = df['Time'] + pd.to_timedelta(df['collect_time'], unit='m')
 
@@ -261,7 +260,7 @@ def extract_meals_data(data: pd.DataFrame, time_threshold=130,
     return meal_acc
 
 
-def find_meals_paper(data:pd.DataFrame, time_threshold=130, pellet_threshold=3):
+def find_meals_paper(data:pd.DataFrame, time_threshold=60, pellet_threshold=2):
     df = data[data['Event'] == 'Pellet'].copy()
     df['retrieval_timestamp'] = df['Time'] + pd.to_timedelta(df['collect_time'], unit='m')
 
