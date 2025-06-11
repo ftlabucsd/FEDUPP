@@ -260,46 +260,56 @@ def extract_meals_data(data: pd.DataFrame, time_threshold=60,
     return meal_acc
 
 
-def find_meals_paper(data:pd.DataFrame, time_threshold=60, pellet_threshold=2):
+def find_meals_paper(data:pd.DataFrame, time_threshold=60, pellet_threshold=2, in_meal_ratio=False):
     df = data[data['Event'] == 'Pellet'].copy()
     df['retrieval_timestamp'] = df['Time'] + pd.to_timedelta(df['collect_time'], unit='m')
 
-    meals = []
-    meal_acc = []
-    meal_start_time = None
-    meal_end_time = None
-    meal_start_index = None
+    total_pellets = len(df)            # denominator for the optional ratio
+    pellets_in_meals = 0               # numerator we will accumulate
 
-    pellet_cnt = 1 # record pellets in the meal
-    for index, row in df.iterrows():
-        current_time = row['retrieval_timestamp']  # Get current time from the 'Time' column
+    meals, meal_acc = [], []
 
+    meal_start_time = meal_end_time = None
+    meal_start_idx = None
+    pellet_cnt = 0
+
+    for idx, row in df.iterrows():
+        current_time = row['retrieval_timestamp']
+
+        # First pellet (or first after closing a meal) → open new meal window
         if meal_start_time is None:
-            meal_start_time = current_time
-            meal_end_time = current_time
-            meal_start_index = index
+            meal_start_time = meal_end_time = current_time
+            meal_start_idx = idx
+            pellet_cnt = 1
+            continue
 
-        # if current pellet is retrieved within 130 seconds after previous retrieval
-        if ((row['retrieval_timestamp'] - meal_start_time).total_seconds() <= time_threshold):
-            meal_end_time = current_time # extend meal end time
+        # Same meal if retrieved within threshold of previous pellet
+        if (current_time - meal_end_time).total_seconds() <= time_threshold:
+            meal_end_time = current_time
             pellet_cnt += 1
         else:
-            meal_events = data.loc[meal_start_index:index]
-            if pellet_cnt >= pellet_threshold and calculate_accuracy(meal_events) > 50:
+            # Close previous burst and decide whether it’s an accepted meal
+            burst_events = data.loc[meal_start_idx : idx - 1]  # inclusive slice
+            if pellet_cnt >= pellet_threshold and calculate_accuracy(burst_events) > 50:
                 meals.append([meal_start_time, meal_end_time])
-                meal_acc.append(calculate_accuracy(meal_events))
+                meal_acc.append(calculate_accuracy(burst_events))
+                pellets_in_meals += pellet_cnt
 
-            meal_start_time = current_time
-            meal_end_time = current_time
-            meal_start_index = index
+            # Start a new burst
+            meal_start_time = meal_end_time = current_time
+            meal_start_idx = idx
             pellet_cnt = 1
 
-    if pellet_cnt >= pellet_threshold:
+    burst_events = data.loc[meal_start_idx:]
+    if pellet_cnt >= pellet_threshold and calculate_accuracy(burst_events) > 50:
         meals.append([meal_start_time, meal_end_time])
-        meal_events = data.loc[meal_start_index:index]
-        meal_acc.append(calculate_accuracy(meal_events))
-    return meals, meal_acc
+        meal_acc.append(calculate_accuracy(burst_events))
+        pellets_in_meals += pellet_cnt
 
+    if in_meal_ratio:
+        meal_ratio = pellets_in_meals / total_pellets if total_pellets else 0
+        return meals, meal_acc, meal_ratio
+    return meals, meal_acc
 
 def extract_meals_for_model(data: pd.DataFrame, time_threshold=60, 
                        pellet_threshold=2) -> list:
