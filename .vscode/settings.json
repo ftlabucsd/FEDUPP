@@ -1,6 +1,5 @@
 {
     "python.analysis.extraPaths": [
         "./scripts",
-        "./HMM-GLM/glmhmm",
     ]
 }

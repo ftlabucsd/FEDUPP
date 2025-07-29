@@ -1,3 +1,8 @@
+"""
+This script provides helper functions for unsupervised learning tasks on FED3
+meal data. It includes utilities for data extraction, clustering, visualization,
+and dataset preparation for machine learning models.
+"""
 from collections import defaultdict
 from sklearn.decomposition import PCA
 from sklearn.cluster import KMeans
@@ -12,6 +17,14 @@ import pickle
 import torch
 
 def label_indices(labels):
+    """Groups indices by their corresponding labels.
+
+    Args:
+        labels (list or np.ndarray): A list of labels.
+
+    Returns:
+        defaultdict: A dictionary where keys are labels and values are lists of indices.
+    """
     result = defaultdict(list)
     for idx, val in enumerate(labels):
         result[val].append(idx)
@@ -19,6 +32,15 @@ def label_indices(labels):
 
 
 def index2meal(data_div: defaultdict, data:list):
+    """Converts a dictionary of label indices to a dictionary of meals.
+
+    Args:
+        data_div (defaultdict): A dictionary mapping labels to indices.
+        data (list): A list of all meals.
+
+    Returns:
+        defaultdict: A dictionary where keys are labels and values are lists of meals.
+    """
     data = np.array(data)
     meal_by_category = defaultdict()
     for key, val in data_div.items():
@@ -27,6 +49,15 @@ def index2meal(data_div: defaultdict, data:list):
 
 
 def extract_data_full_group(file_path, sheets):
+    """Extracts meal data from a group of sheets in an Excel file.
+
+    Args:
+        file_path (str): The path to the Excel file.
+        sheets (list): A list of sheet names to process.
+
+    Returns:
+        defaultdict: A dictionary where keys are the number of pellets and values are lists of meal accuracy sequences.
+    """
     data = defaultdict(list)
     for sheet in sheets:
         try:
@@ -46,6 +77,11 @@ def extract_data_full_group(file_path, sheets):
 
 
 def find_k_by_elbow(data:list):
+    """Uses the elbow method to find the optimal number of clusters (k) for KMeans.
+
+    Args:
+        data (list): The input data for clustering.
+    """
     k_values = range(1, 8)
     inertias = []
 
@@ -66,6 +102,15 @@ def find_k_by_elbow(data:list):
     
     
 def fit_model_single(data:list, k:int):
+    """Fits a KMeans model to the data and visualizes the clusters.
+
+    Args:
+        data (list): The input data for clustering.
+        k (int): The number of clusters.
+
+    Returns:
+        tuple: A tuple containing the fitted KMeans model and a dictionary of meals by category.
+    """
     kmeans = KMeans(n_clusters=k)
     kmeans.fit(data)
     labels = kmeans.labels_
@@ -79,6 +124,12 @@ def fit_model_single(data:list, k:int):
     return kmeans, meals_by_category
 
 def visualize_kmeans(data:list, labels:list):
+    """Visualizes the results of KMeans clustering using PCA for dimensionality reduction.
+
+    Args:
+        data (list): The input data that was clustered.
+        labels (list): The cluster labels for each data point.
+    """
     # Reducing dimensionality for visualization
     pca = PCA(n_components=2)
     reduced_data = pca.fit_transform(data)
@@ -94,6 +145,14 @@ def visualize_kmeans(data:list, labels:list):
 
 
 def read_data(filename:str) -> list:
+    """Reads data from a pickle file.
+
+    Args:
+        filename (str): The name of the pickle file.
+
+    Returns:
+        list: The data loaded from the file, or an empty list if the file doesn't exist.
+    """
     if os.path.exists(filename):
         with open(filename, 'rb') as file:
             data = pickle.load(file)
@@ -104,6 +163,12 @@ def read_data(filename:str) -> list:
 
 
 def update_data(filename:str, new_list:np.array):
+    """Appends new data to an existing pickle file.
+
+    Args:
+        filename (str): The name of the pickle file to update.
+        new_list (np.array): The new data to append.
+    """
     data = read_data(filename)
     print(f'Old data has {len(data)} items')
     data.extend(new_list.tolist())
@@ -113,6 +178,15 @@ def update_data(filename:str, new_list:np.array):
 
 
 def collect_meals_from_categories(meals_by_category:dict, good_class:list):
+    """Separates meals into 'good' and 'bad' categories based on cluster labels.
+
+    Args:
+        meals_by_category (dict): A dictionary of meals grouped by cluster label.
+        good_class (list): A list of labels corresponding to 'good' meal clusters.
+
+    Returns:
+        tuple: A tuple of two numpy arrays: (good_meals, bad_meals).
+    """
     bad_class = [each for each in meals_by_category.keys() if each not in good_class]
     good_meals = []
     bad_meals = []
@@ -125,6 +199,14 @@ def collect_meals_from_categories(meals_by_category:dict, good_class:list):
 
 
 def data_padding(data: list) -> np.array:
+    """Pads each meal in a list to a fixed length of 4 with -1.
+
+    Args:
+        data (list): A list of meals, where each meal is a list of accuracies.
+
+    Returns:
+        np.array: A numpy array of the padded meals.
+    """
     for each in data:
         size = len(each)
         while size < 4:
@@ -133,6 +215,15 @@ def data_padding(data: list) -> np.array:
     return np.array(data)
 
 def create_dataset_single_group(experiment:str, ctrl:bool):
+    """Creates a labeled dataset (features and labels) for a single experimental group.
+
+    Args:
+        experiment (str): The name of the experiment (e.g., 'CASK').
+        ctrl (bool): True if the group is a control group, False otherwise.
+
+    Returns:
+        tuple: A tuple containing the feature array (X) and label array (y).
+    """
     data_root = f'{experiment}_{"ctrl" if ctrl else "exp"}_'
 
     good_X = read_data(data_root+'good.pkl')
@@ -146,12 +237,31 @@ def create_dataset_single_group(experiment:str, ctrl:bool):
 
 
 def merge_dataset(ctrl_X:np.array, ctrl_y:np.array, exp_X:np.array, exp_y:np.array):
+    """Merges datasets from control and experimental groups.
+
+    Args:
+        ctrl_X (np.array): Features for the control group.
+        ctrl_y (np.array): Labels for the control group.
+        exp_X (np.array): Features for the experimental group.
+        exp_y (np.array): Labels for the experimental group.
+
+    Returns:
+        tuple: A tuple containing the merged feature array (X) and label array (y).
+    """
     X = np.vstack((ctrl_X, exp_X))
     y = np.concatenate(((ctrl_y, exp_y)))
     return X, y
 
 
 def dictionary2dataset(meal_by_n_pellet:dict):
+    """Converts a dictionary of meals into a padded tensor dataset.
+
+    Args:
+        meal_by_n_pellet (dict): A dictionary of meals, keyed by the number of pellets.
+
+    Returns:
+        torch.Tensor: A tensor of padded meal data.
+    """
     data = []
     for count in [3,4,5]:
         for meal in meal_by_n_pellet[count]:

@@ -1,23 +1,31 @@
+"""
+This script analyzes behavioral data from FED3 experiments, focusing on transitions
+between different states (e.g., left/right pokes) and learning performance. It
+includes functions to split data into blocks, calculate transition statistics,
+visualize learning trends, and assess learning scores.
+"""
 import os
 from datetime import timedelta
 import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
-import tools as tl
 import numpy as np
-from meals import find_meals_paper, find_first_good_meal
+from meals import find_meals_paper, find_first_good_meal, pellet_flip
+from preprocessing import get_bhv_num
 
 colors = {'Left': 'red', 'Right': 'blue', 'Pellet': 'green'}
 
 
 def split_data_to_blocks(data_dropped: pd.DataFrame, day=3) -> list:
-    """Split dataframe into blocks of same active poke
+    """Splits the behavioral data into blocks based on changes in the active poke.
 
     Args:
-        data_dropped (pd.DataFrame): behavior data
+        data_dropped (pd.DataFrame): The input DataFrame with behavioral data.
+        day (int, optional): The number of days of data to include. Defaults to 3.
 
     Returns:
-        list: list of blocks (number of switches of active poke)
+        list: A list of DataFrames, where each DataFrame represents a block of
+              continuous activity with the same active poke.
     """
     data_dropped = data_dropped[data_dropped['Time_passed'] < timedelta(days=day)]
     curr_poke = data_dropped['Active_Poke'][0]
@@ -35,13 +43,13 @@ def split_data_to_blocks(data_dropped: pd.DataFrame, day=3) -> list:
 
 
 def count_transitions(sub_frame: pd.DataFrame) -> dict:
-    """Count transitions in a block
+    """Counts the occurrences of different types of transitions between pokes.
 
     Args:
-        sub_frame (pd.DataFrame): the data of each block
+        sub_frame (pd.DataFrame): A DataFrame representing a single block of behavior.
 
     Returns:
-        dict: dictionary that contains 5 info we need
+        dict: A dictionary containing counts for each transition type and successful pokes.
     """
     transitions = {
         'Left_to_Left': 0,
@@ -69,13 +77,13 @@ def count_transitions(sub_frame: pd.DataFrame) -> dict:
     return transitions
 
 def count_pellet(sub_frame: pd.DataFrame) -> int:
-    """Count number of occurrence of pellets
+    """Counts the number of pellet events in a given data frame.
 
     Args:
-        sub_frame (pd.DataFrame): data of each block
+        sub_frame (pd.DataFrame): The DataFrame to process.
 
     Returns:
-        int: number of pellets
+        int: The number of pellet events.
     """
     pellet_count = 0
     
@@ -89,20 +97,27 @@ def count_pellet(sub_frame: pd.DataFrame) -> int:
 
 
 def remove_pellet(block: pd.DataFrame) -> pd.DataFrame:
+    """Removes pellet events from a block of data.
+
+    Args:
+        block (pd.DataFrame): The input block.
+
+    Returns:
+        pd.DataFrame: The block with pellet events removed.
+    """
     return block[block['Event'] != 'Pellet']
 
 
 def get_transition_info(blocks: list, meal_config:list, reverse:bool) -> pd.DataFrame:
-    """Get related statistics about each block
-    
-    Return a data frame with columns Block_Index, Left_to_Left, Left_to_Right,
-    Right_to_Right, Right_to_Left, Success_Count, Success_Rate, Active_Poke, Pellet_Rate
-    
+    """Calculates transition-related statistics for each block of data.
+
     Args:
-        blocks (list): list of all blocks
+        blocks (list): A list of DataFrames, each representing a block.
+        meal_config (list): A list containing time and pellet thresholds for meal definition.
+        reverse (bool): A flag indicating whether to reverse the active/inactive periods.
 
     Returns:
-        pd.DataFrame: stats
+        pd.DataFrame: A DataFrame with detailed statistics for each block.
     """
     new_add = []
     inactives = find_inactive_blocks(blocks, reverse=reverse)
@@ -156,6 +171,16 @@ def get_transition_info(blocks: list, meal_config:list, reverse:bool) -> pd.Data
 
 
 def first_meal_stats(data_stats: pd.DataFrame, ignore_inactive=False):
+    """Calculates statistics about the first meal in each block.
+
+    Args:
+        data_stats (pd.DataFrame): DataFrame with block statistics.
+        ignore_inactive (bool, optional): If True, inactive blocks are excluded. Defaults to False.
+
+    Returns:
+        tuple: A tuple containing the average ratio of first good meal time to block time,
+               average first meal time, and median first good meal time.
+    """
     data_stats = data_stats[:-1]
     total_list = data_stats['Block_Time'].to_numpy(dtype=np.float32)
     time_list = np.array([time if type(time) == float else total_list[idx] 
@@ -175,6 +200,15 @@ def first_meal_stats(data_stats: pd.DataFrame, ignore_inactive=False):
 
 
 def find_inactive_blocks(blocks:list, reverse):
+    """Identifies blocks that occur during the inactive (light) period.
+
+    Args:
+        blocks (list): A list of DataFrames, each representing a block.
+        reverse (bool): If True, identifies blocks in the active (dark) period instead.
+
+    Returns:
+        list: A list of indices of the inactive blocks.
+    """
     night_blocks = []
     block_start_index = 1
 
@@ -192,14 +226,13 @@ def find_inactive_blocks(blocks:list, reverse):
 
 
 def graph_tranition_stats(data_stats: pd.DataFrame, blocks: list, sheet: str, export_path=None):
-    """Graph Statistics of each block in transition
-    
-    Visualize proportion of each transition, the accuracy and active poke of each block
+    """Graphs transition statistics, success rates, and active pokes for each block.
 
     Args:
-        data_stats (pd.DataFrame): calculated statistics from the data
-        blocks (list): list of pd.DataFrame that is splitted from the complete data
-        path (str): path of original file path to get display info
+        data_stats (pd.DataFrame): DataFrame with transition statistics.
+        blocks (list): A list of block DataFrames.
+        sheet (str): The name of the data sheet, used for titling the plot.
+        export_path (str, optional): Path to save the plot. Defaults to None.
     """
     fig, ax = plt.subplots(figsize=(22, 12))
 
@@ -243,7 +276,7 @@ def graph_tranition_stats(data_stats: pd.DataFrame, blocks: list, sheet: str, ex
     ax.set_xlabel('Blocks', fontsize=16)
     ax.set_ylabel('Percentage(%)', color='black', fontsize=16)
 
-    info = tl.get_bhv_num(sheet)
+    info = get_bhv_num(sheet)
     night_blocks = find_inactive_blocks(blocks, reverse=False)
 
     for block_index in night_blocks:
@@ -275,89 +308,16 @@ def graph_tranition_stats(data_stats: pd.DataFrame, blocks: list, sheet: str, ex
         return
     plt.show()
     
-
-def graph_learning_trend_by_activity(data_stats: pd.DataFrame, blocks: list, path: str, 
-                                     block_prop=0.6, action_prop=0.5, export_root=None):
-    """
-    Graph Statistics of first 60% block in transition
-
-    Visualize accuracy of each transition, the accuracy and active poke of each block
-
-    Args:
-        data_stats (pd.DataFrame): calculated statistics from the data
-        blocks (list): list of pd.DataFrame that is split from the complete data
-        path (str): path of original file path to get display info
-        block_prop (float): proportion of the blocks used (Default is 0.6)
-        action_prop (float): proportion of the data in each block used (Default is 0.5) 
-    """
-    # Calculate cutoff based on block proportion
-    cutoff = int(len(data_stats) * block_prop)
-    data_stats = data_stats.iloc[:cutoff].reset_index(drop=True)
-    cut_blocks = blocks[:cutoff]
-    acc_in_block_by_prop = block_accuracy_by_proportion(cut_blocks, action_prop)
-
-    # Identify inactive and active block indices
-    info = tl.get_bhv_num(path)
-    night_blocks = find_inactive_blocks(cut_blocks, len(info)==1)
-    night_blocks = [each-1 for each in night_blocks]
-    active_blocks = [i for i in range(len(data_stats)) if i not in night_blocks]
-
-    # Split data_stats and accuracy into active and inactive periods
-    data_stats_active = data_stats.iloc[active_blocks]
-    data_stats_inactive = data_stats.iloc[night_blocks]
-    acc_active = [acc_in_block_by_prop[i] for i in active_blocks]
-    acc_inactive = [acc_in_block_by_prop[i] for i in night_blocks]
-
-    fig, (ax_active, ax_inactive) = plt.subplots(2, 1, figsize=(12, 8))
-    fig.subplots_adjust(hspace=0.3)  # Adjust space between subplots
-
-    colors_active = ['pink' if poke == 'Left' else 'lightblue' for poke in data_stats_active['Active_Poke']]
-    ax_active.bar(data_stats_active['Block_Index'], acc_active, color=colors_active, alpha=0.7)
-    ax_active.set_xlabel('Blocks', fontsize=12)
-    ax_active.set_ylabel('Success Rate (%)', color='black', fontsize=12)
-    ax_active.set_title('Accuracy during Active Periods', fontsize=16)
-    ax_active.set_xticks(data_stats_active['Block_Index'])
-    ax_active.set_yticks(range(0, 81, 20))
-    ax_active.grid(alpha=0.5, linestyle='--')
-
-    colors_inactive = ['pink' if poke == 'Left' else 'lightblue' for poke in data_stats_inactive['Active_Poke']]
-    ax_inactive.bar(data_stats_inactive['Block_Index'], acc_inactive, color=colors_inactive, alpha=0.7)
-    ax_inactive.set_xlabel('Blocks', fontsize=12)
-    ax_inactive.set_ylabel('Success Rate (%)', color='black', fontsize=12)
-    ax_inactive.set_title('Accuracy during Inactive Periods', fontsize=16)
-    ax_inactive.set_xticks(data_stats_inactive['Block_Index'])
-    ax_inactive.set_yticks(range(0, 81, 20))
-    ax_inactive.grid(alpha=0.5, linestyle='--')
-
-    left_patch = mpatches.Patch(color='pink', alpha=0.5, label='Left Active')
-    right_patch = mpatches.Patch(color='lightblue', alpha=0.5, label='Right Active')
-
-    ax_active.legend(handles=[left_patch, right_patch], loc='upper right', fontsize=9)
-    ax_inactive.legend(handles=[left_patch, right_patch], loc='upper right', fontsize=9)
-
-    if len(info) == 2:
-        fig.suptitle(f'Accuracy by Switch for Group {info[0]} Mouse {info[1]}', fontsize=18)
-    else:
-        fig.suptitle(f'Accuracy by Switch for Mouse {info[0]}', fontsize=18)
-
-    if export_root:
-        path = os.path.join(export_root, 'Supplementary 5/', path.replace('.', '')+'.svg')
-        plt.savefig(path, bbox_inches='tight')
-    plt.show()
-
-    
     
 def graph_learning_trend(data_stats: pd.DataFrame, blocks: list, path: str, block_prop=0.6, action_prop=0.5):
-    """Graph Statistics of first 60% block in transition
-    
-    Visualize accuracy of each transition, the accuracy and active poke of each block
+    """Graphs the learning trend over a proportion of blocks.
 
     Args:
-        data_stats (pd.DataFrame): calculated statistics from the data
-        blocks (list): list of pd.DataFrame that is splitted from the complete data
-        path (str): path of original file path to get display info
-        proportion (float): proportion of the blocks used (Default is 0.6)
-        action_prop (float): proportion of the data in each block used (Default is 0.5) 
+        data_stats (pd.DataFrame): DataFrame with block statistics.
+        blocks (list): List of block DataFrames.
+        path (str): Path to the original data file for metadata.
+        block_prop (float, optional): Proportion of blocks to analyze. Defaults to 0.6.
+        action_prop (float, optional): Proportion of actions within each block to analyze. Defaults to 0.5.
     """
     fig, ax = plt.subplots(figsize=(14, 8))
     
@@ -374,7 +334,7 @@ def graph_learning_trend(data_stats: pd.DataFrame, blocks: list, path: str, bloc
     ax.set_xlabel('Blocks', fontsize=16)
     ax.set_ylabel('Percentage(%)', color='black', fontsize=16)
 
-    info = tl.get_bhv_num(path)
+    info = get_bhv_num(path)
     night_blocks = find_inactive_blocks(blocks, False)
     
     for block_index in night_blocks:
@@ -405,8 +365,13 @@ def graph_learning_trend(data_stats: pd.DataFrame, blocks: list, path: str, bloc
 
 
 def accuracy(group: pd.DataFrame):
-    """
-    Calculate the percent correct(0-100) in a interval of getting correct poke
+    """Calculates the percentage of correct pokes in a given interval.
+
+    Args:
+        group (pd.DataFrame): DataFrame for a specific interval.
+
+    Returns:
+        float: The accuracy percentage (0-100).
     """ 
     group = group[group['Event'] != 'Pellet']
     total_events = len(group)
@@ -420,6 +385,15 @@ def accuracy(group: pd.DataFrame):
     
     
 def block_accuracy_by_proportion(blocks: list, proportion: float):
+    """Calculates the accuracy for a specified proportion of each block.
+
+    Args:
+        blocks (list): A list of block DataFrames.
+        proportion (float): The proportion of each block to consider for accuracy calculation.
+
+    Returns:
+        list: A list of accuracy values for each block.
+    """
     acc = []
     for block in blocks:
         size = int(len(block) * proportion)
@@ -428,23 +402,30 @@ def block_accuracy_by_proportion(blocks: list, proportion: float):
 
 
 def learning_score(blocks: list, block_prop=0.5, action_prop=0.8) -> float:
-    """Calculate learning score for each sample
-    
-    We take first proportion amount of the data to calculate accuracy, 
-    which indicates the 
+    """Calculates a learning score based on accuracy in a proportion of blocks and actions.
 
     Args:
-        blocks (list): list of all splited blocks of each mouse
-        proportion (float): the proportion of the data we use to measure learning (Default=0.5) 
+        blocks (list): A list of block DataFrames.
+        block_prop (float, optional): The proportion of initial blocks to use. Defaults to 0.5.
+        action_prop (float, optional): The proportion of initial actions within each block to use. Defaults to 0.8.
 
     Returns:
-        float: score calculated
+        float: The calculated learning score.
     """
     cutoff = int(len(blocks)*block_prop)
     return np.mean(block_accuracy_by_proportion(blocks=blocks[:cutoff], proportion=action_prop))
 
 
 def learning_result(blocks, action_prop=0.25) -> float:
+    """Calculates the final performance accuracy on the later part of each block.
+
+    Args:
+        blocks (list): A list of block DataFrames.
+        action_prop (float, optional): The proportion of the beginning of each block to exclude. Defaults to 0.25.
+
+    Returns:
+        float: The mean accuracy over the specified final portions of the blocks.
+    """
     results = [accuracy(block[int(len(block)*action_prop):]) for block in blocks]
     return np.mean(results)
 
@@ -457,9 +438,16 @@ def graph_learning_score(ctrl: list,
                          proportion=None,
                          export_path=None,
                          verbose=True):
-    """
-    Graph learning score of two groups using violin + box + scatter.
-    Colors: lightblue violin / #1405eb scatter for ctrl; yellow violin / #f28211 scatter for exp.
+    """Graphs the learning scores of two groups using a violin plot with an inset box plot.
+
+    Args:
+        ctrl (list): A list of learning scores for the control group.
+        exp (list): A list of learning scores for the experimental group.
+        width (float, optional): The width of the violin plots. Defaults to 0.4.
+        group_names (list, optional): Names for the groups. Defaults to ['Control', 'Experiment'].
+        proportion (float, optional): The proportion of data used, for labeling. Defaults to None.
+        export_path (str, optional): Path to save the plot. Defaults to None.
+        verbose (bool, optional): If True, prints summary statistics. Defaults to True.
     """
     # summary stats
     ctrl_mean, exp_mean = np.mean(ctrl), np.mean(exp)
@@ -533,10 +521,17 @@ def graph_learning_score_single(data: list,
                                 proportion=None,
                                 export_path=None,
                                 verbose=True):
+    """Graphs the learning score of a single group using a violin plot with a box plot.
+
+    Args:
+        data (list): A list of learning scores.
+        width (float, optional): The width of the violin plot. Defaults to 0.4.
+        group_name (str, optional): The name of the group. Defaults to None.
+        proportion (float, optional): The proportion of data used, for labeling. Defaults to None.
+        export_path (str, optional): Path to save the plot. Defaults to None.
+        verbose (bool, optional): If True, prints summary statistics. Defaults to True.
     """
-    Graph learning score for a single group using violin + box + scatter.
-    Colors: lightblue violin / #1405eb scatter.
-    """
+    # summary stats
     mean_val = np.mean(data)
     se_val   = np.std(data)/np.sqrt(len(data))
     if group_name is None:
@@ -600,9 +595,16 @@ def graph_learning_results(ctrl: list,
                            proportion=None,
                            export_path=None,
                            verbose=True):
-    """
-    Graph accuracy of two groups using violin + box + scatter.
-    Colors: lightblue violin / #1405eb scatter for ctrl; yellow violin / #f28211 scatter for exp.
+    """Graphs the learning results (accuracy) of two groups using a violin and box plot.
+
+    Args:
+        ctrl (list): List of accuracy scores for the control group.
+        exp (list): List of accuracy scores for the experimental group.
+        width (float, optional): Width of the violin plots. Defaults to 0.4.
+        group_names (list, optional): Names for the groups. Defaults to None.
+        proportion (float, optional): Proportion of data used for labeling. Defaults to None.
+        export_path (str, optional): Path to save the plot. Defaults to None.
+        verbose (bool, optional): If True, prints summary statistics. Defaults to True.
     """
     ctrl_mean, exp_mean = np.mean(ctrl), np.mean(exp)
     ctrl_se,   exp_se   = np.std(ctrl)/np.sqrt(len(ctrl)), np.std(exp)/np.sqrt(len(exp))
@@ -674,9 +676,15 @@ def graph_learning_results_single(data: list,
                                   proportion=None,
                                   export_path=None,
                                   verbose=True):
-    """
-    Graph accuracy for a single group using violin + box + scatter.
-    Colors: lightblue violin / #1405eb scatter.
+    """Graphs the learning result (accuracy) for a single group.
+
+    Args:
+        data (list): List of accuracy scores.
+        width (float, optional): Width of the violin plot. Defaults to 0.4.
+        group_name (str, optional): Name of the group. Defaults to None.
+        proportion (float, optional): Proportion of data used for labeling. Defaults to None.
+        export_path (str, optional): Path to save the plot. Defaults to None.
+        verbose (bool, optional): If True, prints summary statistics. Defaults to True.
     """
     mean_val = np.mean(data)
     se_val   = np.std(data)/np.sqrt(len(data))
@@ -741,16 +749,14 @@ def plot_learning_score_trend(
     block_prop: float = 1.0,
     export_path: str = None
 ):
-    """
-    Plot mean ± SEM of learning_score for one or more groups,
-    evaluated at a grid of action_prop values.
+    """Plots the trend of learning scores as a function of action proportion.
 
     Args:
-        blocks_groups: list of groups; each group is a list of `blocks` (one per subject)
-        group_labels:   names for each group; defaults to G1, G2, …
-        proportions:    1D array of action_prop values; defaults to np.linspace(0.05,1.0,20)
-        block_prop:     the block_prop to pass into learning_score (default 1.0)
-        export_path:    file path to save the figure (optional)
+        blocks_groups (list): A list of groups, where each group is a list of block lists (one per subject).
+        group_labels (list, optional): Names for each group. Defaults to None.
+        proportions (np.ndarray, optional): An array of action proportions to evaluate. Defaults to a linspace.
+        block_prop (float, optional): The block proportion to pass to the learning_score function. Defaults to 1.0.
+        export_path (str, optional): Path to save the figure. Defaults to None.
     """
     # default labels
     if group_labels is None:
@@ -812,11 +818,19 @@ def find_meal_pellet_counts(
     time_threshold: float = 60,
     pellet_threshold: int = 2
 ) -> list[int]:
-    """
-    Scan through all 'Pellet' events in `data` and return a list of
-    pellet‐counts for each meal. A meal is defined as a run of pellet
-    events where each is ≤ time_threshold seconds from the start.
-    Only runs with ≥ pellet_threshold pellets are counted.
+    """Scans for pellet events and returns a list of pellet counts for each meal.
+
+    A meal is defined as a series of pellet events where each event is within
+    `time_threshold` seconds of the start of the meal. Only meals with at least
+    `pellet_threshold` pellets are counted.
+
+    Args:
+        data (pd.DataFrame): The input DataFrame containing event data.
+        time_threshold (float, optional): The maximum time between pellets in a meal. Defaults to 60.
+        pellet_threshold (int, optional): The minimum number of pellets to constitute a meal. Defaults to 2.
+
+    Returns:
+        list[int]: A list of pellet counts for each identified meal.
     """
     # narrow to pellet rows & compute retrieval timestamps
     df = data.loc[data['Event'] == 'Pellet'] .copy()
@@ -859,10 +873,16 @@ def pellet_ratio_for_block(
     time_threshold: float = 60,
     pellet_threshold: int = 2
 ) -> float:
-    """
-    Take the first `proportion` of rows in block, count how many pellet‐events
-    fall into “meals” (via find_meal_pellet_counts), and return
-    (pellets_in_meals) / (total_pellets) in that slice.
+    """Calculates the ratio of pellets within meals to total pellets for a proportion of a block.
+
+    Args:
+        block (pd.DataFrame): The DataFrame for a single block.
+        proportion (float): The proportion of the block to analyze.
+        time_threshold (float, optional): Time threshold for defining a meal. Defaults to 60.
+        pellet_threshold (int, optional): Pellet threshold for defining a meal. Defaults to 2.
+
+    Returns:
+        float: The ratio of pellets in meals to total pellets. Returns np.nan if no pellets.
     """
     n = int(len(block) * proportion)
     sub = block.iloc[:n]
@@ -888,9 +908,15 @@ def plot_pellet_ratio_trend(
     pellet_threshold: int = 2,
     export_path: str = None
 ):
-    """
-    For each group (list of block‐lists), sweep `proportions` and compute
-    the pellet‐in‐meal ratio per block, then plot mean±SEM across blocks.
+    """Plots the trend of the pellet-in-meal ratio as a function of action proportion.
+
+    Args:
+        blocks_groups (list[list[pd.DataFrame]]): A list of groups, each containing lists of blocks for subjects.
+        group_labels (list[str], optional): Names for each group. Defaults to None.
+        proportions (np.ndarray, optional): Proportions to sweep over. Defaults to a linspace.
+        time_threshold (float, optional): Time threshold for meal definition. Defaults to 60.
+        pellet_threshold (int, optional): Pellet threshold for meal definition. Defaults to 2.
+        export_path (str, optional): Path to save the plot. Defaults to None.
     """
     if group_labels is None:
         group_labels = [f"G{g+1}" for g in range(len(blocks_groups))]

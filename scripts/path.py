@@ -1,3 +1,7 @@
+"""
+This script manages file paths for the FED3 data analysis project and organizes
+data sheets into cohorts.
+"""
 from preprocessing import get_all_sheet_names
 
 fr1_ctrl_path = '../data/FR1_ctrl.xlsx'
@@ -50,6 +54,14 @@ rev_female_sheets = sorted(rev_female_raw)
 # cohort 3: 9-12;
 # cohort 4: C groups
 def group_by_cohort(sheets):
+    """Groups a list of sheet names into cohorts based on their naming convention.
+
+    Args:
+        sheets (list): A list of sheet names (e.g., 'C1.M1', 'B2.M3').
+
+    Returns:
+        list: A list of lists, where each inner list represents a cohort of sheet names.
+    """
     cohorts = [[], [], [], []]
     for sheet_name in sheets:
         group_info = sheet_name.split('.')[0]
@@ -72,7 +84,3 @@ fr1_ctrl_cohorts = group_by_cohort(fr1_ctrl_raw)
 fr1_cask_cohorts = group_by_cohort(fr1_cask_raw)
 rev_ctrl_cohorts = group_by_cohort(rev_ctrl_raw)
 rev_cask_cohorts = group_by_cohort(rev_cask_raw)
-# print(fr1_ctrl_cohorts,'\n')
-# print(fr1_cask_cohorts,'\n')
-# print(rev_ctrl_cohorts,'\n')
-# print(rev_cask_cohorts,'\n')

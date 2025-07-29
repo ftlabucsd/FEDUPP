@@ -1,3 +1,8 @@
+"""
+This script defines and implements neural network models (RNN and CNN) for classifying
+meal-related time-series data. It includes classes for datasets, the classifiers
+themselves, and functions for training, evaluation, and prediction.
+"""
 import numpy as np
 import torch
 import torch.nn as nn
@@ -8,19 +13,35 @@ device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
 
 class TimeSeriesDataset(Dataset):
+    """A custom PyTorch Dataset for time-series data."""
     def __init__(self, X, y):
+        """
+        Args:
+            X (torch.Tensor): The input features, with shape (num_samples, seq_len).
+            y (torch.Tensor): The corresponding labels, with shape (num_samples,).
+        """
         self.X = X  # Tensor of shape (num_samples, seq_len)
         self.y = y  # Tensor of shape (num_samples,)
 
     def __len__(self):
+        """Returns the total number of samples."""
         return len(self.y)
         
     def __getitem__(self, idx):
+        """Returns a single sample and its label."""
         return self.X[idx], self.y[idx]
     
     
 class RNNClassifier(nn.Module):
+    """A Recurrent Neural Network (RNN) classifier using LSTM layers."""
     def __init__(self, input_size=1, hidden_size=16, num_layers=1, num_classes=2):
+        """
+        Args:
+            input_size (int): The number of features in the input.
+            hidden_size (int): The number of features in the hidden state.
+            num_layers (int): The number of recurrent layers.
+            num_classes (int): The number of output classes.
+        """
         super(RNNClassifier, self).__init__()
         self.hidden_size = hidden_size
         self.num_layers = num_layers
@@ -39,7 +60,13 @@ class RNNClassifier(nn.Module):
 
 
 class CNNClassifier(nn.Module):
+    """A 1D Convolutional Neural Network (CNN) for time-series classification."""
     def __init__(self, num_classes=2, maxlen=4):
+        """
+        Args:
+            num_classes (int): The number of output classes.
+            maxlen (int): The maximum length of the input sequences.
+        """
         super(CNNClassifier, self).__init__()
         self.conv1 = nn.Conv1d(in_channels=1, out_channels=16, kernel_size=2)
         self.relu = nn.ReLU()
@@ -72,6 +99,20 @@ class CNNClassifier(nn.Module):
 
 def train(model:nn.Module, lr:float, num_epochs:int, train_loader:DataLoader, 
           X_test_tensor:torch.tensor, y_test_tensor:torch.tensor):
+    """
+    Trains a given neural network model.
+
+    Args:
+        model (nn.Module): The model to be trained.
+        lr (float): The learning rate for the optimizer.
+        num_epochs (int): The number of training epochs.
+        train_loader (DataLoader): The DataLoader for the training data.
+        X_test_tensor (torch.Tensor): The test features.
+        y_test_tensor (torch.Tensor): The test labels.
+
+    Returns:
+        nn.Module: The trained model.
+    """
     
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.Adam(model.parameters(), lr=lr)
@@ -114,6 +155,16 @@ def train(model:nn.Module, lr:float, num_epochs:int, train_loader:DataLoader,
 
 def evaluate_meals_by_groups(model:nn.Module, ctrl_input:torch.Tensor, ctrl_y:torch.Tensor,
                              exp_input:torch.Tensor, exp_y:torch.Tensor):
+    """
+    Evaluates the model's performance on control and experimental groups.
+
+    Args:
+        model (nn.Module): The trained model.
+        ctrl_input (torch.Tensor): Input data for the control group.
+        ctrl_y (torch.Tensor): Labels for the control group.
+        exp_input (torch.Tensor): Input data for the experimental group.
+        exp_y (torch.Tensor): Labels for the experimental group.
+    """
     model.eval()
     with torch.no_grad():
         outputs_ctrl = model(ctrl_input)
@@ -137,6 +188,14 @@ def evaluate_meals_by_groups(model:nn.Module, ctrl_input:torch.Tensor, ctrl_y:to
 
 
 def evaluate_meals_on_new_data(model:nn.Module, ctrl_input:torch.Tensor, exp_input:torch.Tensor):
+    """
+    Evaluates the model on new, unlabeled data from control and experimental groups.
+
+    Args:
+        model (nn.Module): The trained model.
+        ctrl_input (torch.Tensor): New input data for the control group.
+        exp_input (torch.Tensor): New input data for the experimental group.
+    """
     ctrl_input, exp_input = ctrl_input.to(device), exp_input.to(device)
     model.eval()
     with torch.no_grad():
@@ -156,6 +215,16 @@ def evaluate_meals_on_new_data(model:nn.Module, ctrl_input:torch.Tensor, exp_inp
 
 
 def predict(model:nn.Module, input):
+    """
+    Makes predictions on new data using the trained model.
+
+    Args:
+        model (nn.Module): The trained model.
+        input (array-like or torch.Tensor): The input data for prediction.
+
+    Returns:
+        np.ndarray: The predicted class labels.
+    """
     if type(input) != torch.Tensor: input = torch.Tensor(input)
     input = input.to(device)
 
@@ -167,5 +236,11 @@ def predict(model:nn.Module, input):
     return predicted_ctrl.cpu().numpy()
 
 def count_parameters(model:nn.Module):
+    """
+    Counts the number of trainable parameters in a model.
+
+    Args:
+        model (nn.Module): The model to inspect.
+    """
     trainable_params = sum(p.numel() for p in model.parameters())
     print(f'Trainable parameters: {trainable_params}')

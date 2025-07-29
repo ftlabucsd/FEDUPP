@@ -1,3 +1,8 @@
+"""
+This script provides functions for analyzing meal patterns in FED3 data.
+It includes methods for identifying meals, calculating meal-related statistics,
+and visualizing meal data.
+"""
 from collections import defaultdict
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -8,10 +13,20 @@ import numpy as np
 from accuracy import find_night_index, calculate_accuracy
 from meal_classifiers import predict, RNNClassifier, CNNClassifier
 import torch
+from preprocessing import read_excel_by_sheet, get_bhv_num
+import os
 
 plt.rcParams['figure.figsize'] = (20, 6)
 
 def pad_meal(each:list):
+    """Pads a list with -1 until it reaches a length of 4.
+
+    Args:
+        each (list): The list to pad.
+
+    Returns:
+        list: The padded list.
+    """
     size = len(each)
     while size < 4:
         each.append(-1)
@@ -19,48 +34,16 @@ def pad_meal(each:list):
     return each
 
 
-def get_daily_pellet_counts(df, time_column='Time', pellet_column='Pellet_Count'):
-    # df = pd.read_csv(input_csv)
-    df[time_column] = pd.to_datetime(df[time_column])
-    df = df.sort_values(time_column)
-    
-    df['date'] = df[time_column].dt.date
-    daily_last = df.groupby('date')[pellet_column].last().sort_index()
-
-    daily_counts = []
-    last_values = daily_last.tolist()
-    
-    if last_values:
-        daily_counts.append(last_values[0])
-        for prev, curr in zip(last_values, last_values[1:]):
-            daily_counts.append(curr - prev)
-    return daily_counts
-
-def plot_daily_pellet_counts(daily_counts_2d, group, export_path=None):
-    plt.figure(figsize=(10, 6), dpi=150)
-    
-    for i, counts in enumerate(daily_counts_2d):
-        plt.plot(counts, marker='o', label=f"Mouse {i+1}")
-    
-    plt.xlabel("Day Index")
-    plt.ylabel("Daily Pellet Count")
-    plt.title(f"Daily Pellet Count of {group} Group")
-    plt.grid()
-    plt.legend()
-    plt.tight_layout()
-    if export_path:
-        plt.savefig(export_path, bbox_inches='tight')
-    plt.show()
-
-
 def pellet_flip(data: pd.DataFrame) -> pd.DataFrame:
-    """return a dataframe with 10-min interval and pellet count in this interval
+    """Aggregates pellet events into 10-minute intervals and counts the
+    number of pellets in each interval.
 
     Args:
-        data (pd.DataFrame): raw dataframe processed with pipeline
+        data (pd.DataFrame): A DataFrame containing FED3 data, including a 'Time'
+                             column and an 'Event' column.
 
     Returns:
-        pd.DataFrame: data with 10-min interval and pellet count
+        pd.DataFrame: A DataFrame with 'Interval_Start' and 'Pellet_Count' columns.
     """
     data = data.set_index('Time')
     grouped_data = data[data['Event'] == 'Pellet'].resample('10min').size().reset_index()
@@ -70,34 +53,28 @@ def pellet_flip(data: pd.DataFrame) -> pd.DataFrame:
 
 
 def average_pellet(group: pd.DataFrame) -> float:
-    """return average day pellet count in a session
+    """Calculates the average number of pellets consumed per 24-hour period.
 
     Args:
-        group (pd.DataFrame): data processed by pellet flip
+        group (pd.DataFrame): A DataFrame with 'Interval_Start' and 'Pellet_Count'
+                              columns, as returned by pellet_flip().
 
     Returns:
-        float: average pellet count
+        float: The average number of pellets per day.
     """
     total_hr = (group['Interval_Start'].max()-group['Interval_Start'].min()).total_seconds() / 3600
     total_pellet = group['Pellet_Count'].sum()
     return round(24*total_pellet / total_hr, 2)
 
 
-def find_pellet_frequency(data: pd.DataFrame) -> pd.DataFrame:
-    """find number of pellet in every 10 minutes
-    return a new data frame records the 10 minutes pellet
-    """
-    data = data.drop(['Pellet_Count'], axis='columns')
-    data.set_index('Time', inplace=True)
-    grouped_data = data[data['Event'] == 'Pellet'].resample('10min').size().reset_index()
-    grouped_data.columns = ['Interval_Start', 'Pellet_Count']
-    
-    return grouped_data
-
-
 def graph_pellet_frequency(grouped_data: pd.DataFrame, bhv, num, export_path=None):
-    """graph histogram for pellet frequency
-    histogram analysis
+    """Generates a bar plot showing the frequency of pellet consumption over time.
+
+    Args:
+        grouped_data (pd.DataFrame): DataFrame with pellet counts per time interval.
+        bhv (str): Behavior group identifier.
+        num (str): Mouse number identifier.
+        export_path (str, optional): Path to save the generated plot. Defaults to None.
     """
     ax = sns.barplot(data=grouped_data, x='Interval_Start', y='Pellet_Count', color='#000099', alpha=0.5)
 
@@ -139,6 +116,19 @@ def graph_pellet_frequency(grouped_data: pd.DataFrame, bhv, num, export_path=Non
     plt.show()
 
 def find_first_good_meal(data:pd.DataFrame, time_threshold, pellet_threshold, model_type='cnn'):
+    """Identifies the first "good" meal in a session based on a classification model.
+
+    Args:
+        data (pd.DataFrame): The raw behavior data.
+        time_threshold (int): The maximum time in seconds between pellets to be considered part of the same meal.
+        pellet_threshold (int): The minimum number of pellets required to form a meal.
+        model_type (str, optional): The type of model to use ('lstm' or 'cnn'). Defaults to 'cnn'.
+
+    Returns:
+        tuple: A tuple containing:
+            - list: A list of all identified meals with their accuracies.
+            - datetime or None: The timestamp of the first good meal, or None if no good meal is found.
+    """
     df = data[data['Event'] == 'Pellet'].copy()
     df['retrieval_timestamp'] = df['Time'] + pd.to_timedelta(df['collect_time'], unit='m')
     
@@ -208,6 +198,14 @@ def find_first_good_meal(data:pd.DataFrame, time_threshold, pellet_threshold, mo
     return meals_with_acc, pd.to_datetime(meals_with_acc[first_good_meal_index][0])
 
 def extract_meal_acc_each(events: pd.DataFrame):
+    """Calculates the accuracy of pellet retrieval for each inter-pellet interval within a meal.
+
+    Args:
+        events (pd.DataFrame): A DataFrame slice representing the events within a single meal.
+
+    Returns:
+        list: A list of accuracy values for each interval between pellets in the meal.
+    """
     acc = []
     pellet_indices = events.index[events['Event'] == 'Pellet'].tolist()
 
@@ -223,6 +221,18 @@ def extract_meal_acc_each(events: pd.DataFrame):
 
 def extract_meals_data(data: pd.DataFrame, time_threshold=60, 
                        pellet_threshold=2, verbose=False) -> list:
+    """Extracts all meals from the data and groups them by the number of pellets.
+
+    Args:
+        data (pd.DataFrame): The raw behavior data.
+        time_threshold (int, optional): The maximum time between pellets for a meal. Defaults to 60.
+        pellet_threshold (int, optional): The minimum number of pellets for a meal. Defaults to 2.
+        verbose (bool, optional): If True, prints additional information. Defaults to False.
+
+    Returns:
+        defaultdict: A dictionary where keys are the number of pellets in a meal and
+                     values are lists of accuracy sequences for each meal.
+    """
     df = data[data['Event'] == 'Pellet'].copy()
     df['retrieval_timestamp'] = df['Time'] + pd.to_timedelta(df['collect_time'], unit='m')
 
@@ -261,6 +271,21 @@ def extract_meals_data(data: pd.DataFrame, time_threshold=60,
 
 
 def find_meals_paper(data:pd.DataFrame, time_threshold=60, pellet_threshold=2, in_meal_ratio=False):
+    """Identifies meals based on the criteria defined in a research paper.
+
+    Args:
+        data (pd.DataFrame): The raw behavior data.
+        time_threshold (int, optional): The maximum time between pellets for a meal. Defaults to 60.
+        pellet_threshold (int, optional): The minimum number of pellets for a meal. Defaults to 2.
+        in_meal_ratio (bool, optional): If True, also returns the ratio of pellets
+                                     consumed within meals. Defaults to False.
+
+    Returns:
+        tuple: A tuple containing:
+            - list: A list of meal time intervals.
+            - list: A list of accuracies for each meal.
+            - float (optional): The ratio of pellets in meals to total pellets.
+    """
     df = data[data['Event'] == 'Pellet'].copy()
     df['retrieval_timestamp'] = df['Time'] + pd.to_timedelta(df['collect_time'], unit='m')
 
@@ -313,8 +338,20 @@ def find_meals_paper(data:pd.DataFrame, time_threshold=60, pellet_threshold=2, i
 
 def extract_meals_for_model(data: pd.DataFrame, time_threshold=60, 
                        pellet_threshold=2) -> list:
-    """
-    find meals in the behaviors. 5 pellets in 10 minutes is considered as a meal
+    """Extracts meal data formatted for input to a machine learning model.
+
+    This function identifies meals based on the provided time and pellet thresholds,
+    pads the meal data to a uniform length, and returns the meals and their lengths.
+
+    Args:
+        data (pd.DataFrame): The raw behavior data.
+        time_threshold (int, optional): The maximum time between pellets in a meal. Defaults to 60.
+        pellet_threshold (int, optional): The minimum number of pellets in a meal. Defaults to 2.
+
+    Returns:
+        tuple: A tuple containing:
+            - list: A list of padded meal accuracy sequences.
+            - list: A list of the original lengths of the meals.
     """
     df = data[data['Event'] == 'Pellet'].copy()
     df['retrieval_timestamp'] = df['Time'] + pd.to_timedelta(df['collect_time'], unit='m')
@@ -357,9 +394,15 @@ def extract_meals_for_model(data: pd.DataFrame, time_threshold=60,
 
 
 def graphing_cum_count(data: pd.DataFrame, meal: list, bhv, num, flip=False, export_path=None):
-    """
-    graph the cumulative count and cumulative percentage of pellet consumption
-    use two axis and mark meals on the graph
+    """Graphs the cumulative count of pellets over time, highlighting meal periods.
+
+    Args:
+        data (pd.DataFrame): DataFrame with 'Time' and 'Pellet_Count' columns.
+        meal (list): A list of time intervals representing meals.
+        bhv (str): The behavior group identifier.
+        num (str): The mouse number identifier.
+        flip (bool, optional): If True, flips the secondary y-axis. Defaults to False.
+        export_path (str, optional): Path to save the plot. Defaults to None.
     """
     fig, ax1 = plt.subplots()
     ax1.plot(data['Time'], data['Pellet_Count'], color='blue')
@@ -413,13 +456,13 @@ def graphing_cum_count(data: pd.DataFrame, meal: list, bhv, num, flip=False, exp
 
 
 def experiment_duration(data: pd.DataFrame):
-    """Return the duration of the experiment in unit of days
+    """Calculates the total duration of the experiment in days.
 
     Args:
-        data (pd.DataFrame): behavior data
+        data (pd.DataFrame): The behavior data with a 'Time' column.
 
     Returns:
-        float: durations
+        float: The duration of the experiment in days.
     """
     data['Time'] = pd.to_datetime(data['Time'])
     duration = data.tail(1)['Time'].values[0] - data.head(1)['Time'].values[0]
@@ -429,6 +472,14 @@ def experiment_duration(data: pd.DataFrame):
 
 
 def calculate_deviation(grouped_data: pd.DataFrame) -> float:
+    """Calculates the mean squared deviation of cumulative pellet counts.
+
+    Args:
+        grouped_data (pd.DataFrame): DataFrame with a 'Cum_Sum' column.
+
+    Returns:
+        float: The mean squared deviation.
+    """
     frequency = grouped_data['Cum_Sum'].tolist()
     avg = np.median(frequency)
     deviation = [(each - avg)**2 for each in frequency]
@@ -436,15 +487,16 @@ def calculate_deviation(grouped_data: pd.DataFrame) -> float:
 
 
 def active_meal(meals: list) -> float:
-    """Find meals in the active period of mice (7pm-7am)
-    If the start of the meal is in the active period, we count
-    it as one
+    """Calculates the percentage of meals that occur during the active period (7pm-7am).
+
+    A meal is considered active if its start time falls within the active period.
 
     Args:
-        meals (list): list of meals time intervals
+        meals (list): A list of meal time intervals, where each interval is a list
+                      of [start_time, end_time].
 
     Returns:
-        float: percentage of meals in the active state
+        float: The percentage of meals that occurred during the active period.
     """
     if len(meals) == 0:
         return 0
@@ -456,6 +508,12 @@ def active_meal(meals: list) -> float:
 
 
 def print_meal_stats(data):
+    """Prints statistics about the number of meals of different sizes.
+
+    Args:
+        data (dict): A dictionary where keys are the number of pellets in a meal
+                     and values are lists of meals.
+    """
     total_meals = 0
     keep_meals = 0
     for key, item in data.items():
@@ -465,3 +523,45 @@ def print_meal_stats(data):
             keep_meals += size
             print(f"Number of Pellets: {key}, n_meals: {size}")
     print(f"Total {total_meals} meals and keep {keep_meals}")
+
+
+def process_meal_data(sheet, path, is_cask=False, export_root=None, prefix=None):
+    """Processes meal data for a single sheet and returns key metrics.
+
+    This function reads data from a single Excel sheet, identifies meals, calculates
+    various meal-related metrics, and optionally generates and saves plots.
+
+    Args:
+        sheet (str): The name of the Excel sheet to process.
+        path (str): The path to the Excel file.
+        is_cask (bool, optional): Flag indicating if the data is from a CASK mouse. Defaults to False.
+        export_root (str, optional): The root directory to save generated graphs. Defaults to None.
+        prefix (str, optional): The prefix for the output file names. Defaults to None.
+
+    Returns:
+        dict: A dictionary containing calculated meal metrics.
+    """
+    data = read_excel_by_sheet(sheet=sheet, parent=path)
+    meal, _, in_meal_ratio = find_meals_paper(data, time_threshold=60, pellet_threshold=2, in_meal_ratio=True)
+    meal_with_acc, first_meal_time = find_first_good_meal(data, 60, 2, 'lstm')
+    meal_1 = (meal[0][0] - data['Time'][0]).total_seconds() / 3600
+    meal_1_good = (first_meal_time - data['Time'][0]).total_seconds() / 3600
+    group = pellet_flip(data)
+    bhv, num = get_bhv_num(sheet)
+    
+    # Uncomment these lines if you want to generate graphs
+    if prefix is None:
+        prefix = 'cask' if is_cask else 'ctrl'
+    else:
+        prefix = prefix
+    graph_pellet_frequency(group, bhv, num, export_path=os.path.join(export_root, f'{prefix}_{sheet}_pellet_frequency.svg'))
+    graphing_cum_count(data, meal, bhv, num, flip=True, export_path=os.path.join(export_root, f'{prefix}_{sheet}_cumulative_sum.svg'))
+    
+    return {
+        'avg_pellet': average_pellet(group),
+        'dark_meals': active_meal(meal),
+        'fir_meal': meal_1,
+        'fir_good_meal': meal_1_good,
+        'meal_count': round(len(meal) / experiment_duration(data), 2),
+        'in_meal_ratio': in_meal_ratio
+    }

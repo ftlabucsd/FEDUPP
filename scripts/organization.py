@@ -1,8 +1,21 @@
+"""
+This script provides a set of utility functions for organizing and manipulating
+FED3 data files. It includes functions for merging CSV files, converting them to
+Excel sheets, adjusting data columns, and splitting data into different groups.
+"""
 import os
 import openpyxl
 import pandas as pd
 
 def update_excel_with_csv(csv_path, excel_path, sheet_name):
+    """
+    Updates an Excel file with data from a CSV file, adding it as a new sheet.
+
+    Args:
+        csv_path (str): The path to the input CSV file.
+        excel_path (str): The path to the target Excel file.
+        sheet_name (str): The name of the new sheet to be created in the Excel file.
+    """
     csv_df = pd.read_csv(csv_path)
     # exist then append mode, or write mode
     mode = "a" if os.path.exists(excel_path) else "w"
@@ -12,6 +25,13 @@ def update_excel_with_csv(csv_path, excel_path, sheet_name):
 
 
 def concatenate_csv_files(files:list, output_file:str):
+    """
+    Concatenates multiple CSV files into a single CSV file.
+
+    Args:
+        files (list): A list of paths to the CSV files to be concatenated.
+        output_file (str): The path to the output CSV file.
+    """
     # Read the two CSV files into DataFrames
     dfs = []
     for file in files:
@@ -26,6 +46,17 @@ def concatenate_csv_files(files:list, output_file:str):
 
 
 def adjust_column(series):
+    """
+    Adjusts a pandas Series of cumulative counts to be monotonically increasing.
+
+    This is useful when concatenating files where the count resets to zero.
+
+    Args:
+        series (pd.Series): The pandas Series to adjust.
+
+    Returns:
+        list: The adjusted list of values.
+    """
     if series.empty:
         return series
 
@@ -49,11 +80,11 @@ def adjust_column(series):
  
  
 def prep_pellet_count(path: str):
-    """when combining two csv files, making the pellet count column increasing
-    instead of go to 0 for the new file.
+    """
+    Adjusts pellet and poke counts in a concatenated CSV file to be monotonically increasing.
 
     Args:
-        path (str): path of combined csv files
+        path (str): The path to the combined CSV file.
     """
     df = pd.read_csv(path)
     columns_to_adjust = ["Pellet_Count", "Left_Poke_Count", "Right_Poke_Count"]
@@ -63,6 +94,12 @@ def prep_pellet_count(path: str):
 
 
 def check_data_by_date(path:str):
+    """
+    Corrects the order of data in a CSV file if it is not sorted by date.
+
+    Args:
+        path (str): The path to the CSV file to check and correct.
+    """
     df = pd.read_csv(path)
     df['MM:DD:YYYY hh:mm:ss'] = pd.to_datetime(df['MM:DD:YYYY hh:mm:ss'])
 
@@ -75,6 +112,13 @@ def check_data_by_date(path:str):
 
 
 def merge_csvs_to_excel(excel:str, csv_root:str):
+    """
+    Merges all CSV files in a directory into a single Excel file with multiple sheets.
+
+    Args:
+        excel (str): The path to the output Excel file.
+        csv_root (str): The path to the directory containing the CSV files.
+    """
     files = os.listdir(csv_root)
     if '.DS_Store' in files: 
         files.remove('.DS_Store')
@@ -89,6 +133,12 @@ def merge_csvs_to_excel(excel:str, csv_root:str):
 
 
 def split_ctrl_cask(excel_path:str):
+    """
+    Splits an Excel file into two separate files for control and CASK groups.
+
+    Args:
+        excel_path (str): The path to the input Excel file.
+    """
     xls = pd.ExcelFile(excel_path)  
     all_sheets = xls.sheet_names
     ctrl_sheets = dict()
@@ -116,6 +166,14 @@ def split_ctrl_cask(excel_path:str):
 
 
 def copy_sheet(input_file, target_file, sheet_name):
+    """
+    Copies a sheet from one Excel file to another.
+
+    Args:
+        input_file (str): The path to the source Excel file.
+        target_file (str): The path to the destination Excel file.
+        sheet_name (str): The name of the sheet to copy.
+    """
     try:
         input_wb = openpyxl.load_workbook(input_file, data_only=True)
         if sheet_name not in input_wb.sheetnames:

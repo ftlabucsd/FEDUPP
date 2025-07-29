@@ -1,46 +1,27 @@
+"""
+This script provides functions for analyzing time intervals in FED3 data,
+such as the time between pellet retrievals. It includes methods for cleaning
+the data, calculating mean retrieval times, performing statistical tests,
+and visualizing the results.
+"""
 import pandas as pd
 from scipy import stats
 import matplotlib.pyplot as plt
 import seaborn as sns
-from tools import get_bhv_num
-from preprocessing import get_retrieval_time, read_excel_by_sheet
+from preprocessing import get_retrieval_time, read_excel_by_sheet, get_bhv_num
 import numpy as np
 from direction_transition import split_data_to_blocks
 import os
 
 
-def count_interval(data: pd.DataFrame) -> list:
-    """Get intervals in minutes between each two actions in a list
-
-    Args:
-        data (pd.DataFrame): behavior data
-
-    Returns:
-        list: list of intervals
-    """
-    intervals = []
-    
-    for i in range(1, len(data)):
-        current_timestamp = data.iloc[i]['Time']
-        previous_timestamp = data.iloc[i - 1]['Time']
-        
-        interval = (current_timestamp - previous_timestamp).total_seconds() / 60
-        intervals.append(interval)
-    
-    return intervals
-
-
 def clean_and_interval(path: str) -> pd.DataFrame:
-    """Add interval column to the data
+    """Reads raw data, cleans it, and calculates the time interval between consecutive pellet events.
 
-    Interval column means the time interval between current action and previous action
-    in terms of minutes
-    
     Args:
-        data (pd.DataFrame): raw readed data
+        path (str): The file path to the raw CSV data.
 
     Returns:
-        pd.DataFrame: data with interval column
+        pd.DataFrame: A DataFrame with pellet events, timestamps, and the calculated interval in minutes.
     """
     data = pd.read_csv(path)
     data = data[['MM:DD:YYYY hh:mm:ss', 'Event', 'Retrieval_Time']].rename(columns={'MM:DD:YYYY hh:mm:ss' : 'Time', 
@@ -54,30 +35,20 @@ def clean_and_interval(path: str) -> pd.DataFrame:
 
     return data
 
-
-def graph_pellet_interval(path: str):
-    """Graph Intervals of actions with respect to time
-
-    Args:
-        path (str): filepath of csv
-    """
-    data = clean_and_interval(path)
-    
-    plt.figure(figsize=(15, 5))
-
-    sns.set_palette('bright')
-    sns.set_style('darkgrid')
-
-    sns.lineplot(data=data, x='Time', y='Interval', alpha=0.8)
-
-    info = get_bhv_num(path)
-    plt.title(f'Interval Between Pellets for Group {info[0]} Mouse {info[1]}', fontsize=18)
-    plt.xlabel('Time')
-    plt.ylabel('Interval (minutes)')
-    plt.show()
-    
     
 def mean_pellet_collect_time(path:str, sheet:str, remove_outlier=False, n_stds=3, day=3):
+    """Calculates the mean and standard deviation of pellet retrieval times.
+
+    Args:
+        path (str): The path to the Excel file.
+        sheet (str): The name of the sheet to read.
+        remove_outlier (bool, optional): If True, removes outliers based on standard deviation. Defaults to False.
+        n_stds (int, optional): The number of standard deviations to use for outlier removal. Defaults to 3.
+        day (int, optional): The number of days of data to include. Defaults to 3.
+
+    Returns:
+        tuple: A tuple containing the list of pellet times, the mean, and the standard deviation.
+    """
     pellet_times = get_retrieval_time(path, sheet, day=day)
     mean = np.mean(pellet_times)
     std = np.std(pellet_times)
@@ -88,6 +59,19 @@ def mean_pellet_collect_time(path:str, sheet:str, remove_outlier=False, n_stds=3
 
 
 def plot_retrieval_time_by_block(path:str, sheet:str, day=3, n_stds=3, export_path=None):
+    """Plots the mean pellet retrieval time for each block of the experiment.
+
+    Args:
+        path (str): The path to the Excel file.
+        sheet (str): The name of the sheet to read.
+        day (int, optional): The number of days of data to include. Defaults to 3.
+        n_stds (int, optional): The number of standard deviations for outlier removal. Defaults to 3.
+        export_path (str, optional): The path to save the generated plot. Defaults to None.
+
+    Returns:
+        tuple: A tuple containing the list of mean retrieval times per block,
+               the predicted retrieval time for the next block, and the slope of the best-fit line.
+    """
     pellet_times = get_retrieval_time(path, sheet, day=10)
     mean = np.mean(pellet_times)
     std = np.std(pellet_times)
@@ -126,18 +110,15 @@ def plot_retrieval_time_by_block(path:str, sheet:str, day=3, n_stds=3, export_pa
     
     
 def perform_T_test(ctrl:list, exp:list, test_side='two-sided', alpha=0.05, paired=False):
-    """Perform T tests on control and experiment groups
+    """Performs a T-test between a control and an experimental group.
 
     Args:
-        ctrl (list): data from control group
-        exp (list): data from experiment group
-        test_side (str): the alternative hypothesis 
-                two-sided: not equal
-                greater: exp mean > ctrl mean
-                less: exp mean < ctrl mean
-        alpha (float, optional): significance level of the test. Defaults to 0.05.
-        paired (bool): if true, it means two groups are paired data, while false means 
-            two independent sets. Defaults to 
+        ctrl (list): A list of data for the control group.
+        exp (list): A list of data for the experimental group.
+        test_side (str, optional): The alternative hypothesis. Can be 'two-sided', 'less', or 'greater'.
+                                 Defaults to 'two-sided'.
+        alpha (float, optional): The significance level for the test. Defaults to 0.05.
+        paired (bool, optional): If True, performs a paired T-test. Defaults to False.
     """
     if test_side not in ['two-sided', 'less', 'greater']:
         print('Test size must be two-sided, less or greater')
@@ -159,14 +140,13 @@ def perform_T_test(ctrl:list, exp:list, test_side='two-sided', alpha=0.05, paire
 
 
 def graph_retrieval_time(ctrl:list, exp:list, width=0.4, exp_group_name=None):
-    """
-    Graph average retrieval time of pellets
+    """Graphs the average pellet retrieval time for control and experimental groups.
 
     Args:
-        ctrl (list): data of control group
-        exp (list): data of experiment group
-        width (float): width of plotted bars
-        exp_group_name (str, Optional): name of the experiment group, name with treatments usually.
+        ctrl (list): Data for the control group.
+        exp (list): Data for the experimental group.
+        width (float, optional): The width of the bars in the plot. Defaults to 0.4.
+        exp_group_name (str, optional): The name of the experimental group for labeling. Defaults to None.
     """
     ctrl_mean = np.mean(ctrl)
     cask_mean = np.mean(exp)

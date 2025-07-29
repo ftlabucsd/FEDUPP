@@ -1,13 +1,32 @@
+"""
+This script provides functions for analyzing and visualizing accuracy data from
+FED3 experiments. It includes methods for calculating cumulative accuracy,
+plotting accuracy over time, and comparing accuracy statistics between different
+groups of subjects.
+"""
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
-from preprocessing import read_excel_by_sheet, preprocess_csv
-from tools import get_bhv_num, get_session_time
+from preprocessing import read_excel_by_sheet
 import numpy as np
 from datetime import datetime, timedelta
 import matplotlib.patches as mpatches
 
 def read_and_record(path:str, sheet:str, ending_corr:list, learned_time:list, acc_dict:dict):
+    """
+    Reads data from a sheet, calculates accuracy at a specific time point,
+    and records metrics.
+
+    Args:
+        path (str): Path to the Excel file.
+        sheet (str): Name of the sheet to read.
+        ending_corr (list): List to append the final accuracy to.
+        learned_time (list): List to append the learned time to.
+        acc_dict (dict): Dictionary to store accuracy by sheet.
+
+    Returns:
+        pd.DataFrame: The processed DataFrame.
+    """
     df = read_excel_by_sheet(sheet, path, collect_time=True, 
                              cumulative_accuracy=True, remove_trivial=True, 
                              convert_large=True)
@@ -22,20 +41,6 @@ def read_and_record(path:str, sheet:str, ending_corr:list, learned_time:list, ac
     acc_dict[sheet] = closest_accuracy
     return df
 
-def rr_csv(csv_path, ending_corr:list, learned_time:list):
-    df = preprocess_csv(csv_path, collect_time=True, 
-                             cumulative_accuracy=True, remove_trivial=True, 
-                             convert_large=True)
-    target_time = timedelta(days=7)
-    df['time_diff'] = (df['Time_passed'] - target_time).abs()
-    closest_accuracy = df.loc[df['time_diff'].idxmin(), 'Percent_Correct']
-    df = df[:df['time_diff'].idxmin()]
-    df.drop(columns=['time_diff'], axis='columns')
-
-    ending_corr.append(closest_accuracy)
-    learned_time.append(find_first_learned_time(df))
-    return df
-
 
 def plot_cumulative_accuracy(
     groups: list,
@@ -44,14 +49,13 @@ def plot_cumulative_accuracy(
     export_path: str = None
 ):
     """
-    Plot mean ± SEM of Percent_Correct for one or more cohorts,
-    resampled onto a common time grid of `bin_size_sec` seconds.
+    Plots the mean ± SEM of cumulative accuracy for one or more groups.
 
     Args:
-        groups:       list of cohorts; each cohort is a list of DataFrames.
-        group_labels: names for each cohort; defaults to G1, G2, …
-        bin_size_sec: bin width in seconds for resampling (default 10 s).
-        export_path:  file path to save the figure (optional).
+        groups (list): A list of cohorts, where each cohort is a list of DataFrames.
+        group_labels (list, optional): Names for each cohort. Defaults to None.
+        bin_size_sec (int, optional): The bin width in seconds for resampling. Defaults to 10.
+        export_path (str, optional): The file path to save the figure. Defaults to None.
     """
     if group_labels is None:
         group_labels = [f"G{idx+1}" for idx in range(len(groups))]
@@ -138,12 +142,12 @@ def plot_cumulative_accuracy(
 
 def cumulative_pellets_meals(data: pd.DataFrame, bhv: int, num: int):
     """
-    Graph the cumulative pellet counts for the mice from certain group
+    Graphs the cumulative pellet counts for a specific mouse.
 
-    Parameters:
-    data: input dataframe of certain mice
-    bhv: the group number of the mice
-    num: the index of mice
+    Args:
+        data (pd.DataFrame): The input DataFrame for a single mouse.
+        bhv (int): The group number of the mouse.
+        num (int): The index of the mouse.
     """
     plt.figure(figsize=(15, 6), dpi=90)
 
@@ -161,7 +165,14 @@ def cumulative_pellets_meals(data: pd.DataFrame, bhv: int, num: int):
 
 def calculate_accuracy(group: pd.DataFrame):
     """
-    Calculate the percent correct(0-100) in a interval of getting correct poke
+    Calculates the percentage of correct pokes in a given interval.
+
+    Args:
+        group (pd.DataFrame): A DataFrame for a specific interval, containing
+                              'Event' and 'Active_Poke' columns.
+
+    Returns:
+        float: The accuracy percentage (0-100). Returns 0 if there are no events.
     """
     if 'Pellet' in group['Event'].values:
         group = group[group['Event'] != 'Pellet']
@@ -177,13 +188,15 @@ def calculate_accuracy(group: pd.DataFrame):
 
 
 def find_night_index(hourly_labels:list, rev:bool):
-    """Find pairs of indices that is between 7 pm and 7 am
+    """
+    Finds pairs of indices corresponding to night (7 pm to 7 am) or day intervals.
 
     Args:
-        hourly_labels (list): list of times in format of 'hour:minute'
+        hourly_labels (list): A list of times in 'H:M' format.
+        rev (bool): If True, returns day intervals; otherwise, returns night intervals.
 
     Returns:
-        list: list contains pairs of indices in the night
+        list: A list of [start, end] index pairs for the specified intervals.
     """
     intervals = []
     in_interval = False
@@ -224,6 +237,18 @@ def find_night_index(hourly_labels:list, rev:bool):
 
 
 def find_first_learned_time(data:pd.DataFrame, window_hours=2, accuracy_threshold=0.8): 
+    """
+    Finds the first time a sustained accuracy threshold is met over a sliding window.
+
+    Args:
+        data (pd.DataFrame): The input DataFrame with 'Event', 'Active_Poke', and 'Time_passed'.
+        window_hours (int, optional): The duration of the sliding window in hours. Defaults to 2.
+        accuracy_threshold (float, optional): The accuracy threshold to be met. Defaults to 0.8.
+
+    Returns:
+        float: The time in hours when the learning criterion is first met. Returns the total
+               session time if the criterion is never met.
+    """
     data = data[data['Event'] != 'Pellet'].reset_index(drop=True)
     data['is_match'] = (data['Event'] == data['Active_Poke']).astype(int)
     data['cumulative_total'] = data['is_match'].expanding().count()
@@ -257,6 +282,20 @@ def graph_group_stats(ctrl: list,
                       group_names=None,
                       verbose=True,
                       export_path=None):
+    """
+    Graphs statistics for two groups using violin plots with inset boxplots and scatter plots.
+
+    Args:
+        ctrl (list): Data for the control group.
+        exp (list): Data for the experimental group.
+        stats_name (str): The name of the statistic being plotted (e.g., "Accuracy").
+        unit (str): The unit of the statistic (e.g., "%").
+        violin_width (float, optional): The width of the violin plots. Defaults to 0.25.
+        dpi (int, optional): The resolution of the figure. Defaults to 150.
+        group_names (list, optional): Names for the groups. Defaults to ['Control', 'Experiment'].
+        verbose (bool, optional): If True, prints summary statistics. Defaults to True.
+        export_path (str, optional): The file path to save the figure. Defaults to None.
+    """
     # Default group names
     if group_names is None or len(group_names) < 2:
         group_names = ['Control', 'Experiment']
@@ -337,6 +376,19 @@ def graph_group_stats(ctrl: list,
 
 def graph_single_stats(data: list, stats_name: str, unit: str, 
                        violin_width=0.25, dpi=150, group_name=None, verbose=True, export_path=None):
+    """
+    Graphs statistics for a single group using a violin plot with an inset boxplot and scatter plot.
+
+    Args:
+        data (list): The data for the group.
+        stats_name (str): The name of the statistic being plotted.
+        unit (str): The unit of the statistic.
+        violin_width (float, optional): The width of the violin plot. Defaults to 0.25.
+        dpi (int, optional): The resolution of the figure. Defaults to 150.
+        group_name (str, optional): The name of the group. Defaults to None.
+        verbose (bool, optional): If True, prints summary statistics. Defaults to True.
+        export_path (str, optional): The file path to save the figure. Defaults to None.
+    """
     # Summary stats
     average = np.mean(data)
     std_error = np.std(data) / np.sqrt(len(data))
