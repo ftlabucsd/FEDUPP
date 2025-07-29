@@ -49,14 +49,14 @@ Below is a concise tour of each notebook and the core utilities it relies on.  F
 The notebooks import reusable helpers defined here.  Below is a high-level description of what each module provides. For detailed usage and documentations, please refer to `/scripts` folder and each method's docs.
 
 * **preprocessing.py** – High-throughput Excel reader and cleaner.  Handles event renaming, time-stamp conversion, cumulative accuracy calculation, retrieval-time extraction, sheet discovery, and convenience helpers for mixed-type columns.
-* **accuracy.py** – Tools for cumulative accuracy analytics, finding learning onset, plotting group statistics (violin/box/strip overlays), and cumulative pellet/meal counters.
-* **meals.py** – Meal-level analytics: pellet-frequency histograms, cumulative-pellet plots, meal segmentation based on inter-pellet interval & count thresholds, first-meal detection, active-phase classification, and batch metrics suitable for model input.
+* **accuracy.py** – Tools for cumulative accuracy analytics, finding learning acquisition time, plotting group statistics, and cumulative pellet/meal counters.
+* **meals.py** – Meal-level analytics: pellet-frequency histograms, cumulative-pellet plots, first-meal detection, active-phase segmentation, and construct data for accurate meal classification model input.
 * **meal_classifiers.py** – PyTorch pipelines: dataset wrapper, LSTM and 1-D CNN architectures tailored for variable-length meals, training loop with real-time accuracy, evaluation helpers, and parameter counters.
-* **unsupervised_helpers.py** – Utilities for clustering unlabeled meals: K-means with elbow criterion and silhouette score, PCA visualisation, bookkeeping of good/bad meal indices, padding, dataset creation, and dataset merging.
+* **unsupervised_helpers.py** – Utilities for clustering unlabeled meals: K-means with elbow criterion and silhouette score, PCA visualisation, updating of good/bad meal indices, padding, dataset creation, and dataset merging.
 * **direction_transition.py** – Reversal-specific analytics: splits sessions into blocks, counts event transitions, derives success rates, computes block-level pellet ratios, learning scores, learning results, and renders transition heatmaps and learning-score trends.
 * **intervals.py** – Interval-focused helpers: cleans pellet-only CSV logs, computes mean/SEM pellet-retrieval times (with optional outlier removal), plots retrieval-time trend per block with best-fit regression line, and provides a flexible t-test wrapper.
-* **organization.py** – Data-housekeeping utilities: batch convert CSV → Excel sheets, concatenate files, fix pellet counters when merging, and group sheet names into control/CASK cohorts.
-* **path.py** – Central registry of file paths and ordered sheet lists (FR1 vs Reversal, male vs female, etc.) automatically populated from the Excel workbooks.
+* **organization.py** – Data-housekeeping utilities: batch convert CSV → Excel sheets, concatenate files, fix pellet counters when merging, and group sheet names into control/CASK cohorts (for our data format).
+* **path.py** – Central registry of file paths and ordered sheet lists (FR1 vs Reversal, male vs female, etc.) automatically populated from the Excel workbooks (for our data organization).
 
 ---
 
