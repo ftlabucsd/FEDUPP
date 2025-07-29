@@ -66,7 +66,7 @@ Running the notebooks will populate `export/` with publication-ready `.svg` figu
 ---
 
 ## Contributing
-Feel free to open an issue or PR if you spot a bug, would like additional documentation, or wish to port the analysis to new datasets.
+Feel free to open an issue or PR if you spot a bug, would like additional documentation, or wish to port the analysis to new FED dataset.
 
 ---
 
