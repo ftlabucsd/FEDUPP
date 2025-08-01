@@ -133,7 +133,7 @@ def get_transition_info(blocks: list, meal_config:list, reverse:bool) -> pd.Data
         meals,_ = find_meals_paper(block, meal_config[0], meal_config[1])
         time = round((meals[0][0] - times[0]).total_seconds() / 60, 2) if len(meals) > 0 else 'no meal'
 
-        _, first_meal_time = find_first_good_meal(block, 60, 2, 'lstm')
+        _, first_meal_time = find_first_good_meal(block, 60, 2, 'cnn')
         if first_meal_time is None or first_meal_time > times[-1]:
             meal_1_good = block_time
         else:
@@ -416,12 +416,12 @@ def learning_score(blocks: list, block_prop=0.5, action_prop=0.8) -> float:
     return np.mean(block_accuracy_by_proportion(blocks=blocks[:cutoff], proportion=action_prop))
 
 
-def learning_result(blocks, action_prop=0.25) -> float:
+def learning_result(blocks, action_prop=0.75) -> float:
     """Calculates the final performance accuracy on the later part of each block.
 
     Args:
         blocks (list): A list of block DataFrames.
-        action_prop (float, optional): The proportion of the beginning of each block to exclude. Defaults to 0.25.
+        action_prop (float, optional): The rest of actions from action_prop to the end of each block. Defaults to 0.75.
 
     Returns:
         float: The mean accuracy over the specified final portions of the blocks.
@@ -658,7 +658,7 @@ def graph_learning_results(ctrl: list,
     ax.legend(handles=[c_patch, e_patch])
 
     # labels & title
-    ax.set_ylim(45, 75)
+    ax.set_ylim(55, 85)
     ax.set_xlabel('Groups', fontsize=14)
     ax.set_ylabel('Mean Accuracy (%)', fontsize=14)
     ax.set_title(f'Learning Result of {ctrl_name} vs {exp_name} (last {proportion} data)', fontsize=16)
@@ -726,7 +726,7 @@ def graph_learning_results_single(data: list,
 
     # formatting
     ax.set_xlim(0,1)
-    ax.set_ylim(45, 75)
+    ax.set_ylim(55, 85)
     ax.set_xticks([x])
     ax.set_xticklabels([group_name])
     ax.set_xlabel('Group', fontsize=14)
@@ -953,7 +953,7 @@ def plot_pellet_ratio_trend(
                         mean_ratios - sem_ratios,
                         mean_ratios + sem_ratios,
                         alpha=0.3, color=c)
-
+    print(f'Female Size: {len(mean_ratios)}   Avg: {mean_ratios[-1]:.3f}   SE: {sem_ratios[-1]:.3f}')
     ax.set_xlabel("Action Proportion (%)", fontsize=18)
     ax.set_ylabel("Pellet‐in‐Meal Ratio", fontsize=18)
     ax.set_title("Pellet‐in‐Meal Ratio vs Action Proportion", fontsize=22)
