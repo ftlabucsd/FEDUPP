@@ -18,7 +18,8 @@ All analyses are performed in Jupyter notebooks under `CASK_analysis/` (for CASK
    ```bash
    pip install -r requirements.txt
    ```
-3.  Launch JupyterLab or VS Code in the project root and open any notebook in `CASK_analysis/` or `WT_analysis/`.
+3.  Go through `starter.ipynb` for basic functionality and visualization we provided on FED3 data.
+4.  Launch JupyterLab or VS Code in the project root and open any notebook in `CASK_analysis/` or `WT_analysis/` to dive in detailed analysis.
 
 The notebooks can be run top-to-bottom; figures will appear in the notebook and be saved automatically inside `export/`.
 
@@ -68,9 +69,6 @@ Running the notebooks will populate `export/` with publication-ready `.svg` figu
 ## Contributing
 Feel free to open an issue or PR if you spot a bug, would like additional documentation, or wish to port the analysis to new FED dataset.
 
-
-
-# add starter tutorial notebook
 ---
 
 © 2024 FT LAB
