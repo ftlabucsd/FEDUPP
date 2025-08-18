@@ -1,4 +1,4 @@
-# FED3-data
+# FEDUPP
 
 ## Project Purpose
 This repository contains the full analysis pipeline for behavioural data collected with the **FED3** feeding device.  The goal is to compare feeding behaviour between control mice and mice with CASK knock-down (CASK-KD) across two learning paradigms:
