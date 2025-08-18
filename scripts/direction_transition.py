@@ -503,7 +503,7 @@ def graph_learning_score(ctrl: list,
     ax.legend(handles=[c_patch, e_patch])
 
     # labels & title
-    ax.set_ylim(20, 65)
+    ax.set_ylim(45, 65)
     ax.set_xlabel('Groups', fontsize=14)
     ax.set_ylabel('Learning Score', fontsize=14)
     ax.set_title(f'Learning Score of {ctrl_name} vs {exp_name} ({proportion} data)', fontsize=16)
@@ -745,73 +745,147 @@ def graph_learning_results_single(data: list,
 def plot_learning_score_trend(
     blocks_groups: list,
     group_labels: list = None,
-    proportions: np.ndarray = None,
     block_prop: float = 1.0,
+    action_prop: float = 1.0,
     export_path: str = None
 ):
-    """Plots the trend of learning scores as a function of action proportion.
+    """Plots learning scores using both violin plots and trend line plots.
+
+    Creates two plots:
+    1. Violin plot of final learning scores (at specified action_prop)
+    2. Line plot showing learning score trend across different action proportions with SEM
 
     Args:
         blocks_groups (list): A list of groups, where each group is a list of block lists (one per subject).
         group_labels (list, optional): Names for each group. Defaults to None.
-        proportions (np.ndarray, optional): An array of action proportions to evaluate. Defaults to a linspace.
-        block_prop (float, optional): The block proportion to pass to the learning_score function. Defaults to 1.0.
+        block_prop (float, optional): The proportion of blocks to use. Defaults to 1.0.
+        action_prop (float, optional): The action proportion to evaluate for violin plot. Defaults to 1.0 (100%).
         export_path (str, optional): Path to save the figure. Defaults to None.
     """
-    # default labels
+    from accuracy import graph_group_stats, graph_single_stats
+    
+    # Default group labels
     if group_labels is None:
-        group_labels = [f"G{idx+1}" for idx in range(len(blocks_groups))]
-    # default sweep of action proportions (5%,10%,…,100%)
-    if proportions is None:
-        proportions = np.linspace(0.05, 1.0, 20)
-
-    # a simple palette for up to 4 groups
-    palette = ['#425df5', '#f55442', '#42f58c', '#f5e142']
-
-    fig, ax = plt.subplots(figsize=(16, 6), dpi=150)
-
-    for grp_idx, (blocks_list, label) in enumerate(zip(blocks_groups, group_labels)):
-        # build an (n_subjects × n_props) array of scores
-        score_matrix = np.array([
-            [learning_score(blocks, block_prop=block_prop, action_prop=p)
-             for p in proportions]
-            for blocks in blocks_list
-        ])
-        # compute mean and SEM across subjects
-        mean_scores = score_matrix.mean(axis=0)
-        sem_scores  = score_matrix.std(axis=0, ddof=0) / np.sqrt(score_matrix.shape[0])
-
-        color = palette[grp_idx % len(palette)]
-        ax.plot(
-            proportions,
-            mean_scores,
-            label=f"{label} (n={len(blocks_list)})",
-            color=color,
-            linewidth=2
+        group_labels = [f"Group {i+1}" for i in range(len(blocks_groups))]
+    
+    # Calculate learning scores for each mouse in each group (for violin plot)
+    group_scores = []
+    
+    for blocks_list in blocks_groups:
+        mouse_scores = []
+        
+        for blocks in blocks_list:
+            # Calculate learning score for this mouse at the specified action proportion
+            score = learning_score(blocks, block_prop=block_prop, action_prop=action_prop)
+            mouse_scores.append(score)
+        
+        group_scores.append(mouse_scores)
+    
+    # Create violin plot (existing functionality)
+    if len(group_scores) == 2:
+        # Two groups comparison
+        from intervals import perform_T_test
+        perform_T_test(group_scores[0], group_scores[1])
+        violin_export = export_path
+        graph_group_stats(
+            ctrl=group_scores[0],
+            exp=group_scores[1],
+            stats_name="Learning Score",
+            unit="%",
+            group_names=group_labels,
+            export_path=violin_export
         )
-        ax.fill_between(
-            proportions,
-            mean_scores - sem_scores,
-            mean_scores + sem_scores,
-            alpha=0.3,
-            color=color
+    elif len(group_scores) == 1:
+        # Single group
+        violin_export = export_path
+        graph_single_stats(
+            data=group_scores[0],
+            stats_name="Learning Score",
+            unit="%",
+            group_name=group_labels[0],
+            export_path=violin_export
         )
+    else:
+        raise ValueError("This function currently supports only 1 or 2 groups. For more groups, please extend the implementation.")
+    
+    # Create trend line plot
+    trend_export = export_path.replace('_overall', '_trend')
+    _plot_learning_score_trend_lines(
+        blocks_groups=blocks_groups,
+        group_labels=group_labels,
+        block_prop=block_prop,
+        export_path=trend_export
+    )
 
-    ax.set_xticks([0, 0.25, 0.50, 0.75, 1.0])
-    ax.set_xlabel("Action Proportion", fontsize=18)
-    ax.set_ylabel("Learning Score",    fontsize=18)
-    ax.set_title("Learning Score vs Action Proportion", fontsize=22)
-    ax.legend(fontsize=14, loc='best')
-    ax.grid(True, linestyle='--', alpha=0.4)
 
-    plt.tight_layout()
+def _plot_learning_score_trend_lines(
+    blocks_groups: list,
+    group_labels: list,
+    block_prop: float = 1.0,
+    export_path: str = None,
+    n_bins: int = 19
+):
+    """Helper function to create trend line plots for learning scores.
+    
+    Args:
+        blocks_groups (list): A list of groups, where each group is a list of block lists (one per subject).
+        group_labels (list): Names for each group.
+        block_prop (float): The proportion of blocks to use.
+        export_path (str, optional): Path to save the plot.
+        n_bins (int): Number of bins for the trend analysis.
+    """
+    # Define proportion bins from 0.1 to 1.0
+    proportions = np.linspace(0.05, 1.0, n_bins)
+    
+    # Colors for different groups
+    colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728']  # Blue, Orange, Green, Red
+    
+    fig, ax = plt.subplots(figsize=(10, 6))
+    
+    for group_idx, blocks_list in enumerate(blocks_groups):
+        group_means = []
+        group_sems = []
+
+        for prop in proportions:
+            # Calculate learning scores for all mice in this group at this proportion
+            mouse_scores = []
+            for blocks in blocks_list:
+                score = learning_score(blocks, block_prop=block_prop, action_prop=prop)
+                mouse_scores.append(score)
+            
+            # Calculate mean and SEM
+            mean_score = np.mean(mouse_scores)
+            sem_score = np.std(mouse_scores) / np.sqrt(len(mouse_scores))
+            
+            group_means.append(mean_score)
+            group_sems.append(sem_score)
+        
+        # Convert to numpy arrays
+        group_means = np.array(group_means)
+        group_sems = np.array(group_sems)
+        
+        # Plot line and shaded error region
+        color = colors[group_idx % len(colors)]
+        ax.plot(proportions * 100, group_means, 
+                color=color, linewidth=2,
+                label=group_labels[group_idx])
+        ax.fill_between(proportions * 100, 
+                       group_means - group_sems, 
+                       group_means + group_sems,
+                       color=color, alpha=0.2)
+    
+    # Formatting
+    ax.set_xlabel('Action Proportion (%)', fontsize=12)
+    ax.set_ylabel('Learning Score (%)', fontsize=12)
+    ax.set_title('Learning Score Trend Across Action Proportions', fontsize=14)
+    ax.legend()
+    ax.grid(True, alpha=0.3)
+    ax.set_xlim(0.05, 100)
+    
     if export_path:
-        plt.savefig(export_path, bbox_inches='tight')
+        plt.savefig(export_path, bbox_inches='tight', dpi=300)
     plt.show()
 
-import numpy as np
-import pandas as pd
-import matplotlib.pyplot as plt
 
 def find_meal_pellet_counts(
     data: pd.DataFrame,
@@ -903,66 +977,185 @@ def pellet_ratio_for_block(
 def plot_pellet_ratio_trend(
     blocks_groups: list[list[pd.DataFrame]],
     group_labels: list[str] = None,
-    proportions: np.ndarray = None,
     time_threshold: float = 60,
     pellet_threshold: int = 2,
     export_path: str = None
 ):
-    """Plots the trend of the pellet-in-meal ratio as a function of action proportion.
+    """Plots pellet-in-meal ratios using both violin plots and trend line plots.
+
+    Creates two plots:
+    1. Violin plot of final pellet ratios (at 100% proportion)
+    2. Line plot showing pellet ratio trend across different proportions with SEM
 
     Args:
         blocks_groups (list[list[pd.DataFrame]]): A list of groups, each containing lists of blocks for subjects.
         group_labels (list[str], optional): Names for each group. Defaults to None.
-        proportions (np.ndarray, optional): Proportions to sweep over. Defaults to a linspace.
         time_threshold (float, optional): Time threshold for meal definition. Defaults to 60.
         pellet_threshold (int, optional): Pellet threshold for meal definition. Defaults to 2.
         export_path (str, optional): Path to save the plot. Defaults to None.
     """
+    from accuracy import graph_group_stats, graph_single_stats
+    
+    # Default group labels
     if group_labels is None:
-        group_labels = [f"G{g+1}" for g in range(len(blocks_groups))]
-    if proportions is None:
-        proportions = np.linspace(0.05, 1.0, 20)
+        group_labels = [f"Group {i+1}" for i in range(len(blocks_groups))]
+    
+    # Calculate average pellet ratio at 100% proportion for each mouse in each group (for violin plot)
+    group_ratios = []
+    
+    for blocks_list in blocks_groups:
+        mouse_ratios = []
+        
+        for sample_blocks in blocks_list:
+            # Calculate pellet ratio for each block at 100% proportion
+            block_ratios = []
+            for block_df in sample_blocks:
+                ratio = pellet_ratio_for_block(
+                    block_df, 
+                    proportion=1.0,  # 100% proportion
+                    time_threshold=time_threshold,
+                    pellet_threshold=pellet_threshold
+                )
+                if not np.isnan(ratio):
+                    block_ratios.append(ratio)
+            
+            # Average across all blocks for this mouse
+            if block_ratios:
+                mouse_avg_ratio = np.mean(block_ratios)
+                mouse_ratios.append(mouse_avg_ratio)
+        
+        group_ratios.append(mouse_ratios)
+    
+    # Create violin plot (existing functionality)
+    if len(group_ratios) == 2:
+        # Two groups comparison
+        from intervals import perform_T_test
+        perform_T_test(group_ratios[0], group_ratios[1])
+        violin_export = export_path
+        graph_group_stats(
+            ctrl=group_ratios[0],
+            exp=group_ratios[1],
+            stats_name="Pellet-in-Meal Ratio",
+            unit="ratio",
+            group_names=group_labels,
+            export_path=violin_export
+        )
+    elif len(group_ratios) == 1:
+        # Single group
+        violin_export = export_path
+        graph_single_stats(
+            data=group_ratios[0],
+            stats_name="Pellet-in-Meal Ratio",
+            unit="ratio",
+            group_name=group_labels[0],
+            export_path=violin_export
+        )
+    else:
+        raise ValueError("This function currently supports only 1 or 2 groups. For more groups, please extend the implementation.")
+    
+    # Create trend line plot
+    trend_export = export_path.replace('_overall', '_trend')
+    _plot_pellet_ratio_trend_lines(
+        blocks_groups=blocks_groups,
+        group_labels=group_labels,
+        time_threshold=time_threshold,
+        pellet_threshold=pellet_threshold,
+        export_path=trend_export
+    )
 
-    palette = ['#425df5', '#f55442', '#42f58c', '#f5e142']
-    fig, ax = plt.subplots(figsize=(16, 6), dpi=150)
 
-    for gi, (blocks_list, label) in enumerate(zip(blocks_groups, group_labels)):
-        # build matrix: rows=subjects, cols=proportions
-        mat = np.array([
-            [
-                # average this sample’s block‐wise ratios at proportion p
-                np.nanmean([
-                    pellet_ratio_for_block(
-                        block_df, p,
+def _plot_pellet_ratio_trend_lines(
+    blocks_groups: list[list[pd.DataFrame]],
+    group_labels: list[str],
+    time_threshold: float = 60,
+    pellet_threshold: int = 2,
+    export_path: str = None,
+    n_bins: int = 20
+):
+    """Helper function to create trend line plots for pellet-in-meal ratios.
+    
+    Args:
+        blocks_groups (list[list[pd.DataFrame]]): A list of groups, each containing lists of blocks for subjects.
+        group_labels (list[str]): Names for each group.
+        time_threshold (float): Time threshold for meal definition.
+        pellet_threshold (int): Pellet threshold for meal definition.
+        export_path (str, optional): Path to save the plot.
+        n_bins (int): Number of bins for the trend analysis.
+    """
+    # Define proportion bins from 0.1 to 1.0
+    proportions = np.linspace(0.0, 1.0, n_bins)
+    
+    # Colors for different groups
+    colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728']  # Blue, Orange, Green, Red
+    
+    fig, ax = plt.subplots(figsize=(10, 6))
+    
+    for group_idx, blocks_list in enumerate(blocks_groups):
+        group_means = []
+        group_sems = []
+        
+        for prop in proportions:
+            # Calculate pellet ratios for all mice in this group at this proportion
+            mouse_ratios = []
+            for sample_blocks in blocks_list:
+                # Calculate average pellet ratio across all blocks for this mouse at this proportion
+                block_ratios = []
+                for block_df in sample_blocks:
+                    ratio = pellet_ratio_for_block(
+                        block_df,
+                        proportion=prop,
                         time_threshold=time_threshold,
                         pellet_threshold=pellet_threshold
                     )
-                    for block_df in sample_blocks
-                ])
-                for p in proportions
-            ]
-            for sample_blocks in blocks_list
-        ])
-
-        mean_ratios = np.nanmean(mat, axis=0)
-        sem_ratios  = np.nanstd(mat, axis=0, ddof=0) / np.sqrt(np.sum(~np.isnan(mat), axis=0))
-
-        c = palette[gi % len(palette)]
-        ax.plot(proportions * 100, mean_ratios, label=f"{label} (n={len(blocks_list)})", color=c, linewidth=2)
-        ax.fill_between(proportions * 100,
-                        mean_ratios - sem_ratios,
-                        mean_ratios + sem_ratios,
-                        alpha=0.3, color=c)
-    print(f'Female Size: {len(mean_ratios)}   Avg: {mean_ratios[-1]:.3f}   SE: {sem_ratios[-1]:.3f}')
-    ax.set_xlabel("Action Proportion (%)", fontsize=18)
-    ax.set_ylabel("Pellet‐in‐Meal Ratio", fontsize=18)
-    ax.set_title("Pellet‐in‐Meal Ratio vs Action Proportion", fontsize=22)
+                    if not np.isnan(ratio):
+                        block_ratios.append(ratio)
+                
+                # Average across blocks for this mouse
+                if block_ratios:
+                    mouse_avg_ratio = np.mean(block_ratios)
+                    mouse_ratios.append(mouse_avg_ratio)
+            
+            # Calculate mean and SEM across mice
+            if mouse_ratios:
+                mean_ratio = np.mean(mouse_ratios)
+                sem_ratio = np.std(mouse_ratios) / np.sqrt(len(mouse_ratios))
+            else:
+                mean_ratio = np.nan
+                sem_ratio = np.nan
+            
+            group_means.append(mean_ratio)
+            group_sems.append(sem_ratio)
+        
+        # Convert to numpy arrays and filter out NaN values
+        group_means = np.array(group_means)
+        group_sems = np.array(group_sems)
+        
+        # Only plot if we have valid data
+        valid_mask = ~np.isnan(group_means)
+        if np.any(valid_mask):
+            valid_proportions = proportions[valid_mask]
+            valid_means = group_means[valid_mask]
+            valid_sems = group_sems[valid_mask]
+            
+            # Plot line and shaded error region
+            color = colors[group_idx % len(colors)]
+            ax.plot(valid_proportions * 100, valid_means, 
+                    color=color, linewidth=2, marker='o', markersize=4,
+                    label=group_labels[group_idx])
+            ax.fill_between(valid_proportions * 100, 
+                           valid_means - valid_sems, 
+                           valid_means + valid_sems,
+                           color=color, alpha=0.2)
+    
+    # Formatting
+    ax.set_xlabel('Block Proportion (%)', fontsize=12)
+    ax.set_ylabel('Pellet-in-Meal Ratio', fontsize=12)
+    ax.set_title('Pellet-in-Meal Ratio Trend Across Block Proportions', fontsize=14)
+    ax.legend()
+    ax.grid(True, alpha=0.3)
     ax.set_xlim(0, 100)
     ax.set_ylim(0, 1)
-    ax.grid(True, linestyle='--', alpha=0.4)
-    ax.legend(fontsize=14, loc='best')
-    plt.tight_layout()
-
+    
     if export_path:
-        plt.savefig(export_path, bbox_inches='tight')
+        plt.savefig(export_path, bbox_inches='tight', dpi=300)
     plt.show()

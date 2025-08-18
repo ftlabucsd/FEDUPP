@@ -133,12 +133,15 @@ def find_first_good_meal(data:pd.DataFrame, time_threshold, pellet_threshold, mo
     df['retrieval_timestamp'] = df['Time'] + pd.to_timedelta(df['collect_time'], unit='m')
     
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    lstm_ckpt = os.path.join(base_dir, 'data', 'LSTM_from_CASK.pth')
+    cnn_ckpt = os.path.join(base_dir, 'data', 'CNN_from_CASK.pth')
     if model_type == 'lstm': 
         model = RNNClassifier(input_size=1, hidden_size=400, num_layers=2, num_classes=2).to(device)
-        model.load_state_dict(torch.load('../data/LSTM_from_CASK.pth', map_location='cpu'))
+        model.load_state_dict(torch.load(lstm_ckpt, map_location='cpu'))
     elif model_type == 'cnn':
         model = CNNClassifier(num_classes=2, maxlen=4).to(device)
-        model.load_state_dict(torch.load('../data/CNN_from_CASK.pth', map_location='cpu'))
+        model.load_state_dict(torch.load(cnn_ckpt, map_location='cpu'))
     else:
         print('Only support lstm and cnn.')
         return
@@ -549,13 +552,16 @@ def process_meal_data(sheet, path, is_cask=False, export_root=None, prefix=None)
     group = pellet_flip(data)
     bhv, num = get_bhv_num(sheet)
     
-    # Uncomment these lines if you want to generate graphs
     if prefix is None:
         prefix = 'cask' if is_cask else 'ctrl'
     else:
         prefix = prefix
-    graph_pellet_frequency(group, bhv, num, export_path=os.path.join(export_root, f'{prefix}_{sheet}_pellet_frequency.svg'))
-    graphing_cum_count(data, meal, bhv, num, flip=True, export_path=os.path.join(export_root, f'{prefix}_{sheet}_cumulative_sum.svg'))
+    
+    freq_path = os.path.join(export_root, f'{prefix}_{sheet}_pellet_frequency.svg') if export_root else None
+    cum_path = os.path.join(export_root, f'{prefix}_{sheet}_cumulative_sum.svg') if export_root else None
+    
+    graph_pellet_frequency(group, bhv, num, export_path=freq_path)
+    graphing_cum_count(data, meal, bhv, num, flip=True, export_path=cum_path)
     
     return {
         'avg_pellet': average_pellet(group),

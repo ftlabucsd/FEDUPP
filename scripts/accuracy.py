@@ -12,6 +12,7 @@ import numpy as np
 from datetime import datetime, timedelta
 import matplotlib.patches as mpatches
 
+
 def read_and_record(path:str, sheet:str, ending_corr:list, learned_time:list, acc_dict:dict):
     """
     Reads data from a sheet, calculates accuracy at a specific time point,

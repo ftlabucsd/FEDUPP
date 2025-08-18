@@ -1,19 +1,38 @@
 """
 This script manages file paths for the FED3 data analysis project and organizes
 data sheets into cohorts.
+
+It resolves absolute paths based on this file's location so that these
+variables can be safely imported and used from notebooks or scripts in any
+subdirectory (e.g., `CASK_analysis`, `WT_analysis`, or the project root).
 """
-from preprocessing import get_all_sheet_names
+from pathlib import Path
 
-fr1_ctrl_path = '../data/FR1_ctrl.xlsx'
-fr1_cask_path = '../data/FR1_cask.xlsx'
-rev_ctrl_path = '../data/reversal_ctrl.xlsx'
-rev_cask_path = '../data/reversal_cask.xlsx'
+# Make the import of preprocessing robust across different working directories
+try:  # When importing as `scripts.path`
+    from scripts.preprocessing import get_all_sheet_names
+except Exception:  # Fallbacks for different execution contexts
+    try:
+        from .preprocessing import get_all_sheet_names  # type: ignore
+    except Exception:
+        from preprocessing import get_all_sheet_names
 
-fr1_male_path = '../data/FR1_male.xlsx'
-fr1_female_path = '../data/FR1_female.xlsx'
-rev_male_path = '../data/reversal_male.xlsx'
-rev_female_path = '../data/reversal_female.xlsx'
 
+# Resolve project root from this file's location: scripts/ -> project root
+_THIS_FILE = Path(__file__).resolve()
+_PROJECT_ROOT = _THIS_FILE.parent.parent
+_DATA_DIR = _PROJECT_ROOT / 'data'
+
+# Absolute paths to data files (Path objects work with pandas)
+fr1_ctrl_path = _DATA_DIR / 'FR1_ctrl.xlsx'
+fr1_cask_path = _DATA_DIR / 'FR1_cask.xlsx'
+rev_ctrl_path = _DATA_DIR / 'reversal_ctrl.xlsx'
+rev_cask_path = _DATA_DIR / 'reversal_cask.xlsx'
+
+fr1_male_path = _DATA_DIR / 'FR1_male.xlsx'
+fr1_female_path = _DATA_DIR / 'FR1_female.xlsx'
+rev_male_path = _DATA_DIR / 'reversal_male.xlsx'
+rev_female_path = _DATA_DIR / 'reversal_female.xlsx'
 
 fr1_ctrl_raw = get_all_sheet_names(fr1_ctrl_path)
 fr1_cask_raw = get_all_sheet_names(fr1_cask_path)
@@ -36,6 +55,9 @@ fr1_female_raw.remove('R2M7')
 rev_male_raw.remove('R1M1')
 rev_male_raw.remove('R1M3')
 rev_male_raw.remove('R1M7')
+
+rev_female_raw.remove('R1M1')
+rev_female_raw.remove('R1M3')
 
 # general loop through
 fr1_ctrl_sheets = sorted(fr1_ctrl_raw)
