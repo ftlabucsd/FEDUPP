@@ -10,7 +10,7 @@ import seaborn as sns
 import matplotlib.patches as mpatches
 from datetime import timedelta
 import numpy as np
-from accuracy import find_night_index, calculate_accuracy
+from accuracy import find_inactive_index, calculate_accuracy
 from meal_classifiers import predict, RNNClassifier, CNNClassifier
 import torch
 from preprocessing import read_excel_by_sheet, get_bhv_num
@@ -90,11 +90,11 @@ def graph_pellet_frequency(grouped_data: pd.DataFrame, bhv, num, export_path=Non
     
     # Locate the x-coordinates for the specified times
     if bhv is not None:
-        dark = find_night_index(hourly_labels, rev=False)
+        inactive = find_inactive_index(hourly_labels, rev=False)
     else:
-        dark = find_night_index(hourly_labels, rev=True)
+        inactive = find_inactive_index(hourly_labels, rev=True)
 
-    for idx, each in enumerate(dark):
+    for idx, each in enumerate(inactive):
         if idx == 0:
             ax.axvspan(6*each[0], 6*(1+each[1]), color='grey', alpha=0.4, label='Inactive')
         else:
@@ -450,9 +450,9 @@ def graphing_cum_count(data: pd.DataFrame, meal: list, bhv, num, flip=False, exp
             plt.axvspan(start, data['Time'].max(), color='grey', alpha=0.4)
     
     patch_meal = mpatches.Patch(color='lightblue', alpha=0.9, label='Meal')
-    patch_night = mpatches.Patch(color='grey', alpha=0.5, label='Inactive')
+    patch_inactive = mpatches.Patch(color='grey', alpha=0.5, label='Inactive')
 
-    plt.legend(handles=[patch_meal, patch_night], loc='upper right')
+    plt.legend(handles=[patch_meal, patch_inactive], loc='upper right')
     if export_path:
         plt.savefig(export_path, bbox_inches='tight')
     plt.show()
@@ -565,7 +565,7 @@ def process_meal_data(sheet, path, is_cask=False, export_root=None, prefix=None)
     
     return {
         'avg_pellet': average_pellet(group),
-        'dark_meals': active_meal(meal),
+        'inactive_meals': active_meal(meal),
         'fir_meal': meal_1,
         'fir_good_meal': meal_1_good,
         'meal_count': round(len(meal) / experiment_duration(data), 2),

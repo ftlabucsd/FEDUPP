@@ -188,13 +188,13 @@ def calculate_accuracy(group: pd.DataFrame):
         return (matching_count / total_events) * 100
 
 
-def find_night_index(hourly_labels:list, rev:bool):
+def find_inactive_index(hourly_labels:list, rev:bool):
     """
-    Finds pairs of indices corresponding to night (7 pm to 7 am) or day intervals.
+    Finds pairs of indices corresponding to inactive (7 pm to 7 am) or day intervals.
 
     Args:
         hourly_labels (list): A list of times in 'H:M' format.
-        rev (bool): If True, returns day intervals; otherwise, returns night intervals.
+        rev (bool): If True, returns day intervals; otherwise, returns inactive intervals.
 
     Returns:
         list: A list of [start, end] index pairs for the specified intervals.
@@ -206,7 +206,7 @@ def find_night_index(hourly_labels:list, rev:bool):
     for i, time_str in enumerate(hourly_labels):
         current_time = datetime.strptime(time_str, '%H:%M')
 
-        # Determine if the current time is within the night interval (7pm to 7am)
+        # Determine if the current time is within the inactive interval (7pm to 7am)
         if current_time.hour >= 19 or current_time.hour < 7:
             if not in_interval:
                 # We are starting a new interval
@@ -370,83 +370,6 @@ def graph_group_stats(ctrl: list,
     ax.set_xlim(0, 1.5)
 
     # Save or display
-    if export_path:
-        plt.savefig(export_path, bbox_inches='tight')
-    plt.show()
-
-
-def graph_single_stats(data: list, stats_name: str, unit: str, 
-                       violin_width=0.25, dpi=150, group_name=None, verbose=True, export_path=None):
-    """
-    Graphs statistics for a single group using a violin plot with an inset boxplot and scatter plot.
-
-    Args:
-        data (list): The data for the group.
-        stats_name (str): The name of the statistic being plotted.
-        unit (str): The unit of the statistic.
-        violin_width (float, optional): The width of the violin plot. Defaults to 0.25.
-        dpi (int, optional): The resolution of the figure. Defaults to 150.
-        group_name (str, optional): The name of the group. Defaults to None.
-        verbose (bool, optional): If True, prints summary statistics. Defaults to True.
-        export_path (str, optional): The file path to save the figure. Defaults to None.
-    """
-    # Summary stats
-    average = np.mean(data)
-    std_error = np.std(data) / np.sqrt(len(data))
-
-    if group_name is None:
-        group_name = 'Group'
-    if verbose:
-        print(f'{group_name} Size: {len(data)}')
-        print(f'{group_name} Average: {average:.3f}')
-        print(f'{group_name} SE: {std_error:.3f}')
-    
-    # Set up figure
-    fig, ax = plt.subplots(dpi=dpi)
-    fig.set_size_inches(6, 6)
-    x = 0.5  # single group position
-
-    # 1) Violin (no interior lines)
-    parts = ax.violinplot([data],
-                          positions=[x],
-                          widths=violin_width,
-                          showmeans=False,
-                          showmedians=False,
-                          showextrema=False)
-    for pc in parts['bodies']:
-        pc.set_facecolor('#38bcf5')
-        pc.set_edgecolor('black')
-        pc.set_alpha(0.6)
-
-    # 2) Boxplot inside
-    ax.boxplot(data,
-               positions=[x],
-               widths=violin_width * 0.5,
-               showfliers=False,
-               patch_artist=True,
-               boxprops=dict(facecolor='white', edgecolor='black'),
-               medianprops=dict(color='black'),
-               whiskerprops=dict(color='black'),
-               capprops=dict(color='black'))
-
-    # 3) Scatter the individual points (jittered)
-    jitter_strength = violin_width / 8
-    x_jittered = x + np.random.uniform(-jitter_strength, jitter_strength, size=len(data))
-    ax.scatter(x_jittered, data, marker='o', zorder=3, color='blue', alpha=0.8)
-
-    # Legend
-    patch = mpatches.Patch(color='#38bcf5', alpha=0.6, label=f'{group_name} (n = {len(data)})')
-    ax.legend(handles=[patch])
-
-    # Labels & formatting
-    ax.set_xlabel('Groups', fontsize=14)
-    ax.set_ylabel(f'{stats_name} ({unit})', fontsize=14)
-    ax.set_title(f'{stats_name} Distribution for {group_name}', fontsize=20)
-    ax.set_xticks([x])
-    ax.set_xticklabels([group_name])
-    ax.set_xlim(0, 1)
-
-    # Save or show
     if export_path:
         plt.savefig(export_path, bbox_inches='tight')
     plt.show()

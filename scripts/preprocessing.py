@@ -11,22 +11,6 @@ import warnings
 warnings.filterwarnings('ignore')
 
 
-def get_bhv_num(sheet: str) -> tuple:
-    """Extracts behavior and mouse numbers from a sheet name.
-
-    Args:
-        sheet (str): The name of the sheet (e.g., 'C1.M1' or 'R1M10').
-
-    Returns:
-        tuple: A tuple containing the behavior group and mouse number.
-    """
-    if '.' in sheet:
-        parts = sheet.split('.')
-        return [parts[0][1:], sheet[-1]]
-    else:
-        # R1M10 -> 1 and 10
-        return sheet[1], sheet[3:]
-
 def convert_to_numeric(value):
     """Converts a value to a numeric type if it is a numeric string.
 

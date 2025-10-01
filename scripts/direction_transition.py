@@ -11,7 +11,6 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 import numpy as np
 from meals import find_meals_paper, find_first_good_meal, pellet_flip
-from preprocessing import get_bhv_num
 
 colors = {'Left': 'red', 'Right': 'blue', 'Pellet': 'green'}
 
@@ -204,12 +203,12 @@ def find_inactive_blocks(blocks:list, reverse):
 
     Args:
         blocks (list): A list of DataFrames, each representing a block.
-        reverse (bool): If True, identifies blocks in the active (dark) period instead.
+        reverse (bool): If True, identifies blocks in the active (inactive) period instead.
 
     Returns:
         list: A list of indices of the inactive blocks.
     """
-    night_blocks = []
+    inactive_blocks = []
     block_start_index = 1
 
     for block_df in blocks:
@@ -217,12 +216,12 @@ def find_inactive_blocks(blocks:list, reverse):
             times = pd.to_datetime(block_df['Time']).tolist()
             cnt = [1 if time.hour >= 19 or time.hour < 7 else 0 for time in times]
             if sum(cnt) > len(cnt) // 2:
-                night_blocks.append(block_start_index)
+                inactive_blocks.append(block_start_index)
         block_start_index += 1
 
     if reverse:
-        night_blocks = [each for each in range(1, len(blocks)+1) if each not in night_blocks]
-    return night_blocks
+        inactive_blocks = [each for each in range(1, len(blocks)+1) if each not in inactive_blocks]
+    return inactive_blocks
 
 
 def graph_tranition_stats(data_stats: pd.DataFrame, blocks: list, sheet: str, export_path=None):
@@ -277,16 +276,16 @@ def graph_tranition_stats(data_stats: pd.DataFrame, blocks: list, sheet: str, ex
     ax.set_ylabel('Percentage(%)', color='black', fontsize=16)
 
     info = get_bhv_num(sheet)
-    night_blocks = find_inactive_blocks(blocks, reverse=False)
+    inactive_blocks = find_inactive_blocks(blocks, reverse=False)
 
-    for block_index in night_blocks:
+    for block_index in inactive_blocks:
         ax.axvspan(block_index - 0.5, block_index + 0.5, facecolor='gray', alpha=0.4)
 
     left_patch = mpatches.Patch(color='pink', alpha=0.5, label='Left Active')
     right_patch = mpatches.Patch(color='lightblue', alpha=0.5, label='Right Active')
-    night_patch = mpatches.Patch(color='gray', alpha=0.5, label='Inactive Period')
+    inactive_patch = mpatches.Patch(color='gray', alpha=0.5, label='Inactive Period')
 
-    lines = [l1[0], l2[0], l3[0], l4[0], bars1[0], bars2[0], left_patch, right_patch, night_patch]
+    lines = [l1[0], l2[0], l3[0], l4[0], bars1[0], bars2[0], left_patch, right_patch, inactive_patch]
     labels = [line.get_label() for line in lines]  # Get the labels of the line
     legend = ax.legend(lines, labels, loc='upper right', bbox_to_anchor=(1.13, 1), borderaxespad=0)
     legend.set_title('Legend')
@@ -335,16 +334,16 @@ def graph_learning_trend(data_stats: pd.DataFrame, blocks: list, path: str, bloc
     ax.set_ylabel('Percentage(%)', color='black', fontsize=16)
 
     info = get_bhv_num(path)
-    night_blocks = find_inactive_blocks(blocks, False)
+    inactive_blocks = find_inactive_blocks(blocks, False)
     
-    for block_index in night_blocks:
+    for block_index in inactive_blocks:
         ax.axvspan(block_index - 0.5, block_index + 0.5, facecolor='gray', alpha=0.4)
 
     left_patch = mpatches.Patch(color='pink', alpha=0.5, label='Left Active')
     right_patch = mpatches.Patch(color='lightblue', alpha=0.5, label='Right Active')
-    night_patch = mpatches.Patch(color='gray', alpha=0.5, label='Inactive Period')
+    inactive_patch = mpatches.Patch(color='gray', alpha=0.5, label='Inactive Period')
 
-    leg_bg = plt.legend(handles=[left_patch, right_patch, night_patch], loc='upper right')
+    leg_bg = plt.legend(handles=[left_patch, right_patch, inactive_patch], loc='upper right')
 
     leg_bg.set_title('Correct Rate')
     leg_bg.get_title().set_fontsize('17')
@@ -515,79 +514,6 @@ def graph_learning_score(ctrl: list,
     plt.show()
 
 
-def graph_learning_score_single(data: list,
-                                width=0.4,
-                                group_name=None,
-                                proportion=None,
-                                export_path=None,
-                                verbose=True):
-    """Graphs the learning score of a single group using a violin plot with a box plot.
-
-    Args:
-        data (list): A list of learning scores.
-        width (float, optional): The width of the violin plot. Defaults to 0.4.
-        group_name (str, optional): The name of the group. Defaults to None.
-        proportion (float, optional): The proportion of data used, for labeling. Defaults to None.
-        export_path (str, optional): Path to save the plot. Defaults to None.
-        verbose (bool, optional): If True, prints summary statistics. Defaults to True.
-    """
-    # summary stats
-    mean_val = np.mean(data)
-    se_val   = np.std(data)/np.sqrt(len(data))
-    if group_name is None:
-        group_name = 'Group'
-    if verbose:
-        print(f'{group_name} Size: {len(data)}   Avg: {mean_val:.3f}   SE: {se_val:.3f}')
-
-    fig, ax = plt.subplots(figsize=(3,6))
-    x = 0.5
-
-    # violin
-    parts = ax.violinplot([data],
-                          positions=[x],
-                          widths=width,
-                          showmeans=False,
-                          showmedians=False,
-                          showextrema=False)
-    for violin in parts['bodies']:
-        violin.set_facecolor('lightblue')
-        violin.set_edgecolor('black')
-        violin.set_alpha(0.8)
-
-    # inset boxplot
-    ax.boxplot([data],
-               positions=[x],
-               widths=width*0.5,
-               showfliers=False,
-               patch_artist=True,
-               boxprops=dict(facecolor='white', edgecolor='black'),
-               medianprops=dict(color='black'),
-               whiskerprops=dict(color='black'),
-               capprops=dict(color='black'))
-
-    # scatter
-    jitter = width/8
-    x_vals = x + np.random.uniform(-jitter, jitter, size=len(data))
-    ax.scatter(x_vals, data, marker='o', zorder=3, color='#1405eb', alpha=0.8)
-
-    # formatting
-    ax.set_xlim(0,1)
-    ax.set_ylim(20, 65)
-    ax.set_xticks([x])
-    ax.set_xticklabels([group_name])
-    ax.set_xlabel('Group', fontsize=14)
-    ax.set_ylabel('Learning Score', fontsize=14)
-    ax.set_title(f'Learning Score of {group_name} of {proportion} data', fontsize=16)
-
-    # legend
-    patch = mpatches.Patch(color='lightblue', alpha=0.8, label=f'{group_name} (n={len(data)})')
-    ax.legend(handles=[patch])
-
-    if export_path:
-        plt.savefig(export_path, bbox_inches='tight')
-    plt.show()
-
-
 def graph_learning_results(ctrl: list,
                            exp: list,
                            width=0.4,
@@ -664,78 +590,6 @@ def graph_learning_results(ctrl: list,
     ax.set_title(f'Learning Result of {ctrl_name} vs {exp_name} (last {proportion} data)', fontsize=16)
     ax.set_xticks(x_positions)
     ax.set_xticklabels(group_names)
-
-    if export_path:
-        plt.savefig(export_path, bbox_inches='tight')
-    plt.show()
-
-
-def graph_learning_results_single(data: list,
-                                  width=0.4,
-                                  group_name=None,
-                                  proportion=None,
-                                  export_path=None,
-                                  verbose=True):
-    """Graphs the learning result (accuracy) for a single group.
-
-    Args:
-        data (list): List of accuracy scores.
-        width (float, optional): Width of the violin plot. Defaults to 0.4.
-        group_name (str, optional): Name of the group. Defaults to None.
-        proportion (float, optional): Proportion of data used for labeling. Defaults to None.
-        export_path (str, optional): Path to save the plot. Defaults to None.
-        verbose (bool, optional): If True, prints summary statistics. Defaults to True.
-    """
-    mean_val = np.mean(data)
-    se_val   = np.std(data)/np.sqrt(len(data))
-    if group_name is None:
-        group_name = 'Group'
-    if verbose:
-        print(f'{group_name} Size: {len(data)}   Avg: {mean_val:.3f}   SE: {se_val:.3f}')
-
-    fig, ax = plt.subplots(figsize=(3,6))
-    x = 0.5
-
-    # violin
-    parts = ax.violinplot([data],
-                          positions=[x],
-                          widths=width,
-                          showmeans=False,
-                          showmedians=False,
-                          showextrema=False)
-    for violin in parts['bodies']:
-        violin.set_facecolor('lightblue')
-        violin.set_edgecolor('black')
-        violin.set_alpha(0.8)
-
-    # inset boxplot
-    ax.boxplot([data],
-               positions=[x],
-               widths=width*0.5,
-               showfliers=False,
-               patch_artist=True,
-               boxprops=dict(facecolor='white', edgecolor='black'),
-               medianprops=dict(color='black'),
-               whiskerprops=dict(color='black'),
-               capprops=dict(color='black'))
-
-    # scatter
-    jitter = width/8
-    x_vals = x + np.random.uniform(-jitter, jitter, size=len(data))
-    ax.scatter(x_vals, data, marker='o', zorder=3, color='#1405eb', alpha=0.8)
-
-    # formatting
-    ax.set_xlim(0,1)
-    ax.set_ylim(55, 85)
-    ax.set_xticks([x])
-    ax.set_xticklabels([group_name])
-    ax.set_xlabel('Group', fontsize=14)
-    ax.set_ylabel('Mean Accuracy (%)', fontsize=14)
-    ax.set_title(f'Learning Result of {group_name} (last {proportion} data)', fontsize=16)
-
-    # legend
-    patch = mpatches.Patch(color='lightblue', alpha=0.8, label=f'{group_name} (n={len(data)})')
-    ax.legend(handles=[patch])
 
     if export_path:
         plt.savefig(export_path, bbox_inches='tight')
