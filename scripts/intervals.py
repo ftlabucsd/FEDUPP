@@ -131,13 +131,6 @@ def perform_T_test(ctrl:list, exp:list, test_side='two-sided', alpha=0.05, paire
         _, p_value = stats.ttest_ind(exp, ctrl, alternative=test_side)
 
     print("P Value is ", p_value)
-    if p_value < alpha:
-        if test_side == 'two-sided':
-            print("There is a significant difference between the two groups.")
-        else:
-            print(f'Experiment group is significantly {test_side} than control group')
-    else:
-        print("There is no significant difference between the two groups.")
 
 
 def graph_retrieval_time(ctrl:list, exp:list, width=0.4, exp_group_name=None):

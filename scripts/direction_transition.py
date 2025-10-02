@@ -5,6 +5,7 @@ includes functions to split data into blocks, calculate transition statistics,
 visualize learning trends, and assess learning scores.
 """
 import os
+import warnings
 from datetime import timedelta
 
 import pandas as pd
@@ -12,7 +13,7 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 import numpy as np
 
-from scripts.meals import find_meals_paper, find_first_good_meal
+from scripts.meals import find_meals_paper, find_first_good_meal, predict_meal_quality
 
 colors = {'Left': 'red', 'Right': 'blue', 'Pellet': 'green'}
 
@@ -226,141 +227,116 @@ def find_inactive_blocks(blocks:list, reverse):
     return inactive_blocks
 
 
-def graph_tranition_stats(data_stats: pd.DataFrame, blocks: list, sheet: str, export_path=None):
-    """Graphs transition statistics, success rates, and active pokes for each block.
+def plot_transition_stats(
+    data_stats: pd.DataFrame,
+    blocks: list,
+    *,
+    mouse_label: str,
+    group_label: str | None = None,
+    export_path: str | os.PathLike | None = None,
+    show: bool = False,
+    inactive_reverse: bool = False,
+) -> None:
+    """Plot transition statistics, success rates, and block context for one session."""
 
-    Args:
-        data_stats (pd.DataFrame): DataFrame with transition statistics.
-        blocks (list): A list of block DataFrames.
-        sheet (str): The name of the data sheet, used for titling the plot.
-        export_path (str, optional): Path to save the plot. Defaults to None.
-    """
-    fig, ax = plt.subplots(figsize=(22, 12))
-
-    l1 = ax.plot(data_stats['Block_Index'], data_stats['Left_to_Left'],
-            marker='o', label='Left-Left', color='black')
-    l2 = ax.plot(data_stats['Block_Index'], data_stats['Left_to_Right'],
-            marker='*', label='Left-Right', color='green')
-    l3 = ax.plot(data_stats['Block_Index'], data_stats['Right_to_Right'],
-            marker='s', label='Right-Right', color='orange')
-    l4 = ax.plot(data_stats['Block_Index'], data_stats['Right_to_Left'],
-            marker='X', label='Right-Left', color='purple')
-     
-    bars1 = ax.bar(data_stats['Block_Index'][::2], data_stats['Success_Rate'][::2],
-                color='pink' if data_stats['Active_Poke'][0] == 'Left' else 'lightblue', alpha=0.7)
-
-    bars2 = ax.bar(data_stats['Block_Index'][1::2], data_stats['Success_Rate'][1::2],
-                color='lightblue' if data_stats['Active_Poke'][1] == 'Right' else 'pink', alpha=0.7)
-
-    labels = data_stats['First_Good_Meal_Time']
-    total_times = data_stats['Block_Time']
-    for bar, label, total in zip(bars1, labels[::2], total_times[::2]):
-        ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 1.75,  # Add small offset (0.01) to bar height
-                label, ha='center', va='bottom', fontsize=12)
-        ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.01,  # Add small offset (0.01) to bar height
-                total, ha='center', va='bottom', fontsize=12)
-            
-    for bar, label, total in zip(bars2, labels[1::2], total_times[1::2]):
-        ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 1.75,  # Add small offset (0.01) to bar height
-                label, ha='center', va='bottom', fontsize=12)
-        ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.01,  # Add small offset (0.01) to bar height
-                total, ha='center', va='bottom', fontsize=12)
-    
-    plt.annotate('First Accurate Meal Time (min) \n Block Length', 
-            xy=(bars1[0].get_x()+0.4, bars1[0].get_height() + 4.2), 
-            xytext=(-90, 20),
-            textcoords='offset points',
-            arrowprops=dict(arrowstyle='->', lw=2),
-            fontsize=16,
-            color='blue')
-
-    ax.set_xlabel('Blocks', fontsize=16)
-    ax.set_ylabel('Percentage(%)', color='black', fontsize=16)
-
-    inactive_blocks = find_inactive_blocks(blocks, reverse=False)
-
-    for block_index in inactive_blocks:
-        ax.axvspan(block_index - 0.5, block_index + 0.5, facecolor='gray', alpha=0.4)
-
-    left_patch = mpatches.Patch(color='pink', alpha=0.5, label='Left Active')
-    right_patch = mpatches.Patch(color='lightblue', alpha=0.5, label='Right Active')
-    inactive_patch = mpatches.Patch(color='gray', alpha=0.5, label='Inactive Period')
-
-    lines = [l1[0], l2[0], l3[0], l4[0], bars1[0], bars2[0], left_patch, right_patch, inactive_patch]
-    labels = [line.get_label() for line in lines]  # Get the labels of the line
-    legend = ax.legend(lines, labels, loc='upper right', bbox_to_anchor=(1.13, 1), borderaxespad=0)
-    legend.set_title('Legend')
-    legend.get_title().set_fontsize('16')
-    for text in legend.get_texts():
-        text.set_fontsize('14')
-    
-    if len(info) == 2:
-        plt.title(f'Probability of Transitions in Poke Choosing and Accuracy in Group {info[0]} Mouse {info[1]}', fontsize=24)
-    else:
-        plt.title(f'Probability of Transitions in Poke Choosing and Accuracy Rates of Mouse {info[0]}', fontsize=24)
-
-    plt.xticks(data_stats['Block_Index'])
-    plt.yticks(range(0, 100, 20))
-    fig.set_dpi(150)
-    ax.grid(alpha=0.5, linestyle='--')
-    if export_path:
-        plt.savefig(export_path, bbox_inches='tight')
+    if data_stats.empty:
         return
-    plt.show()
-    
-    
-def graph_learning_trend(data_stats: pd.DataFrame, blocks: list, path: str, block_prop=0.6, action_prop=0.5):
-    """Graphs the learning trend over a proportion of blocks.
 
-    Args:
-        data_stats (pd.DataFrame): DataFrame with block statistics.
-        blocks (list): List of block DataFrames.
-        path (str): Path to the original data file for metadata.
-        block_prop (float, optional): Proportion of blocks to analyze. Defaults to 0.6.
-        action_prop (float, optional): Proportion of actions within each block to analyze. Defaults to 0.5.
-    """
-    fig, ax = plt.subplots(figsize=(14, 8))
-    
-    cutoff = int(len(data_stats)*block_prop)
-    data_stats = data_stats[:cutoff]
-    cut_blocks = blocks[:cutoff]
-    acc_in_block_by_prop = block_accuracy_by_proportion(cut_blocks, action_prop)
+    fig, ax = plt.subplots(figsize=(16, 9), dpi=150)
 
-    ax.bar(data_stats['Block_Index'][::2], acc_in_block_by_prop[::2],
-        label='Success Rate', color='pink' if data_stats['Active_Poke'][0] == 'Left' else 'lightblue', alpha=0.7)
-    ax.bar(data_stats['Block_Index'][1::2], acc_in_block_by_prop[1::2],
-        label='Success Rate', color='lightblue' if data_stats['Active_Poke'][1] == 'Right' else 'pink', alpha=0.7)
+    block_idx = data_stats['Block_Index']
+    transition_specs = [
+        ('Left_to_Left', 'o', '#1f77b4', 'Left→Left'),
+        ('Left_to_Right', '*', '#ff7f0e', 'Left→Right'),
+        ('Right_to_Right', 's', '#2ca02c', 'Right→Right'),
+        ('Right_to_Left', 'X', '#d62728', 'Right→Left'),
+    ]
 
-    ax.set_xlabel('Blocks', fontsize=16)
-    ax.set_ylabel('Percentage(%)', color='black', fontsize=16)
+    line_handles = []
+    for column, marker, color, label in transition_specs:
+        if column not in data_stats:
+            continue
+        line, = ax.plot(
+            block_idx,
+            data_stats[column],
+            marker=marker,
+            color=color,
+            linewidth=2,
+            label=label,
+        )
+        line_handles.append(line)
 
-    inactive_blocks = find_inactive_blocks(blocks, False)
-    
+    active_series = data_stats.get('Active_Poke', pd.Series(['Unknown'] * len(block_idx)))
+    bar_palette = ['#f8b4c0' if str(poke).lower().startswith('l') else '#a4c8ff' for poke in active_series]
+    success_rate = data_stats.get('Success_Rate')
+    bars = None
+    if success_rate is not None:
+        bars = ax.bar(block_idx, success_rate, color=bar_palette, alpha=0.6)
+
+    first_good = data_stats.get('First_Good_Meal_Time', pd.Series([''] * len(block_idx)))
+    block_time = data_stats.get('Block_Time', pd.Series([np.nan] * len(block_idx)))
+
+    if bars is not None:
+        for bar, meal_time, total_time in zip(bars, first_good, block_time):
+            center_x = bar.get_x() + bar.get_width() / 2
+            label_text = str(meal_time)
+            total_text = f"{total_time}" if pd.notna(total_time) else ""
+            ax.text(center_x, bar.get_height() + 2.4, label_text, ha='center', va='bottom', fontsize=10)
+            if total_text:
+                ax.text(center_x, bar.get_height() + 0.6, total_text, ha='center', va='bottom', fontsize=10, color='#555555')
+
+    inactive_blocks = find_inactive_blocks(blocks, reverse=inactive_reverse)
     for block_index in inactive_blocks:
-        ax.axvspan(block_index - 0.5, block_index + 0.5, facecolor='gray', alpha=0.4)
+        ax.axvspan(block_index - 0.5, block_index + 0.5, facecolor='gray', alpha=0.25)
 
-    left_patch = mpatches.Patch(color='pink', alpha=0.5, label='Left Active')
-    right_patch = mpatches.Patch(color='lightblue', alpha=0.5, label='Right Active')
-    inactive_patch = mpatches.Patch(color='gray', alpha=0.5, label='Inactive Period')
+    legend_handles = line_handles.copy()
+    if bars is not None:
+        legend_handles.extend([
+            mpatches.Patch(color='#f8b4c0', alpha=0.6, label='Left active'),
+            mpatches.Patch(color='#a4c8ff', alpha=0.6, label='Right active'),
+        ])
+    if inactive_blocks:
+        legend_handles.append(mpatches.Patch(color='gray', alpha=0.25, label='Inactive period'))
+    if legend_handles:
+        ax.legend(handles=legend_handles, fontsize=12, loc='upper right')
 
-    leg_bg = plt.legend(handles=[left_patch, right_patch, inactive_patch], loc='upper right')
+    title_parts = ['Transition Stats']
+    if group_label:
+        title_parts.append(f"Group {group_label}")
+    title_parts.append(f"Mouse {mouse_label}")
+    ax.set_title(' - '.join(title_parts), fontsize=20)
 
-    leg_bg.set_title('Correct Rate')
-    leg_bg.get_title().set_fontsize('17')
-    leg_bg.get_texts()[0].set_fontsize('15')
-    leg_bg.get_texts()[1].set_fontsize('15')
-    leg_bg.get_texts()[2].set_fontsize('15')
+    ax.set_xlabel('Block Index', fontsize=14)
+    ax.set_ylabel('Percentage (%)', fontsize=14)
+    ax.set_xticks(block_idx)
+    ax.set_ylim(0, 100)
+    ax.grid(alpha=0.3, linestyle='--')
 
-    if len(info) == 2:
-        plt.title(f'Accuracy by Switch for Group {info[0]} Mouse {info[1]}', fontsize=24)
+    if export_path:
+        fig.savefig(export_path, bbox_inches='tight')
+
+    if show:
+        plt.show()
     else:
-        plt.title(f'Accuracy by Switch for Mouse {info[0]}', fontsize=24)
+        plt.close(fig)
 
-    plt.xticks(data_stats['Block_Index'])
-    plt.yticks(range(0, 100, 20))
-    fig.set_dpi(80)
-    plt.grid(alpha=0.5, linestyle='--')
-    plt.show()
+
+def graph_tranition_stats(data_stats: pd.DataFrame, blocks: list, sheet: str, export_path=None):
+    """Backward compatible wrapper for the legacy API."""
+    warnings.warn(
+        "graph_tranition_stats is deprecated; use plot_transition_stats with explicit labels instead.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    plot_transition_stats(
+        data_stats,
+        blocks,
+        mouse_label=sheet,
+        group_label=None,
+        export_path=export_path,
+        show=False,
+    )
+    return None
 
 
 def accuracy(group: pd.DataFrame):
@@ -616,39 +592,11 @@ def plot_learning_score_trend(
         action_prop (float, optional): The action proportion to evaluate for violin plot. Defaults to 1.0 (100%).
         export_path (str, optional): Path to save the figure. Defaults to None.
     """
-    from scripts.accuracy import graph_group_stats
-    from scripts.intervals import perform_T_test
-    
+
     # Default group labels
     if group_labels is None:
         group_labels = [f"Group {i+1}" for i in range(len(blocks_groups))]
-    
-    # Calculate learning scores for each mouse in each group (for violin plot)
-    group_scores = []
-    
-    for blocks_list in blocks_groups:
-        mouse_scores = []
-        
-        for blocks in blocks_list:
-            # Calculate learning score for this mouse at the specified action proportion
-            score = learning_score(blocks, block_prop=block_prop, action_prop=action_prop)
-            mouse_scores.append(score)
-        
-        group_scores.append(mouse_scores)
-    
-    # Create violin plot (existing functionality)
-    violin_export = export_path
-    graph_group_stats(
-        group_data=group_scores,
-        stats_name="Learning Score",
-        unit="%",
-        group_names=group_labels,
-        export_path=violin_export
-    )
 
-    if len(group_scores) == 2:
-        perform_T_test(group_scores[0], group_scores[1])
-    
     # Create trend line plot
     trend_export = export_path.replace('_overall', '_trend')
     _plot_learning_score_trend_lines(

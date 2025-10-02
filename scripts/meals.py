@@ -5,18 +5,169 @@ and visualizing meal data.
 """
 from collections import defaultdict
 from pathlib import Path
-
+import os
+import warnings
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 import matplotlib.patches as mpatches
-from datetime import timedelta
 import numpy as np
 from scripts.accuracy import find_inactive_index, calculate_accuracy
 from scripts.meal_classifiers import predict, RNNClassifier, CNNClassifier
 import torch
 from scripts.preprocessing import SessionData
-import os
+_MEAL_MODEL_CACHE: dict[str, torch.nn.Module] = {}
+_MEAL_MODEL_DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+_BASE_DIR = Path(__file__).resolve().parent.parent
+_MEAL_CHECKPOINTS = {
+    'cnn': _BASE_DIR / 'data' / 'CNN_from_CASK.pth',
+    'lstm': _BASE_DIR / 'data' / 'LSTM_from_CASK.pth',
+}
+
+
+def _build_meal_model(model_type: str) -> torch.nn.Module:
+    if model_type == 'lstm':
+        return RNNClassifier(input_size=1, hidden_size=400, num_layers=2, num_classes=2).to(_MEAL_MODEL_DEVICE)
+    if model_type == 'cnn':
+        return CNNClassifier(num_classes=2, maxlen=4).to(_MEAL_MODEL_DEVICE)
+    raise ValueError("Only 'lstm' and 'cnn' meal models are supported")
+
+
+def _get_meal_model(model_type: str = 'cnn'):
+    model_type = model_type.lower()
+    if model_type not in _MEAL_MODEL_CACHE:
+        model = _build_meal_model(model_type)
+        ckpt_path = _MEAL_CHECKPOINTS.get(model_type)
+        if ckpt_path is None:
+            raise ValueError("Only 'lstm' and 'cnn' meal models are supported")
+        if not ckpt_path.exists():
+            raise FileNotFoundError(f"Meal model checkpoint not found: {ckpt_path}")
+        state = torch.load(str(ckpt_path), map_location='cpu')
+        model.load_state_dict(state)
+        model.eval()
+        _MEAL_MODEL_CACHE[model_type] = model
+    return _MEAL_MODEL_CACHE[model_type]
+
+
+def preload_meal_models(model_types: tuple[str, ...] | list[str] | None = None, *, strict: bool = False) -> dict[str, torch.nn.Module]:
+    if model_types is None:
+        model_types = ('cnn', 'lstm')
+
+    loaded: dict[str, torch.nn.Module] = {}
+    for model_type in model_types:
+        key = model_type.lower()
+        try:
+            loaded[key] = _get_meal_model(key)
+        except FileNotFoundError as exc:
+            warning_msg = f"Skipping preload for '{model_type}': {exc}"
+            warnings.warn(warning_msg, RuntimeWarning, stacklevel=2)
+            if strict:
+                raise
+        except Exception as exc:  # pragma: no cover - safeguard
+            warnings.warn(f"Failed to preload meal model '{model_type}': {exc!r}", RuntimeWarning, stacklevel=2)
+            if strict:
+                raise
+    return loaded
+
+
+_PRELOADED_MEAL_MODELS = preload_meal_models()
+
+
+def predict_meal_quality(batch_meals, model_type='cnn'):
+    model = _get_meal_model(model_type)
+    return predict(model, batch_meals)
+
+
+def analyze_meals(
+    data: pd.DataFrame,
+    time_threshold: int = 60,
+    pellet_threshold: int = 2,
+    model_type: str = 'cnn',
+    accuracy_threshold: float = 80.0,
+):
+    """Detect meals in a session and classify them using the trained model.
+
+    Returns a tuple of (meals_with_acc, good_mask, first_good_time) where
+    * meals_with_acc is a list of [start_time, padded_accuracy_sequence]
+    * good_mask is a boolean numpy array indicating model-predicted good meals
+    * first_good_time is the timestamp of the first predicted good meal (or None).
+    """
+
+    df = data[data['Event'] == 'Pellet'].copy()
+    if df.empty:
+        return [], np.zeros(0, dtype=bool), None
+
+    df['retrieval_timestamp'] = df['Time'] + pd.to_timedelta(df['collect_time'], unit='m')
+
+    meals_with_acc: list[list] = []
+    meal_lengths: list[int] = []
+
+    meal_start_time = None
+    meal_start_index = None
+    pellet_cnt = 1
+
+    for index, row in df.iterrows():
+        current_time = row['retrieval_timestamp']
+
+        if meal_start_time is None:
+            meal_start_time = current_time
+            meal_start_index = index
+            pellet_cnt = 1
+            continue
+
+        if (current_time - meal_start_time).total_seconds() <= time_threshold:
+            pellet_cnt += 1
+        else:
+            if pellet_cnt >= pellet_threshold:
+                meal_events = data.loc[meal_start_index:index]
+                if calculate_accuracy(meal_events) > 50:
+                    accuracies = extract_meal_acc_each(meal_events)
+                    meal_lengths.append(len(accuracies))
+                    meals_with_acc.append([meal_start_time, pad_meal(accuracies)])
+
+            meal_start_time = current_time
+            meal_start_index = index
+            pellet_cnt = 1
+
+    if meal_start_time is not None and pellet_cnt >= pellet_threshold:
+        meal_events = data.loc[meal_start_index:]
+        accuracies = extract_meal_acc_each(meal_events)
+        meal_lengths.append(len(accuracies))
+        meals_with_acc.append([meal_start_time, pad_meal(accuracies)])
+
+    if not meals_with_acc:
+        return [], np.zeros(0, dtype=bool), None
+
+    candidate_idx = [idx for idx, length in enumerate(meal_lengths) if length in (2, 3, 4)]
+    good_mask = np.zeros(len(meals_with_acc), dtype=bool)
+    first_good_idx = None
+
+    if candidate_idx:
+        sequences = np.stack([meals_with_acc[idx][1] for idx in candidate_idx])
+        predictions = predict_meal_quality(sequences, model_type=model_type)
+        for pos, meal_idx in enumerate(candidate_idx):
+            is_good = predictions[pos] == 0
+            good_mask[meal_idx] = is_good
+            if is_good and first_good_idx is None:
+                first_good_idx = meal_idx
+    else:
+        predictions = np.array([])
+
+    if first_good_idx is None and not candidate_idx:
+        # Fallback to accuracy heuristic when model cannot evaluate the meal
+        for meal_idx, (start_time, padded_acc) in enumerate(meals_with_acc):
+            valid_values = [val for val in padded_acc if val != -1]
+            if valid_values and np.mean(valid_values) >= accuracy_threshold:
+                good_mask[meal_idx] = True
+                first_good_idx = meal_idx
+                break
+
+    first_good_time = (
+        pd.to_datetime(meals_with_acc[first_good_idx][0])
+        if first_good_idx is not None else None
+    )
+
+    return meals_with_acc, good_mask, first_good_time
 
 plt.rcParams['figure.figsize'] = (20, 6)
 
@@ -120,76 +271,13 @@ def find_first_good_meal(data:pd.DataFrame, time_threshold, pellet_threshold, mo
             - list: A list of all identified meals with their accuracies.
             - datetime or None: The timestamp of the first good meal, or None if no good meal is found.
     """
-    df = data[data['Event'] == 'Pellet'].copy()
-    df['retrieval_timestamp'] = df['Time'] + pd.to_timedelta(df['collect_time'], unit='m')
-    
-    device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    lstm_ckpt = os.path.join(base_dir, 'data', 'LSTM_from_CASK.pth')
-    cnn_ckpt = os.path.join(base_dir, 'data', 'CNN_from_CASK.pth')
-    if model_type == 'lstm': 
-        model = RNNClassifier(input_size=1, hidden_size=400, num_layers=2, num_classes=2).to(device)
-        model.load_state_dict(torch.load(lstm_ckpt, map_location='cpu'))
-    elif model_type == 'cnn':
-        model = CNNClassifier(num_classes=2, maxlen=4).to(device)
-        model.load_state_dict(torch.load(cnn_ckpt, map_location='cpu'))
-    else:
-        print('Only support lstm and cnn.')
-        return
-    
-    meals_with_acc = []
-    meal_start_time = None
-    meal_start_index = None
-    first_good_meal_index = None
-
-    pellet_cnt = 1 # record pellets in the meal
-    for index, row in df.iterrows():
-        current_time = row['retrieval_timestamp']  # Get current time from the 'Time' column
-
-        if meal_start_time is None:
-            meal_start_time = current_time
-            meal_start_index = index
-            continue
-
-        # if current pellet is retrieved within 60 seconds after previous retrieval
-        if ((row['retrieval_timestamp'] - meal_start_time).total_seconds() <= time_threshold):
-            pellet_cnt += 1
-        else:
-            meal_events = data.loc[meal_start_index:index]
-            if pellet_cnt >= pellet_threshold and calculate_accuracy(meal_events) > 50:
-                pellet_cnt += 1
-                accuracies = extract_meal_acc_each(meal_events)
-                meals_with_acc.append([meal_start_time, pad_meal(accuracies)])
-
-            meal_start_time = current_time
-            meal_start_index = index
-            pellet_cnt = 1
-
-    if pellet_cnt >= pellet_threshold:
-        accuracies = extract_meal_acc_each(data.loc[meal_start_index:])
-        meals_with_acc.append([meal_start_time, pad_meal(accuracies)])
-
-    if len(meals_with_acc) == 0: return meals_with_acc, None # half session time if no meal
-
-    temp_list = [row[1] for row in meals_with_acc if len(row[1]) in [2,3,4]]
-    idx = -1
-    if len(temp_list) == 0: # no model-recognizable meal
-        for each in meals_with_acc: # search meal with average accuracy of at least 75%
-            if np.mean(each[1]) >= 80:
-                first_good_meal_index = idx+1
-                break
-            idx += 1
-        # if no high-accuracy meal, then use max time
-        if first_good_meal_index == None: return 0, None
-    else:
-        meal_data = np.stack(temp_list)
-        predicted = predict(model, meal_data)
-        indices = np.where(predicted == 0)[0]
-        if indices.size > 0:
-            first_good_meal_index = np.where(predicted==0)[0][0]
-        else:
-            return 0, None
-    return meals_with_acc, pd.to_datetime(meals_with_acc[first_good_meal_index][0])
+    meals_with_acc, good_mask, first_good_time = analyze_meals(
+        data,
+        time_threshold=time_threshold,
+        pellet_threshold=pellet_threshold,
+        model_type=model_type,
+    )
+    return meals_with_acc, first_good_time
 
 def extract_meal_acc_each(events: pd.DataFrame):
     """Calculates the accuracy of pellet retrieval for each inter-pellet interval within a meal.
@@ -528,7 +616,7 @@ def process_meal_data(session: SessionData, export_root: str | os.PathLike | Non
     """
     data = session.raw.copy()
     meal, _, in_meal_ratio = find_meals_paper(data, time_threshold=60, pellet_threshold=2, in_meal_ratio=True)
-    meal_with_acc, first_meal_time = find_first_good_meal(data, 60, 2, 'lstm')
+    meals_with_acc, good_mask, first_meal_time = analyze_meals(data, 60, 2, 'cnn')
     meal_1 = (meal[0][0] - data['Time'][0]).total_seconds() / 3600 if meal else 0
     meal_1_good = (
         (first_meal_time - data['Time'][0]).total_seconds() / 3600
@@ -576,5 +664,8 @@ def process_meal_data(session: SessionData, export_root: str | os.PathLike | Non
         'fir_meal': meal_1,
         'fir_good_meal': meal_1_good,
         'meal_count': round(len(meal) / experiment_duration(data), 2),
-        'in_meal_ratio': in_meal_ratio
+        'in_meal_ratio': in_meal_ratio,
+        'good_mask': good_mask,
+        'total_meals': len(good_mask),
+        'meals_with_acc': meals_with_acc,
     }

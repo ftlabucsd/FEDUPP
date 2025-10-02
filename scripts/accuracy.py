@@ -281,6 +281,7 @@ def graph_group_stats(
     dpi: int = 150,
     verbose: bool = True,
     export_path: str | None = None,
+    remove_outlier_stds: float = -1, # -1 means no outlier removal
 ):
     """Visualise summary statistics for one or more groups.
 
@@ -297,6 +298,7 @@ def graph_group_stats(
         dpi (int, optional): Figure DPI. Defaults to 150.
         verbose (bool, optional): When True, print summary statistics. Defaults to True.
         export_path (str, optional): When provided, save the figure to this path.
+        remove_outlier_stds (float, optional): The number of standard deviations to use for outlier removal. Defaults to 2.5.
     """
     if not group_data:
         raise ValueError("group_data must contain at least one group.")
@@ -309,6 +311,11 @@ def graph_group_stats(
 
     prepared = []
     for idx, values in enumerate(group_data):
+        # remove values exceeding certain number of std from the mean
+        if remove_outlier_stds > 0:
+            mean = np.mean(values)
+            std = np.std(values)
+            values = [value for value in values if value < mean + remove_outlier_stds * std and value > mean - remove_outlier_stds * std]
         if len(values) == 0:
             raise ValueError(f"Group '{group_names[idx]}' has no observations.")
         prepared.append(np.asarray(values, dtype=float))
