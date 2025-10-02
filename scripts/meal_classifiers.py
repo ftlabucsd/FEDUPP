@@ -4,6 +4,7 @@ meal-related time-series data. It includes classes for datasets, the classifiers
 themselves, and functions for training, evaluation, and prediction.
 """
 import numpy as np
+from sklearn.metrics import f1_score
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -181,9 +182,12 @@ def evaluate_meals_by_groups(model:nn.Module, ctrl_input:torch.Tensor, ctrl_y:to
     predicted_ctrl, predicted_exp = predicted_ctrl.cpu().numpy(), predicted_exp.cpu().numpy()
     ctrl_good, ctrl_total = np.sum(predicted_ctrl), np.size(predicted_ctrl)
     exp_good, exp_total = np.sum(predicted_exp), np.size(predicted_exp)
-
-    print(f'Control Group: {ctrl_total-ctrl_good}/{ctrl_total} good meals with proportion of {1-ctrl_good/ctrl_total}')
-    print(f'Experiment Group: {exp_total-exp_good}/{exp_total} good meals with proportion of {1-exp_good/exp_total}')
+    
+    # calculate F1 score
+    f1_ctrl = f1_score(ctrl_y, predicted_ctrl)
+    f1_exp = f1_score(exp_y, predicted_exp)
+    print(f'Control Group: {ctrl_total-ctrl_good}/{ctrl_total} good meals with proportion of {1-ctrl_good/ctrl_total}; F1 Score: {f1_ctrl:.3f}')
+    print(f'Experiment Group: {exp_total-exp_good}/{exp_total} good meals with proportion of {1-exp_good/exp_total}; F1 Score: {f1_exp:.3f}')
 
 
 def evaluate_meals_on_new_data(model:nn.Module, ctrl_input:torch.Tensor, exp_input:torch.Tensor):
@@ -208,7 +212,7 @@ def evaluate_meals_on_new_data(model:nn.Module, ctrl_input:torch.Tensor, exp_inp
     ctrl_good, ctrl_total = np.sum(predicted_ctrl), np.size(predicted_ctrl)
     exp_good, exp_total = np.sum(predicted_exp), np.size(predicted_exp)
 
-    print(f'Control Group: {ctrl_total-ctrl_good}/{ctrl_total} good meals with proportion of {1-ctrl_good/ctrl_total}')
+    print(f'Control Group: {ctrl_total-ctrl_good}/{ctrl_total} good meals with proportion of {1-ctrl_good/ctrl_total}; F1 Score: {f1_ctrl:.3f}')
     print(f'Experiment Group: {exp_total-exp_good}/{exp_total} good meals with proportion of {1-exp_good/exp_total}')
 
 
