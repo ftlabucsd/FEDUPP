@@ -4,16 +4,18 @@ It includes methods for identifying meals, calculating meal-related statistics,
 and visualizing meal data.
 """
 from collections import defaultdict
+from pathlib import Path
+
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 import matplotlib.patches as mpatches
 from datetime import timedelta
 import numpy as np
-from accuracy import find_inactive_index, calculate_accuracy
-from meal_classifiers import predict, RNNClassifier, CNNClassifier
+from scripts.accuracy import find_inactive_index, calculate_accuracy
+from scripts.meal_classifiers import predict, RNNClassifier, CNNClassifier
 import torch
-from preprocessing import read_excel_by_sheet, get_bhv_num
+from scripts.preprocessing import SessionData
 import os
 
 plt.rcParams['figure.figsize'] = (20, 6)
@@ -67,53 +69,42 @@ def average_pellet(group: pd.DataFrame) -> float:
     return round(24*total_pellet / total_hr, 2)
 
 
-def graph_pellet_frequency(grouped_data: pd.DataFrame, bhv, num, export_path=None):
-    """Generates a bar plot showing the frequency of pellet consumption over time.
+def graph_pellet_frequency(grouped_data: pd.DataFrame, bhv, num, export_path=None, show: bool = False):
+    """Generates a bar plot showing the frequency of pellet consumption over time."""
+    fig, ax = plt.subplots()
+    sns.barplot(data=grouped_data, x='Interval_Start', y='Pellet_Count', color='#000099', alpha=0.5, ax=ax)
 
-    Args:
-        grouped_data (pd.DataFrame): DataFrame with pellet counts per time interval.
-        bhv (str): Behavior group identifier.
-        num (str): Mouse number identifier.
-        export_path (str, optional): Path to save the generated plot. Defaults to None.
-    """
-    ax = sns.barplot(data=grouped_data, x='Interval_Start', y='Pellet_Count', color='#000099', alpha=0.5)
-
-    # Get the x-axis positions
     xtick_positions = ax.get_xticks()
-
-    # Update x-axis labels to display one-hour intervals
     hourly_labels = [label.strftime('%H:%M') for label in grouped_data['Interval_Start'] if label.minute == 0]
     hourly_positions = [pos for pos, label in zip(xtick_positions, grouped_data['Interval_Start']) if label.minute == 0]
 
-    ax.set_xticks(hourly_positions)  # Set the tick positions to match the hourly intervals
-    ax.set_xticklabels(hourly_labels, rotation=45, horizontalalignment='right')  # Set the tick labels to hourly format
-    
-    # Locate the x-coordinates for the specified times
+    ax.set_xticks(hourly_positions)
+    ax.set_xticklabels(hourly_labels, rotation=45, horizontalalignment='right')
+
     if bhv is not None:
         inactive = find_inactive_index(hourly_labels, rev=False)
     else:
         inactive = find_inactive_index(hourly_labels, rev=True)
 
     for idx, each in enumerate(inactive):
-        if idx == 0:
-            ax.axvspan(6*each[0], 6*(1+each[1]), color='grey', alpha=0.4, label='Inactive')
-        else:
-            ax.axvspan(6*each[0], 6*(1+each[1]), color='grey', alpha=0.4)
+        label = 'Inactive' if idx == 0 else None
+        ax.axvspan(6*each[0], 6*(1+each[1]), color='grey', alpha=0.4, label=label)
 
-    # Add vertical grey background for the time interval between 7 p.m. and 7 a.m.
-    plt.axhline(y=5, color='red', linestyle='--', label='meal')
-    if bhv == None:
-        plt.title(f'Pellet Frequency of Mouse {num}', fontsize=18)
+    ax.axhline(y=5, color='red', linestyle='--', label='meal')
+    if bhv is None:
+        ax.set_title(f'Pellet Frequency of Mouse {num}', fontsize=18)
     else:
-        plt.title(f'Pellet Frequency of Group {bhv} Mouse {num}', fontsize=18)
-    plt.xlabel('Time', fontsize=14)
-    plt.ylabel('Number of Pellet', fontsize=14)
-    plt.yticks(range(0, 19, 2))
-    plt.tight_layout()
-    plt.legend()
+        ax.set_title(f'Pellet Frequency of Group {bhv} Mouse {num}', fontsize=18)
+    ax.set_xlabel('Time', fontsize=14)
+    ax.set_ylabel('Number of Pellet', fontsize=14)
+    ax.set_yticks(range(0, 19, 2))
+    ax.legend()
+    fig.tight_layout()
     if export_path:
-        plt.savefig(export_path, bbox_inches='tight')
-    plt.show()
+        fig.savefig(export_path, bbox_inches='tight')
+    if show:
+        plt.show()
+    plt.close(fig)
 
 def find_first_good_meal(data:pd.DataFrame, time_threshold, pellet_threshold, model_type='cnn'):
     """Identifies the first "good" meal in a session based on a classification model.
@@ -396,66 +387,57 @@ def extract_meals_for_model(data: pd.DataFrame, time_threshold=60,
     return meals, meal_len
 
 
-def graphing_cum_count(data: pd.DataFrame, meal: list, bhv, num, flip=False, export_path=None):
-    """Graphs the cumulative count of pellets over time, highlighting meal periods.
-
-    Args:
-        data (pd.DataFrame): DataFrame with 'Time' and 'Pellet_Count' columns.
-        meal (list): A list of time intervals representing meals.
-        bhv (str): The behavior group identifier.
-        num (str): The mouse number identifier.
-        flip (bool, optional): If True, flips the secondary y-axis. Defaults to False.
-        export_path (str, optional): Path to save the plot. Defaults to None.
-    """
+def graphing_cum_count(data: pd.DataFrame, meal: list, bhv, num, flip=False, export_path=None, show: bool = False):
+    """Graphs the cumulative count of pellets over time."""
     fig, ax1 = plt.subplots()
     ax1.plot(data['Time'], data['Pellet_Count'], color='blue')
-    if bhv == None:
+    if bhv is None:
         ax1.set_title(f'Pellet Count and Cumulative Sum Over Time of Mouse {num}', fontsize=18)
     else:
         ax1.set_title(f'Pellet Count and Cumulative Sum Over Time of Group {bhv} Mouse {num}', fontsize=18)
 
     for interval in meal:
-        plt.axvspan(interval[0], interval[1], color='lightblue')
+        ax1.axvspan(interval[0], interval[1], color='lightblue')
 
     ax1.set_xlabel('Time', fontsize=12)
     ax1.set_ylabel('Pellet_Count', fontsize=12)
 
     if not flip:
-        ax2 = ax1.twinx()  # Share the same x-axis as ax1
+        ax2 = ax1.twinx()
         ax2.set_ylabel('Cum_Sum', fontsize=12)
         ax2.plot(data['Time'], data['Cum_Sum'], color='blue')
 
     start = None
     end = None
-    
+
     if bhv is not None:
         for interval in pd.date_range(start=data['Time'].min(), end=data['Time'].max(), freq='20min'):
-            if (19 <= interval.hour or interval.hour < 7) and start == None:
+            if (19 <= interval.hour or interval.hour < 7) and start is None:
                 start = interval
-            elif interval.hour == 7:
-                end = interval
-                plt.axvspan(start, end, color='grey', alpha=0.4)
+            elif interval.hour == 7 and start is not None:
+                ax1.axvspan(start, interval, color='grey', alpha=0.4)
                 start = end = None
-        if start != None and end == None:
-            plt.axvspan(start, data['Time'].max(), color='grey', alpha=0.4)
+        if start is not None and end is None:
+            ax1.axvspan(start, data['Time'].max(), color='grey', alpha=0.4)
     else:
         for interval in pd.date_range(start=data['Time'].min(), end=data['Time'].max(), freq='20min'):
-            if (7 <= interval.hour and interval.hour < 19) and start == None:
+            if (7 <= interval.hour < 19) and start is None:
                 start = interval
-            elif interval.hour == 19 and start != None:        
-                # print(start, interval)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         
-                plt.axvspan(start, interval, color='grey', alpha=0.4)
+            elif interval.hour == 19 and start is not None:
+                ax1.axvspan(start, interval, color='grey', alpha=0.4)
                 start = end = None
-        if start != None and end == None:
-            plt.axvspan(start, data['Time'].max(), color='grey', alpha=0.4)
-    
+        if start is not None and end is None:
+            ax1.axvspan(start, data['Time'].max(), color='grey', alpha=0.4)
+
     patch_meal = mpatches.Patch(color='lightblue', alpha=0.9, label='Meal')
     patch_inactive = mpatches.Patch(color='grey', alpha=0.5, label='Inactive')
 
-    plt.legend(handles=[patch_meal, patch_inactive], loc='upper right')
+    ax1.legend(handles=[patch_meal, patch_inactive], loc='upper right')
     if export_path:
-        plt.savefig(export_path, bbox_inches='tight')
-    plt.show()
+        fig.savefig(export_path, bbox_inches='tight')
+    if show:
+        plt.show()
+    plt.close(fig)
 
 
 def experiment_duration(data: pd.DataFrame):
@@ -528,7 +510,7 @@ def print_meal_stats(data):
     print(f"Total {total_meals} meals and keep {keep_meals}")
 
 
-def process_meal_data(sheet, path, is_cask=False, export_root=None, prefix=None):
+def process_meal_data(session: SessionData, export_root: str | os.PathLike | None = None, prefix: str | None = None):
     """Processes meal data for a single sheet and returns key metrics.
 
     This function reads data from a single Excel sheet, identifies meals, calculates
@@ -544,24 +526,49 @@ def process_meal_data(sheet, path, is_cask=False, export_root=None, prefix=None)
     Returns:
         dict: A dictionary containing calculated meal metrics.
     """
-    data = read_excel_by_sheet(sheet=sheet, parent=path)
+    data = session.raw.copy()
     meal, _, in_meal_ratio = find_meals_paper(data, time_threshold=60, pellet_threshold=2, in_meal_ratio=True)
     meal_with_acc, first_meal_time = find_first_good_meal(data, 60, 2, 'lstm')
-    meal_1 = (meal[0][0] - data['Time'][0]).total_seconds() / 3600
-    meal_1_good = (first_meal_time - data['Time'][0]).total_seconds() / 3600
+    meal_1 = (meal[0][0] - data['Time'][0]).total_seconds() / 3600 if meal else 0
+    meal_1_good = (
+        (first_meal_time - data['Time'][0]).total_seconds() / 3600
+        if first_meal_time is not None
+        else meal_1
+    )
     group = pellet_flip(data)
-    bhv, num = get_bhv_num(sheet)
+    bhv, num = session.key.group, session.key.mouse_id
     
-    if prefix is None:
-        prefix = 'cask' if is_cask else 'ctrl'
-    else:
-        prefix = prefix
+    run_prefix = prefix if prefix is not None else session.key.group.lower()
     
-    freq_path = os.path.join(export_root, f'{prefix}_{sheet}_pellet_frequency.svg') if export_root else None
-    cum_path = os.path.join(export_root, f'{prefix}_{sheet}_cumulative_sum.svg') if export_root else None
+    session_label = session.key.session_id
+    export_root_path = Path(export_root) if export_root else None
+    freq_path = (
+        export_root_path / f"{run_prefix}_{session_label}_pellet_frequency.svg"
+        if export_root_path
+        else None
+    )
+    cum_path = (
+        export_root_path / f"{run_prefix}_{session_label}_cumulative_sum.svg"
+        if export_root_path
+        else None
+    )
     
-    graph_pellet_frequency(group, bhv, num, export_path=freq_path)
-    graphing_cum_count(data, meal, bhv, num, flip=True, export_path=cum_path)
+    graph_pellet_frequency(
+        group,
+        bhv,
+        num,
+        export_path=str(freq_path) if freq_path else None,
+        show=False,
+    )
+    graphing_cum_count(
+        data,
+        meal,
+        bhv,
+        num,
+        flip=True,
+        export_path=str(cum_path) if cum_path else None,
+        show=False,
+    )
     
     return {
         'avg_pellet': average_pellet(group),

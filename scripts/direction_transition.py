@@ -6,11 +6,13 @@ visualize learning trends, and assess learning scores.
 """
 import os
 from datetime import timedelta
+
 import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 import numpy as np
-from meals import find_meals_paper, find_first_good_meal, pellet_flip
+
+from scripts.meals import find_meals_paper, find_first_good_meal
 
 colors = {'Left': 'red', 'Right': 'blue', 'Pellet': 'green'}
 
@@ -275,7 +277,6 @@ def graph_tranition_stats(data_stats: pd.DataFrame, blocks: list, sheet: str, ex
     ax.set_xlabel('Blocks', fontsize=16)
     ax.set_ylabel('Percentage(%)', color='black', fontsize=16)
 
-    info = get_bhv_num(sheet)
     inactive_blocks = find_inactive_blocks(blocks, reverse=False)
 
     for block_index in inactive_blocks:
@@ -333,7 +334,6 @@ def graph_learning_trend(data_stats: pd.DataFrame, blocks: list, path: str, bloc
     ax.set_xlabel('Blocks', fontsize=16)
     ax.set_ylabel('Percentage(%)', color='black', fontsize=16)
 
-    info = get_bhv_num(path)
     inactive_blocks = find_inactive_blocks(blocks, False)
     
     for block_index in inactive_blocks:
@@ -616,7 +616,8 @@ def plot_learning_score_trend(
         action_prop (float, optional): The action proportion to evaluate for violin plot. Defaults to 1.0 (100%).
         export_path (str, optional): Path to save the figure. Defaults to None.
     """
-    from accuracy import graph_group_stats, graph_single_stats
+    from scripts.accuracy import graph_group_stats
+    from scripts.intervals import perform_T_test
     
     # Default group labels
     if group_labels is None:
@@ -636,31 +637,17 @@ def plot_learning_score_trend(
         group_scores.append(mouse_scores)
     
     # Create violin plot (existing functionality)
+    violin_export = export_path
+    graph_group_stats(
+        group_data=group_scores,
+        stats_name="Learning Score",
+        unit="%",
+        group_names=group_labels,
+        export_path=violin_export
+    )
+
     if len(group_scores) == 2:
-        # Two groups comparison
-        from intervals import perform_T_test
         perform_T_test(group_scores[0], group_scores[1])
-        violin_export = export_path
-        graph_group_stats(
-            ctrl=group_scores[0],
-            exp=group_scores[1],
-            stats_name="Learning Score",
-            unit="%",
-            group_names=group_labels,
-            export_path=violin_export
-        )
-    elif len(group_scores) == 1:
-        # Single group
-        violin_export = export_path
-        graph_single_stats(
-            data=group_scores[0],
-            stats_name="Learning Score",
-            unit="%",
-            group_name=group_labels[0],
-            export_path=violin_export
-        )
-    else:
-        raise ValueError("This function currently supports only 1 or 2 groups. For more groups, please extend the implementation.")
     
     # Create trend line plot
     trend_export = export_path.replace('_overall', '_trend')
@@ -848,7 +835,7 @@ def plot_pellet_ratio_trend(
         pellet_threshold (int, optional): Pellet threshold for meal definition. Defaults to 2.
         export_path (str, optional): Path to save the plot. Defaults to None.
     """
-    from accuracy import graph_group_stats, graph_single_stats
+    from scripts.accuracy import graph_group_stats
     
     # Default group labels
     if group_labels is None:
@@ -881,31 +868,18 @@ def plot_pellet_ratio_trend(
         group_ratios.append(mouse_ratios)
     
     # Create violin plot (existing functionality)
+    violin_export = export_path
+    graph_group_stats(
+        group_data=group_ratios,
+        stats_name="Pellet-in-Meal Ratio",
+        unit="ratio",
+        group_names=group_labels,
+        export_path=violin_export
+    )
+
     if len(group_ratios) == 2:
-        # Two groups comparison
-        from intervals import perform_T_test
+        from scripts.intervals import perform_T_test
         perform_T_test(group_ratios[0], group_ratios[1])
-        violin_export = export_path
-        graph_group_stats(
-            ctrl=group_ratios[0],
-            exp=group_ratios[1],
-            stats_name="Pellet-in-Meal Ratio",
-            unit="ratio",
-            group_names=group_labels,
-            export_path=violin_export
-        )
-    elif len(group_ratios) == 1:
-        # Single group
-        violin_export = export_path
-        graph_single_stats(
-            data=group_ratios[0],
-            stats_name="Pellet-in-Meal Ratio",
-            unit="ratio",
-            group_name=group_labels[0],
-            export_path=violin_export
-        )
-    else:
-        raise ValueError("This function currently supports only 1 or 2 groups. For more groups, please extend the implementation.")
     
     # Create trend line plot
     trend_export = export_path.replace('_overall', '_trend')

@@ -11,7 +11,7 @@ from sklearn.metrics import silhouette_score
 import matplotlib.pyplot as plt
 import numpy as np
 import meals as ml
-from preprocessing import read_excel_by_sheet
+from scripts.preprocessing import build_session_catalog
 import os
 import pickle
 import torch

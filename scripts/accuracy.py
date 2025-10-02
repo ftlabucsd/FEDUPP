@@ -7,13 +7,13 @@ groups of subjects.
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
-from preprocessing import read_excel_by_sheet
+from scripts.preprocessing import SessionData
 import numpy as np
 from datetime import datetime, timedelta
 import matplotlib.patches as mpatches
 
 
-def read_and_record(path:str, sheet:str, ending_corr:list, learned_time:list, acc_dict:dict):
+def read_and_record(session: SessionData, ending_corr: list, learned_time: list, acc_dict: dict):
     """
     Reads data from a sheet, calculates accuracy at a specific time point,
     and records metrics.
@@ -28,9 +28,7 @@ def read_and_record(path:str, sheet:str, ending_corr:list, learned_time:list, ac
     Returns:
         pd.DataFrame: The processed DataFrame.
     """
-    df = read_excel_by_sheet(sheet, path, collect_time=True, 
-                             cumulative_accuracy=True, remove_trivial=True, 
-                             convert_large=True)
+    df = session.raw.copy()
     target_time = timedelta(hours=24, minutes=30)
     df['time_diff'] = (df['Time_passed'] - target_time).abs()
     closest_accuracy = df.loc[df['time_diff'].idxmin(), 'Percent_Correct']
@@ -39,15 +37,15 @@ def read_and_record(path:str, sheet:str, ending_corr:list, learned_time:list, ac
 
     ending_corr.append(closest_accuracy)
     learned_time.append(find_first_learned_time(df))
-    acc_dict[sheet] = closest_accuracy
+    acc_dict[session.key.mouse_id] = closest_accuracy
     return df
 
 
 def plot_cumulative_accuracy(
     groups: list,
-    group_labels: list = None,
+    group_labels: list | None = None,
     bin_size_sec: int = 10,
-    export_path: str = None
+    export_path: str | None = None,
 ):
     """
     Plots the mean ± SEM of cumulative accuracy for one or more groups.
@@ -62,7 +60,7 @@ def plot_cumulative_accuracy(
         group_labels = [f"G{idx+1}" for idx in range(len(groups))]
 
     # colors for up to two groups; you can extend this list for more
-    palette = ['#425df5', '#f55442', '#42f58c', '#f5e142']
+    palette = ['#425df5', '#f55442', '#0ec72a', '#f5e142']
 
     fig, ax = plt.subplots(figsize=(16, 6), dpi=150)
 
@@ -76,7 +74,7 @@ def plot_cumulative_accuracy(
             # 1) resample onto a regular grid of bin_size_sec
             resampled = (
                 ts
-                .resample(f"{bin_size_sec}S")
+                .resample(f"{bin_size_sec}s")
                 .mean()   # average within each bin
                 .ffill()  # forward-fill so it's truly cumulative
             )
@@ -274,102 +272,113 @@ def find_first_learned_time(data:pd.DataFrame, window_hours=2, accuracy_threshol
     return data.loc[len(data)-1, 'Time_passed'].total_seconds() / 3600
 
 
-def graph_group_stats(ctrl: list,
-                      exp: list,
-                      stats_name: str,
-                      unit: str,
-                      violin_width=0.25,
-                      dpi=150,
-                      group_names=None,
-                      verbose=True,
-                      export_path=None):
-    """
-    Graphs statistics for two groups using violin plots with inset boxplots and scatter plots.
+def graph_group_stats(
+    group_data: list,
+    stats_name: str,
+    unit: str,
+    group_names: list | None = None,
+    violin_width: float = 0.25,
+    dpi: int = 150,
+    verbose: bool = True,
+    export_path: str | None = None,
+):
+    """Visualise summary statistics for one or more groups.
+
+    Creates violin plots with inset boxplots and jittered scatter points for each
+    group, optionally exporting the figure. Supports between 1 and 5 groups.
 
     Args:
-        ctrl (list): Data for the control group.
-        exp (list): Data for the experimental group.
-        stats_name (str): The name of the statistic being plotted (e.g., "Accuracy").
-        unit (str): The unit of the statistic (e.g., "%").
-        violin_width (float, optional): The width of the violin plots. Defaults to 0.25.
-        dpi (int, optional): The resolution of the figure. Defaults to 150.
-        group_names (list, optional): Names for the groups. Defaults to ['Control', 'Experiment'].
-        verbose (bool, optional): If True, prints summary statistics. Defaults to True.
-        export_path (str, optional): The file path to save the figure. Defaults to None.
+        group_data (list[list[float]]): Sequence of observations per group.
+        stats_name (str): Display name of the statistic (e.g., "Accuracy").
+        unit (str): Unit label to append to the y-axis (e.g., "%").
+        group_names (list[str], optional): Names for each group. Defaults to
+            generated numeric labels when omitted.
+        violin_width (float, optional): Width of each violin. Defaults to 0.25.
+        dpi (int, optional): Figure DPI. Defaults to 150.
+        verbose (bool, optional): When True, print summary statistics. Defaults to True.
+        export_path (str, optional): When provided, save the figure to this path.
     """
-    # Default group names
-    if group_names is None or len(group_names) < 2:
-        group_names = ['Control', 'Experiment']
-    ctrl_name, exp_name = group_names
+    if not group_data:
+        raise ValueError("group_data must contain at least one group.")
 
-    # Summary statistics
+    n_groups = len(group_data)
+    if group_names is None:
+        group_names = [f"Group {idx+1}" for idx in range(n_groups)]
+    if len(group_names) != n_groups:
+        raise ValueError("group_names length must match group_data length.")
+
+    prepared = []
+    for idx, values in enumerate(group_data):
+        if len(values) == 0:
+            raise ValueError(f"Group '{group_names[idx]}' has no observations.")
+        prepared.append(np.asarray(values, dtype=float))
+
     if verbose:
-        ctrl_avg = np.mean(ctrl)
-        exp_avg  = np.mean(exp)
-        ctrl_se  = np.std(ctrl) / np.sqrt(len(ctrl))
-        exp_se   = np.std(exp) / np.sqrt(len(exp))
-        print(f'{ctrl_name} Size: {len(ctrl)}')
-        print(f'{exp_name} Size: {len(exp)}')
-        print(f'{ctrl_name} Average: {ctrl_avg:.3f}')
-        print(f'{exp_name} Average: {exp_avg:.3f}')
-        print(f'{ctrl_name} SE: {ctrl_se:.3f}')
-        print(f'{exp_name} SE: {exp_se:.3f}')
+        for name, values in zip(group_names, prepared):
+            mean_val = float(np.mean(values))
+            se_val = float(np.std(values, ddof=0) / np.sqrt(len(values)))
+            print(f"{name} Size: {len(values)} \t Average: {mean_val:.3f} \t SE: {se_val:.3f}")
 
-    # Figure setup
+    fig_width = max(6, 2 + 1.6 * n_groups)
     fig, ax = plt.subplots(dpi=dpi)
-    fig.set_size_inches(6, 6)
+    fig.set_size_inches(fig_width, 6)
 
-    # X positions for the two groups
-    x_positions = [0.5, 1.0]
-    data = [ctrl, exp]
+    x_positions = np.arange(n_groups)
+    colors = ['#425df5', '#f55442', '#0ec72a', '#f5e142'] # Blue, Orange, Green, Red
 
-    # 1) Violin plots (no interior lines/extrema)
-    parts = ax.violinplot(data,
-                          positions=x_positions,
-                          widths=violin_width,
-                          showmeans=False,
-                          showmedians=False,
-                          showextrema=False)
+    parts = ax.violinplot(
+        prepared,
+        positions=x_positions,
+        widths=violin_width,
+        showmeans=False,
+        showmedians=False,
+        showextrema=False,
+    )
     for i, violin in enumerate(parts['bodies']):
-        color = '#38bcf5' if i == 0 else '#38f5a6'
+        color = colors[i % len(colors)]
         violin.set_facecolor(color)
         violin.set_edgecolor('black')
-        violin.set_alpha(0.6)
+        violin.set_alpha(0.65)
 
-    # 2) Boxplots inside the violins
-    ax.boxplot(data,
-               positions=x_positions,
-               widths=violin_width * 0.5,
-               showfliers=False,
-               patch_artist=True,
-               boxprops=dict(facecolor='white', edgecolor='black'),
-               medianprops=dict(color='black'),
-               whiskerprops=dict(color='black'),
-               capprops=dict(color='black'))
+    ax.boxplot(
+        prepared,
+        positions=x_positions,
+        widths=violin_width * 0.6,
+        showfliers=False,
+        patch_artist=True,
+        boxprops=dict(facecolor='white', edgecolor='black'),
+        medianprops=dict(color='black'),
+        whiskerprops=dict(color='black'),
+        capprops=dict(color='black'),
+    )
 
-    # 3) Scatter individual points (jittered)
-    jitter_strength = violin_width / 8
-    scatter_colors = ['#18c1f5', '#36d15a']
-    for x, group_data, c in zip(x_positions, data, scatter_colors):
-        x_j = x + np.random.uniform(-jitter_strength, jitter_strength, size=len(group_data))
-        ax.scatter(x_j, group_data, marker='o', zorder=3, color=c, alpha=0.8)
+    jitter_strength = violin_width / 6
+    for i, (x, values) in enumerate(zip(x_positions, prepared)):
+        jitter = np.random.uniform(-jitter_strength, jitter_strength, size=len(values))
+        ax.scatter(
+            np.repeat(x, len(values)) + jitter,
+            values,
+            color=colors[i % len(colors)],
+            edgecolor='black',
+            linewidth=0.4,
+            alpha=0.85,
+            zorder=3,
+        )
 
-    # Legend
-    ctrl_patch = mpatches.Patch(color='#38bcf5', alpha=0.6, label=f'{ctrl_name} (n={len(ctrl)})')
-    exp_patch  = mpatches.Patch(color='#38f5a6', alpha=0.6, label=f'{exp_name} (n={len(exp)})')
-    ax.legend(handles=[ctrl_patch, exp_patch])
+    legend_handles = [
+        mpatches.Patch(color=colors[i % len(colors)], alpha=0.65, label=f"{name} (n={len(values)})")
+        for i, (name, values) in enumerate(zip(group_names, prepared))
+    ]
+    ax.legend(handles=legend_handles, fontsize=12)
 
-    # Labels & title
     ax.set_xlabel('Groups', fontsize=14)
-    ax.set_ylabel(f'{stats_name} ({unit})', fontsize=14)
-    ax.set_title(f'{stats_name} Distribution: {ctrl_name} vs. {exp_name}', fontsize=20)
-
-    # X‐axis ticks
+    ax.set_ylabel(f"{stats_name} ({unit})", fontsize=14)
+    ax.set_title(f"{stats_name} Distribution", fontsize=20)
     ax.set_xticks(x_positions)
-    ax.set_xticklabels(group_names)
-    ax.set_xlim(0, 1.5)
+    ax.set_xticklabels(group_names, rotation=0)
+    ax.set_xlim(-0.5, n_groups - 0.5)
+    ax.grid(axis='y', linestyle='--', alpha=0.3)
 
-    # Save or display
     if export_path:
         plt.savefig(export_path, bbox_inches='tight')
     plt.show()

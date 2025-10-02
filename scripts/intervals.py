@@ -8,10 +8,11 @@ import pandas as pd
 from scipy import stats
 import matplotlib.pyplot as plt
 import seaborn as sns
-from preprocessing import get_retrieval_time, read_excel_by_sheet
 import numpy as np
-from direction_transition import split_data_to_blocks
 import os
+
+from scripts.preprocessing import SessionData, get_retrieval_time
+from scripts.direction_transition import split_data_to_blocks
 
 
 def clean_and_interval(path: str) -> pd.DataFrame:
