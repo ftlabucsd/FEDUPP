@@ -10,8 +10,7 @@ import matplotlib.pyplot as plt
 from sklearn.metrics import silhouette_score
 import matplotlib.pyplot as plt
 import numpy as np
-import meals as ml
-from scripts.preprocessing import build_session_catalog
+from scripts.meals import analyze_meals
 import os
 import pickle
 import torch
@@ -47,33 +46,25 @@ def index2meal(data_div: defaultdict, data:list):
         meal_by_category[key] = data[val]
     return meal_by_category
 
-
-def extract_data_full_group(file_path, sheets):
-    """Extracts meal data from a group of sheets in an Excel file.
-
-    Args:
-        file_path (str): The path to the Excel file.
-        sheets (list): A list of sheet names to process.
-
-    Returns:
-        defaultdict: A dictionary where keys are the number of pellets and values are lists of meal accuracy sequences.
-    """
-    data = defaultdict(list)
-    for sheet in sheets:
-        try:
-            each = read_excel_by_sheet(sheet, file_path, remove_trivial=False, collect_time=True)
-            each_acc_dict = ml.extract_meals_data(data=each, 
-                                            time_threshold=60,
-                                            pellet_threshold=2)
-        except ValueError:
-            continue
-        
-        for key, item in each_acc_dict.items():
-            data[key].extend(item)
-
-    ml.print_meal_stats(data)
-    # ctrl_data = ml.preprocess_meal_data(ctrl_data)
-    return data
+def extract_meal_sequences(session_list, time_threshold=60, pellet_threshold=2, counts=(3, 4, 5)):
+    sequences = {cnt: [] for cnt in counts}
+    session_ratios = []
+    for session in session_list:
+        meals_with_acc, good_mask, _ = analyze_meals(
+            session.raw.copy(),
+            time_threshold=time_threshold,
+            pellet_threshold=pellet_threshold,
+            model_type='cnn',
+        )
+        total = len(good_mask)
+        ratio = float(good_mask.sum()) / total if total else 0.0
+        session_ratios.append(ratio)
+        for _, padded in meals_with_acc:
+            valid = [value for value in padded if value != -1]
+            pellet_cnt = len(valid) + 1
+            if pellet_cnt in sequences:
+                sequences[pellet_cnt].append(valid)
+    return sequences, session_ratios
 
 
 def find_k_by_elbow(data:list):
@@ -101,7 +92,7 @@ def find_k_by_elbow(data:list):
     plt.show()
     
     
-def fit_model_single(data:list, k:int):
+def fit_model_single(data:list, k:int, visualize:bool=False):
     """Fits a KMeans model to the data and visualizes the clusters.
 
     Args:
@@ -119,8 +110,8 @@ def fit_model_single(data:list, k:int):
     meals_by_category = index2meal(data_div, data)
     score = silhouette_score(data, kmeans.labels_)
     print("Silhouette Score:", score)
-    visualize_kmeans(data, labels)
-    
+    if visualize:
+        visualize_kmeans(data, labels)
     return kmeans, meals_by_category
 
 def visualize_kmeans(data:list, labels:list):

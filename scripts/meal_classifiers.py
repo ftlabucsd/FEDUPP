@@ -11,7 +11,6 @@ from torch.utils.data import DataLoader, Dataset
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
-
 class TimeSeriesDataset(Dataset):
     """A custom PyTorch Dataset for time-series data."""
     def __init__(self, X, y):
