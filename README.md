@@ -83,11 +83,11 @@ sample_data/
 │   └── reversal.csv
 └── ...
 ```
-> Note: you do not have to specify the FR1 or reversal session type in csv filenames. Our algorithm will automatically determine its session. The names is for illustration only.
+> Note: you do not have to specify the FR1 or reversal session type in csv filenames. Our algorithm will automatically determine its session. The names is for illustration only, but you do not to put csv files for one mouse in one folder.
 
 **B. Define Group Membership**
 
-Create or modify `group_map.json` to assign mice id to experimental groups, for example like below (the ID you enter here must match the subfolder name, like "M1", "M2" above):
+Create or modify `group_map.json` to assign mice id to experimental groups, for example like below (the ID you enter here must match the subfolder name, like "M1", "M2" above, but the group name can be customized as desired):
 
 ```json
 {
@@ -215,8 +215,9 @@ The `Accurate Meal Model.ipynb` notebook provides a complete workflow for traini
 ### Workflow Overview
 
 ```
-1. Extract Meal Sequences → 2. K-means Clustering → 3. Manual Selection for good (expected) clusters → 
-4. Train LSTM/CNN → 5. Evaluate Performance → 6. Save Model Weights
+1. Extract Meal Sequences → 2. K-means Clustering 
+→ 3. Manual Selection for good (expected) clusters 
+→ 4. Train LSTM/CNN → 5. Evaluate Performance → 6. Save Model Weights
 ```
 
 ### Methodology
@@ -260,8 +261,8 @@ If you have multiple experimental groups and want custom meal quality models:
 5. Save your model weights in notebook: `torch.save(model.state_dict(), 'data/CNN_from_YOUR_NAME.pth')`
 
 **Model Performance (CASK dataset):**
-- LSTM: ~99% test accuracy, F1~=0.99-1.0
-- CNN: ~98-99% test accuracy, F1~=0.98
+- LSTM: ≈99% test accuracy, F1≈0.99-1.0
+- CNN: ≈98-99% test accuracy, F1≈0.98
 
 ---
 
@@ -491,9 +492,9 @@ Running the complete pipeline generates organized visualizations:
 
 ### FR1 Output (`figures/FR1/`)
 ```
-cumulative_accuracy.svg          # Learning curves with SEM bands
+cumulative_accuracy.svg           # Learning curves with SEM bands
 overall_accuracy.svg              # Final accuracy distribution
-learning_milestone_time.svg       # Time to 80% accuracy
+learning_milestone_time.svg       # Start time to maintaining 80% accuracy for 2 hours
 avg_pellets.svg                   # Pellet consumption rate
 first_meal_time.svg               # Initial meal latency
 first_good_meal_time.svg          # First quality meal latency
@@ -508,7 +509,7 @@ meals/
 
 ### Reversal Output (`figures/REV/`)
 ```
-rev_learning_score_overall.svg       # Early adaptation curves
+rev_learning_score_overall.svg        # Early adaptation curves
 rev_learning_result.svg               # Final performance distribution
 rev_pellet_ratio_overall.svg          # In-meal ratio trends
 rev_number_of_blocks.svg              # Block count per session
@@ -686,7 +687,7 @@ We welcome contributions! To contribute:
 
 ## 📧 Contact & Support
 
-**Maintainer**: [FT Lab](https://www.teleselab.com/)
+**Maintainer**: [FT Lab](https://www.teleselab.com/) <br>
 **Report Issues**: [GitHub Issues](https://github.com/your-username/FED3-data/issues)  
 
 For bug reports, include:
