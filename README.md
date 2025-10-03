@@ -246,7 +246,7 @@ The `Accurate Meal Model.ipynb` notebook provides a complete workflow for traini
 - Used automatically in main pipeline during meal analysis
 - Retrain on your own data for experiment-specific classifiers
 
-### Training Your Own Classifier
+### Training Your Own Classifier (Light Computation)
 
 If you have multiple experimental groups and want custom meal quality models:
 
@@ -259,6 +259,8 @@ If you have multiple experimental groups and want custom meal quality models:
    - Save labeled data to `.pkl` files
 4. Run training cells to train LSTM/CNN and evaluate
 5. Save your model weights in notebook: `torch.save(model.state_dict(), 'data/CNN_from_YOUR_NAME.pth')`
+
+Our LSTM model takes < 30s and CNN model takes < 10s to train on Apple M1 CPU, so you do not have to use a GPU! 
 
 **Model Performance (CASK dataset):**
 - LSTM: ≈99% test accuracy, F1≈0.99-1.0
@@ -580,7 +582,7 @@ TEST_PAIRS = [
 ]
 ```
 
-### Use Custom Meal Classifier (Computational Light)
+### Use Custom Meal Classifier
 
 Train your own model in `Accurate Meal Model.ipynb`, then update model loading in `scripts/meals.py`:
 
@@ -591,7 +593,6 @@ def _build_meal_model(model_type: str):
         model.load_state_dict(torch.load('data/CNN_from_YOUR_NAME.pth'))
     # ...
 ```
-The LSTM model takes < 30s and CNN model takes < 10s to train on Apple M1 CPU, so you do not have to use a GPU! 
 
 ### Extend with Custom Metrics
 
