@@ -580,7 +580,7 @@ TEST_PAIRS = [
 ]
 ```
 
-### Use Custom Meal Classifier
+### Use Custom Meal Classifier (Computational Light)
 
 Train your own model in `Accurate Meal Model.ipynb`, then update model loading in `scripts/meals.py`:
 
@@ -591,6 +591,7 @@ def _build_meal_model(model_type: str):
         model.load_state_dict(torch.load('data/CNN_from_YOUR_NAME.pth'))
     # ...
 ```
+The LSTM model takes < 30s and CNN model takes < 10s to train on Apple M1 CPU, so you do not have to use a GPU! 
 
 ### Extend with Custom Metrics
 
@@ -624,7 +625,7 @@ plot_group_stats_wrapper(custom_results, "My Metric", "units", "custom.svg", "fi
 
 | Issue | Possible Causes | Solution |
 |-------|----------------|----------|
-| **"No sessions found"** | Incorrect data structure | Ensure CSVs are in `sample_data/M*/` format |
+| **"No sessions found"** | Incorrect data structure | Ensure CSVs are in `DATA_DIR/*/` format and remember updating your directory of data in notebook |
 | **Missing meal classifier** | Model file not present | Check `data/CNN_from_CASK.pth` exists, or train your own |
 | **Import errors** | Missing dependencies | Run `pip install -r requirements.txt` |
 | **High memory usage** | Large cached data | Call `session_cache.cache_clear()` in Step 2 |
