@@ -1,9 +1,4 @@
-"""
-This script provides functions for analyzing meal patterns in FED3 data.
-It includes methods for identifying meals, calculating meal-related statistics,
-and visualizing meal data.
-"""
-from collections import defaultdict
+"""Meal detection, quality assessment, and visualisation utilities for FED3 sessions."""
 from pathlib import Path
 import os
 import warnings
@@ -23,9 +18,11 @@ _MEAL_CHECKPOINTS = {
     'cnn': _BASE_DIR / 'data' / 'CNN_from_CASK.pth',
     'lstm': _BASE_DIR / 'data' / 'LSTM_from_CASK.pth',
 }
+plt.rcParams['figure.figsize'] = (20, 6)
 
 
 def _build_meal_model(model_type: str) -> torch.nn.Module:
+    """Instantiate the requested meal classifier architecture."""
     if model_type == 'lstm':
         return RNNClassifier(input_size=1, hidden_size=400, num_layers=2, num_classes=2).to(_MEAL_MODEL_DEVICE)
     if model_type == 'cnn':
@@ -34,6 +31,7 @@ def _build_meal_model(model_type: str) -> torch.nn.Module:
 
 
 def _get_meal_model(model_type: str = 'cnn'):
+    """Load a cached meal classifier, initialising it on demand."""
     model_type = model_type.lower()
     if model_type not in _MEAL_MODEL_CACHE:
         model = _build_meal_model(model_type)
@@ -49,7 +47,8 @@ def _get_meal_model(model_type: str = 'cnn'):
     return _MEAL_MODEL_CACHE[model_type]
 
 
-def preload_meal_models(model_types: tuple[str, ...] | list[str] | None = None, *, strict: bool = False) -> dict[str, torch.nn.Module]:
+def preload_meal_models(model_types: tuple[str, ...] | list[str] | None = None) -> dict[str, torch.nn.Module]:
+    """Eagerly load meal classifiers so later calls avoid disk reads."""
     if model_types is None:
         model_types = ('cnn', 'lstm')
 
@@ -59,21 +58,17 @@ def preload_meal_models(model_types: tuple[str, ...] | list[str] | None = None, 
         try:
             loaded[key] = _get_meal_model(key)
         except FileNotFoundError as exc:
-            warning_msg = f"Skipping preload for '{model_type}': {exc}"
-            warnings.warn(warning_msg, RuntimeWarning, stacklevel=2)
-            if strict:
-                raise
+            raise RuntimeWarning(f"Skipping preload for '{model_type}': {exc}")
         except Exception as exc:  # pragma: no cover - safeguard
-            warnings.warn(f"Failed to preload meal model '{model_type}': {exc!r}", RuntimeWarning, stacklevel=2)
-            if strict:
-                raise
+            raise RuntimeWarning(f"Failed to preload meal model '{model_type}': {exc!r}")
     return loaded
 
 
 _PRELOADED_MEAL_MODELS = preload_meal_models()
 
 
-def predict_meal_quality(batch_meals, model_type='cnn'):
+def predict_meal_quality(batch_meals, model_type: str = 'cnn'):
+    """Run the chosen meal model on a batch of padded meal accuracy vectors."""
     model = _get_meal_model(model_type)
     return predict(model, batch_meals)
 
@@ -169,17 +164,9 @@ def analyze_meals(
 
     return meals_with_acc, good_mask, first_good_time
 
-plt.rcParams['figure.figsize'] = (20, 6)
 
 def pad_meal(each:list):
-    """Pads a list with -1 until it reaches a length of 4.
-
-    Args:
-        each (list): The list to pad.
-
-    Returns:
-        list: The padded list.
-    """
+    """Pad a list with ``-1`` values until it reaches a length of four."""
     size = len(each)
     while size < 4:
         each.append(-1)
@@ -188,16 +175,7 @@ def pad_meal(each:list):
 
 
 def pellet_flip(data: pd.DataFrame) -> pd.DataFrame:
-    """Aggregates pellet events into 10-minute intervals and counts the
-    number of pellets in each interval.
-
-    Args:
-        data (pd.DataFrame): A DataFrame containing FED3 data, including a 'Time'
-                             column and an 'Event' column.
-
-    Returns:
-        pd.DataFrame: A DataFrame with 'Interval_Start' and 'Pellet_Count' columns.
-    """
+    """Aggregate pellet events into 10-minute bins and count occurrences."""
     data = data.set_index('Time')
     grouped_data = data[data['Event'] == 'Pellet'].resample('10min').size().reset_index()
     grouped_data.columns = ['Interval_Start', 'Pellet_Count']
@@ -206,22 +184,14 @@ def pellet_flip(data: pd.DataFrame) -> pd.DataFrame:
 
 
 def average_pellet(group: pd.DataFrame) -> float:
-    """Calculates the average number of pellets consumed per 24-hour period.
-
-    Args:
-        group (pd.DataFrame): A DataFrame with 'Interval_Start' and 'Pellet_Count'
-                              columns, as returned by pellet_flip().
-
-    Returns:
-        float: The average number of pellets per day.
-    """
+    """Calculate the average number of pellets consumed per 24 hours."""
     total_hr = (group['Interval_Start'].max()-group['Interval_Start'].min()).total_seconds() / 3600
     total_pellet = group['Pellet_Count'].sum()
     return round(24*total_pellet / total_hr, 2)
 
 
 def graph_pellet_frequency(grouped_data: pd.DataFrame, bhv, num, export_path=None, show: bool = False):
-    """Generates a bar plot showing the frequency of pellet consumption over time."""
+    """Plot 10-minute pellet counts and shade inactive periods."""
     fig, ax = plt.subplots()
     sns.barplot(data=grouped_data, x='Interval_Start', y='Pellet_Count', color='#000099', alpha=0.5, ax=ax)
 
@@ -257,20 +227,9 @@ def graph_pellet_frequency(grouped_data: pd.DataFrame, bhv, num, export_path=Non
         plt.show()
     plt.close(fig)
 
-def find_first_good_meal(data:pd.DataFrame, time_threshold, pellet_threshold, model_type='cnn'):
-    """Identifies the first "good" meal in a session based on a classification model.
 
-    Args:
-        data (pd.DataFrame): The raw behavior data.
-        time_threshold (int): The maximum time in seconds between pellets to be considered part of the same meal.
-        pellet_threshold (int): The minimum number of pellets required to form a meal.
-        model_type (str, optional): The type of model to use ('lstm' or 'cnn'). Defaults to 'cnn'.
-
-    Returns:
-        tuple: A tuple containing:
-            - list: A list of all identified meals with their accuracies.
-            - datetime or None: The timestamp of the first good meal, or None if no good meal is found.
-    """
+def find_first_accurate_meal(data:pd.DataFrame, time_threshold, pellet_threshold, model_type='cnn'):
+    """Identify the first model-classified good meal within a session."""
     meals_with_acc, good_mask, first_good_time = analyze_meals(
         data,
         time_threshold=time_threshold,
@@ -279,15 +238,9 @@ def find_first_good_meal(data:pd.DataFrame, time_threshold, pellet_threshold, mo
     )
     return meals_with_acc, first_good_time
 
+
 def extract_meal_acc_each(events: pd.DataFrame):
-    """Calculates the accuracy of pellet retrieval for each inter-pellet interval within a meal.
-
-    Args:
-        events (pd.DataFrame): A DataFrame slice representing the events within a single meal.
-
-    Returns:
-        list: A list of accuracy values for each interval between pellets in the meal.
-    """
+    """Calculate per-interval pellet accuracy within a meal."""
     acc = []
     pellet_indices = events.index[events['Event'] == 'Pellet'].tolist()
 
@@ -301,73 +254,8 @@ def extract_meal_acc_each(events: pd.DataFrame):
     return acc
 
 
-def extract_meals_data(data: pd.DataFrame, time_threshold=60, 
-                       pellet_threshold=2, verbose=False) -> list:
-    """Extracts all meals from the data and groups them by the number of pellets.
-
-    Args:
-        data (pd.DataFrame): The raw behavior data.
-        time_threshold (int, optional): The maximum time between pellets for a meal. Defaults to 60.
-        pellet_threshold (int, optional): The minimum number of pellets for a meal. Defaults to 2.
-        verbose (bool, optional): If True, prints additional information. Defaults to False.
-
-    Returns:
-        defaultdict: A dictionary where keys are the number of pellets in a meal and
-                     values are lists of accuracy sequences for each meal.
-    """
-    df = data[data['Event'] == 'Pellet'].copy()
-    df['retrieval_timestamp'] = df['Time'] + pd.to_timedelta(df['collect_time'], unit='m')
-
-    meal_acc = defaultdict(list) # key is number of pellets, value is each series of accuracy in the meal
-    meal_start_time = None
-    meal_start_index = None
-
-    pellet_cnt = 1 # record pellets in the meal
-    for index, row in df.iterrows():
-        current_time = row['retrieval_timestamp']  # Get current time from the 'Time' column
-
-        if meal_start_time is None:
-            meal_start_time = current_time
-            meal_start_index = index
-            continue
-
-        # if current pellet is retrieved within 60 seconds after previous retrieval
-        if ((row['retrieval_timestamp'] - meal_start_time).total_seconds() <= time_threshold):
-            pellet_cnt += 1
-        else:
-            if pellet_cnt >= pellet_threshold:
-                pellet_cnt += 1
-                meal_events = data.loc[meal_start_index:index]
-                accuracies = extract_meal_acc_each(meal_events)
-                meal_acc[pellet_cnt].append(accuracies)
-
-            meal_start_time = current_time
-            meal_start_index = index
-            pellet_cnt = 1
-
-    if pellet_cnt >= pellet_threshold:
-        accuracies = extract_meal_acc_each(data.loc[meal_start_index:])
-        meal_acc[len(accuracies)+1].append(accuracies)
-    
-    return meal_acc
-
-
 def find_meals_paper(data:pd.DataFrame, time_threshold=60, pellet_threshold=2, in_meal_ratio=False):
-    """Identifies meals based on the criteria defined in a research paper.
-
-    Args:
-        data (pd.DataFrame): The raw behavior data.
-        time_threshold (int, optional): The maximum time between pellets for a meal. Defaults to 60.
-        pellet_threshold (int, optional): The minimum number of pellets for a meal. Defaults to 2.
-        in_meal_ratio (bool, optional): If True, also returns the ratio of pellets
-                                     consumed within meals. Defaults to False.
-
-    Returns:
-        tuple: A tuple containing:
-            - list: A list of meal time intervals.
-            - list: A list of accuracies for each meal.
-            - float (optional): The ratio of pellets in meals to total pellets.
-    """
+    """Identify meals using the heuristic described in the FED3 publication."""
     df = data[data['Event'] == 'Pellet'].copy()
     df['retrieval_timestamp'] = df['Time'] + pd.to_timedelta(df['collect_time'], unit='m')
 
@@ -418,65 +306,9 @@ def find_meals_paper(data:pd.DataFrame, time_threshold=60, pellet_threshold=2, i
         return meals, meal_acc, meal_ratio
     return meals, meal_acc
 
-def extract_meals_for_model(data: pd.DataFrame, time_threshold=60, 
-                       pellet_threshold=2) -> list:
-    """Extracts meal data formatted for input to a machine learning model.
-
-    This function identifies meals based on the provided time and pellet thresholds,
-    pads the meal data to a uniform length, and returns the meals and their lengths.
-
-    Args:
-        data (pd.DataFrame): The raw behavior data.
-        time_threshold (int, optional): The maximum time between pellets in a meal. Defaults to 60.
-        pellet_threshold (int, optional): The minimum number of pellets in a meal. Defaults to 2.
-
-    Returns:
-        tuple: A tuple containing:
-            - list: A list of padded meal accuracy sequences.
-            - list: A list of the original lengths of the meals.
-    """
-    df = data[data['Event'] == 'Pellet'].copy()
-    df['retrieval_timestamp'] = df['Time'] + pd.to_timedelta(df['collect_time'], unit='m')
-
-    meal_acc = []
-    meal_start_time = None
-    meal_start_index = None
-
-    pellet_cnt = 1 # record pellets in the meal
-    for index, row in df.iterrows():
-        current_time = row['retrieval_timestamp']  # Get current time from the 'Time' column
-
-        if meal_start_time is None:
-            meal_start_time = current_time
-            meal_start_index = index
-            continue
-
-        # if current pellet is retrieved within 60 seconds after previous retrieval
-        if ((row['retrieval_timestamp'] - meal_start_time).total_seconds() <= time_threshold):
-            pellet_cnt += 1
-        else:
-            if pellet_cnt >= pellet_threshold and pellet_cnt:
-                pellet_cnt += 1
-                meal_events = data.loc[meal_start_index:index]
-                accuracies = extract_meal_acc_each(meal_events)
-                meal_acc.append(accuracies)
-
-            meal_start_time = current_time
-            meal_start_index = index
-            pellet_cnt = 1
-
-    if pellet_cnt >= pellet_threshold:
-        accuracies = extract_meal_acc_each(data.loc[meal_start_index:])
-        meal_acc.append(accuracies)
-    
-    temp_list = [row for row in meal_acc if len(row) in [2,3,4]]
-    meal_len = [len(each)+1 for each in temp_list]
-    meals = [pad_meal(meal) for meal in temp_list]
-    return meals, meal_len
-
 
 def graphing_cum_count(data: pd.DataFrame, meal: list, bhv, num, flip=False, export_path=None, show: bool = False):
-    """Graphs the cumulative count of pellets over time."""
+    """Plot pellet counts alongside cumulative sum and highlight meals/inactivity."""
     fig, ax1 = plt.subplots()
     ax1.plot(data['Time'], data['Pellet_Count'], color='blue')
     if bhv is None:
@@ -529,14 +361,7 @@ def graphing_cum_count(data: pd.DataFrame, meal: list, bhv, num, flip=False, exp
 
 
 def experiment_duration(data: pd.DataFrame):
-    """Calculates the total duration of the experiment in days.
-
-    Args:
-        data (pd.DataFrame): The behavior data with a 'Time' column.
-
-    Returns:
-        float: The duration of the experiment in days.
-    """
+    """Return the total duration of the session in days."""
     data['Time'] = pd.to_datetime(data['Time'])
     duration = data.tail(1)['Time'].values[0] - data.head(1)['Time'].values[0]
     duration_seconds = duration / np.timedelta64(1, 's')
@@ -544,33 +369,8 @@ def experiment_duration(data: pd.DataFrame):
     return duration
 
 
-def calculate_deviation(grouped_data: pd.DataFrame) -> float:
-    """Calculates the mean squared deviation of cumulative pellet counts.
-
-    Args:
-        grouped_data (pd.DataFrame): DataFrame with a 'Cum_Sum' column.
-
-    Returns:
-        float: The mean squared deviation.
-    """
-    frequency = grouped_data['Cum_Sum'].tolist()
-    avg = np.median(frequency)
-    deviation = [(each - avg)**2 for each in frequency]
-    return sum(deviation) / len(frequency)
-
-
 def active_meal(meals: list) -> float:
-    """Calculates the percentage of meals that occur during the active period (7pm-7am).
-
-    A meal is considered active if its start time falls within the active period.
-
-    Args:
-        meals (list): A list of meal time intervals, where each interval is a list
-                      of [start_time, end_time].
-
-    Returns:
-        float: The percentage of meals that occurred during the active period.
-    """
+    """Return the proportion of meals that begin during the active (7pm–7am) window."""
     if len(meals) == 0:
         return 0
     cnt = 0
@@ -580,40 +380,8 @@ def active_meal(meals: list) -> float:
     return round(cnt/len(meals), 4) 
 
 
-def print_meal_stats(data):
-    """Prints statistics about the number of meals of different sizes.
-
-    Args:
-        data (dict): A dictionary where keys are the number of pellets in a meal
-                     and values are lists of meals.
-    """
-    total_meals = 0
-    keep_meals = 0
-    for key, item in data.items():
-        size = len(item)
-        total_meals += size
-        if key in [3, 4, 5]:
-            keep_meals += size
-            print(f"Number of Pellets: {key}, n_meals: {size}")
-    print(f"Total {total_meals} meals and keep {keep_meals}")
-
-
 def process_meal_data(session: SessionData, export_root: str | os.PathLike | None = None, prefix: str | None = None):
-    """Processes meal data for a single sheet and returns key metrics.
-
-    This function reads data from a single Excel sheet, identifies meals, calculates
-    various meal-related metrics, and optionally generates and saves plots.
-
-    Args:
-        sheet (str): The name of the Excel sheet to process.
-        path (str): The path to the Excel file.
-        is_cask (bool, optional): Flag indicating if the data is from a CASK mouse. Defaults to False.
-        export_root (str, optional): The root directory to save generated graphs. Defaults to None.
-        prefix (str, optional): The prefix for the output file names. Defaults to None.
-
-    Returns:
-        dict: A dictionary containing calculated meal metrics.
-    """
+    """Compile per-session meal metrics and optionally export diagnostic plots."""
     data = session.raw.copy()
     meal, _, in_meal_ratio = find_meals_paper(data, time_threshold=60, pellet_threshold=2, in_meal_ratio=True)
     meals_with_acc, good_mask, first_meal_time = analyze_meals(data, 60, 2, 'cnn')
@@ -669,3 +437,26 @@ def process_meal_data(session: SessionData, export_root: str | os.PathLike | Non
         'total_meals': len(good_mask),
         'meals_with_acc': meals_with_acc,
     }
+
+
+def collect_good_meal_ratio(quality_map: dict) -> dict:
+    """Calculate the ratio of good meals to total meals for each group.
+    
+    Args:
+        quality_map (dict): Dictionary where keys are group names and values are lists of
+            dictionaries containing 'good_mask' (boolean array) and 'total_meals' (int).
+    
+    Returns:
+        dict: Dictionary with same keys, values are lists of good meal ratios (0.0 to 1.0).
+    """
+    ratios = {}
+    for group, entries in quality_map.items():
+        ratios[group] = []
+        for entry in entries:
+            good_mask = entry.get('good_mask')
+            total_meals = entry.get('total_meals') or (len(good_mask) if good_mask is not None else 0)
+            if good_mask is None or total_meals == 0:
+                ratios[group].append(0.0)
+            else:
+                ratios[group].append(float(good_mask.sum()) / total_meals)
+    return ratios

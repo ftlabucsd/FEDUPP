@@ -20,7 +20,15 @@ import pandas as pd
 
 @dataclass(frozen=True)
 class SessionKey:
-    """Identifier for a single session."""
+    """Identifier for a single session.
+
+    Attributes:
+        session_id (str): Unique identifier combining mouse ID and CSV stem.
+        mouse_id (str): Animal identifier extracted from the directory name.
+        group (str): Experimental group supplied by ``group_map.json``.
+        session_type (str): Inferred session type such as ``FR1`` or ``REV``.
+        session_path (Path): Filesystem path to the source CSV file.
+    """
 
     session_id: str
     mouse_id: str
@@ -31,7 +39,12 @@ class SessionKey:
 
 @dataclass
 class SessionData:
-    """Container for a preprocessed FED3 session."""
+    """Container for a preprocessed FED3 session.
+
+    Attributes:
+        key (SessionKey): Metadata describing the session.
+        raw (pd.DataFrame): Cleaned FED3 event log with uniform column names.
+    """
 
     key: SessionKey
     raw: pd.DataFrame
@@ -49,6 +62,14 @@ class SessionData:
 
 
 def load_group_map(group_map_path: str | os.PathLike) -> Dict[str, List[str]]:
+    """Read the group-to-mouse mapping used to organise sessions.
+
+    Args:
+        group_map_path (str | os.PathLike): Location of ``group_map.json``.
+
+    Returns:
+        dict[str, list[str]]: Mapping from group name to mouse IDs.
+    """
     path = Path(group_map_path)
     with path.open("r", encoding="utf-8") as f:
         payload = json.load(f)
@@ -57,6 +78,15 @@ def load_group_map(group_map_path: str | os.PathLike) -> Dict[str, List[str]]:
 
 
 def discover_sessions(sample_root: str | os.PathLike) -> Dict[str, List[Path]]:
+    """Locate CSV files for each mouse within the sample data directory.
+
+    Args:
+        sample_root (str | os.PathLike): Top-level directory containing one
+            subdirectory per mouse.
+
+    Returns:
+        dict[str, list[Path]]: Mouse ID mapped to its available CSV files.
+    """
     base = Path(sample_root)
     session_map: Dict[str, List[Path]] = {}
     for mouse_dir in sorted(p for p in base.iterdir() if p.is_dir()):
@@ -68,6 +98,14 @@ def discover_sessions(sample_root: str | os.PathLike) -> Dict[str, List[Path]]:
 
 
 def infer_session_type(session_df: pd.DataFrame) -> Optional[str]:
+    """Best-effort inference of session type from the ``Session_type`` column.
+
+    Args:
+        session_df (pd.DataFrame): Loaded session DataFrame.
+
+    Returns:
+        str | None: ``FR1`` or ``REV`` when recognised, otherwise ``None``.
+    """
     if "Session_type" not in session_df.columns:
         return None
     value = str(session_df["Session_type"].iloc[0])
@@ -79,6 +117,21 @@ def infer_session_type(session_df: pd.DataFrame) -> Optional[str]:
 
 
 def load_session_csv(csv_path: Path) -> pd.DataFrame:
+    """Load and standardise a raw FED3 CSV file.
+
+    The function renames columns, normalises poke labels, calculates
+    row-by-row accuracy, and computes a ``Time_passed`` column for later
+    filtering.
+
+    Args:
+        csv_path (Path): Path to the FED3 CSV export.
+
+    Returns:
+        pd.DataFrame: Cleaned session events ready for further analysis.
+
+    Raises:
+        ValueError: If the file is missing required columns.
+    """
     df = pd.read_csv(csv_path)
     expected_columns = {
         "MM:DD:YYYY hh:mm:ss",
@@ -123,14 +176,23 @@ def load_session_csv(csv_path: Path) -> pd.DataFrame:
         if poke_col in df.columns:
             df[poke_col] = pd.to_numeric(df[poke_col], errors="coerce").fillna(0)
 
-    df = ensure_percent_correct(df)
-
+    df = calculate_accuracy_by_row(df, convert_large=True)
     df = df.reset_index(drop=True)
     df["Time_passed"] = df["Time"] - df["Time"].iloc[0]
     return df
 
 
 def motor_turn_summary(csv_path: Path, cutoff: int = 15) -> Tuple[int, float]:
+    """Summarise excessive motor turns for the quality control filter.
+
+    Args:
+        csv_path (Path): Path to the session CSV file.
+        cutoff (int): Motor turn threshold above which a pellet is flagged.
+
+    Returns:
+        tuple[int, float]: Number of exceeding events and their fraction of all
+        pellet events.
+    """
     df = pd.read_csv(csv_path)
     if "Motor_Turns" not in df.columns:
         return 0, 0.0
@@ -146,6 +208,19 @@ def build_session_catalog(
     sample_root: str | os.PathLike,
     group_map_path: str | os.PathLike,
 ) -> Tuple[Dict[str, SessionData], Dict[str, Dict[str, List[SessionKey]]]]:
+    """Load all sessions and organise them by group and session type.
+
+    Args:
+        sample_root (str | os.PathLike): Root directory containing per-mouse
+            CSV exports.
+        group_map_path (str | os.PathLike): JSON file specifying group
+            assignments.
+
+    Returns:
+        tuple: ``(session_store, groupings)`` where ``session_store`` maps
+        session IDs to ``SessionData`` and ``groupings`` provides group →
+        session type → ``SessionKey`` lists.
+    """
     group_map = load_group_map(group_map_path)
     session_paths = discover_sessions(sample_root)
 
@@ -187,11 +262,6 @@ def convert_to_numeric(value):
     if isinstance(value, str) and value.isnumeric():
         return pd.to_numeric(value)
     return value
-
-
-def ensure_percent_correct(df: pd.DataFrame) -> pd.DataFrame:
-    df = calculate_accuracy_by_row(df, convert_large=True)
-    return df
 
 
 def calculate_accuracy_by_row(df: pd.DataFrame, convert_large: bool = True):
@@ -238,6 +308,7 @@ def get_retrieval_time(csv_path: str | os.PathLike, day: int = 3):
 
 @lru_cache(maxsize=1)
 def session_cache(sample_root: str | os.PathLike, group_map_path: str | os.PathLike):
+    """Cache the session catalogue so repeated notebook calls stay fast."""
     return build_session_catalog(sample_root, group_map_path)
 
 
@@ -247,6 +318,7 @@ def get_group_sessions(
     session_type: str,
     group_name: Optional[str] = None,
 ) -> Dict[str, List[SessionKey]]:
+    """Retrieve session keys for one or all groups filtered by session type."""
     _, groupings = session_cache(sample_root, group_map_path)
     if group_name:
         return {group_name: groupings.get(group_name, {}).get(session_type, [])}
@@ -254,6 +326,7 @@ def get_group_sessions(
 
 
 def get_session_data(sample_root: str | os.PathLike, group_map_path: str | os.PathLike, session_id: str) -> SessionData:
+    """Fetch a cached ``SessionData`` object by its session ID."""
     sessions, _ = session_cache(sample_root, group_map_path)
     return sessions[session_id]
 

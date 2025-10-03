@@ -116,6 +116,7 @@ def train(model:nn.Module, lr:float, num_epochs:int, train_loader:DataLoader,
     
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.Adam(model.parameters(), lr=lr)
+    print(f"Model Parameters: {sum(p.numel() for p in model.parameters())}")
     
     for epoch in range(num_epochs):
         model.train()
@@ -216,7 +217,6 @@ def evaluate_meals_on_new_data(model:nn.Module, ctrl_input:torch.Tensor, exp_inp
     print(f'Experiment Group: {exp_total-exp_good}/{exp_total} good meals with proportion of {1-exp_good/exp_total}')
 
 
-
 def predict(model:nn.Module, input):
     """
     Makes predictions on new data using the trained model.
@@ -237,13 +237,3 @@ def predict(model:nn.Module, input):
         _, predicted_ctrl = torch.max(outputs_ctrl.data, 1)
 
     return predicted_ctrl.cpu().numpy()
-
-def count_parameters(model:nn.Module):
-    """
-    Counts the number of trainable parameters in a model.
-
-    Args:
-        model (nn.Module): The model to inspect.
-    """
-    trainable_params = sum(p.numel() for p in model.parameters())
-    print(f'Trainable parameters: {trainable_params}')

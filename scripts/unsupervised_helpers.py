@@ -13,7 +13,6 @@ import numpy as np
 from scripts.meals import analyze_meals
 import os
 import pickle
-import torch
 
 def label_indices(labels):
     """Groups indices by their corresponding labels.
@@ -204,57 +203,3 @@ def data_padding(data: list) -> np.array:
             each.append(-1)
             size += 1
     return np.array(data)
-
-def create_dataset_single_group(experiment:str, ctrl:bool):
-    """Creates a labeled dataset (features and labels) for a single experimental group.
-
-    Args:
-        experiment (str): The name of the experiment (e.g., 'CASK').
-        ctrl (bool): True if the group is a control group, False otherwise.
-
-    Returns:
-        tuple: A tuple containing the feature array (X) and label array (y).
-    """
-    data_root = f'{experiment}_{"ctrl" if ctrl else "exp"}_'
-
-    good_X = read_data(data_root+'good.pkl')
-    bad_X = read_data(data_root+'bad.pkl')
-    good_y = np.zeros((len(good_X)))
-    bad_y = np.ones((len(bad_X)))
-
-    X = np.vstack((data_padding(good_X), data_padding(bad_X)))
-    y = np.concatenate((good_y, bad_y))
-    return X, y
-
-
-def merge_dataset(ctrl_X:np.array, ctrl_y:np.array, exp_X:np.array, exp_y:np.array):
-    """Merges datasets from control and experimental groups.
-
-    Args:
-        ctrl_X (np.array): Features for the control group.
-        ctrl_y (np.array): Labels for the control group.
-        exp_X (np.array): Features for the experimental group.
-        exp_y (np.array): Labels for the experimental group.
-
-    Returns:
-        tuple: A tuple containing the merged feature array (X) and label array (y).
-    """
-    X = np.vstack((ctrl_X, exp_X))
-    y = np.concatenate(((ctrl_y, exp_y)))
-    return X, y
-
-
-def dictionary2dataset(meal_by_n_pellet:dict):
-    """Converts a dictionary of meals into a padded tensor dataset.
-
-    Args:
-        meal_by_n_pellet (dict): A dictionary of meals, keyed by the number of pellets.
-
-    Returns:
-        torch.Tensor: A tensor of padded meal data.
-    """
-    data = []
-    for count in [3,4,5]:
-        for meal in meal_by_n_pellet[count]:
-            data.append(meal)
-    return torch.tensor(data_padding(data), dtype=torch.float32)
