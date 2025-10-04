@@ -213,7 +213,7 @@ def evaluate_meals_on_new_data(model:nn.Module, ctrl_input:torch.Tensor, exp_inp
     ctrl_good, ctrl_total = np.sum(predicted_ctrl), np.size(predicted_ctrl)
     exp_good, exp_total = np.sum(predicted_exp), np.size(predicted_exp)
 
-    print(f'Control Group: {ctrl_total-ctrl_good}/{ctrl_total} good meals with proportion of {1-ctrl_good/ctrl_total}; F1 Score: {f1_ctrl:.3f}')
+    print(f'Control Group: {ctrl_total-ctrl_good}/{ctrl_total} good meals with proportion of {1-ctrl_good/ctrl_total}')
     print(f'Experiment Group: {exp_total-exp_good}/{exp_total} good meals with proportion of {1-exp_good/exp_total}')
 
 
