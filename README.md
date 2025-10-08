@@ -48,7 +48,7 @@ After FR1 training, the "correct" active poke side periodically switches, testin
 - Transition patterns (L→L, L→R, R→R, R→L)
 - Learning scores (early block adaptation)
 - Pellet retrieval speed trends
-- Meal quality during cognitive challenge
+- Meal quality (inaccurate & accurate) during behavioral contingencies (blocks)
 
 ---
 
@@ -83,7 +83,7 @@ sample_data/
 │   └── reversal.csv
 └── ...
 ```
-> Note: you do not have to specify the FR1 or reversal session type in csv filenames. Our algorithm will automatically determine its session. The names is for illustration only, but you do not to put csv files for one mouse in one folder.
+> Note: you do not have to specify the behavioral session type (e.g. FR1 or reversal) in csv filenames. Our algorithm will automatically determine its session. The names is for illustration only, but you *DO* have to put csv files for one mouse in one folder.
 
 **B. Define Group Membership**
 
