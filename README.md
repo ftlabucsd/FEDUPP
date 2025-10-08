@@ -1,10 +1,14 @@
 # FEDUPP - FED3 Users Processing Package
 
-This is the official implementation of the paper "The development of FEDUPP: Feeding Experimentation Device Users Processing Package to Assess Learning and Cognitive Flexibility"
+This is the official implementation of the paper "The development of FEDUPP: Feeding Experimentation Device Users Processing Package to Assess Learning and Cognitive Flexibility".
 
  [![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/) &nbsp; [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE) &nbsp; [![Paper Link](https://img.shields.io/badge/bioarxiv-paper-red.svg)](https://www.biorxiv.org/content/10.1101/2025.08.14.670424v1)
 
 > **A comprehensive, reusable analysis pipeline for FED3 behavioral data to assess learning acquisition, cognitive flexibility, and feeding patterns in mice.**
+
+## TL;DR
+
+You directly goes to `pipeline.ipynb` to start with the full FEDUPP with explanation for each step with your data, or replicate our data.
 
 ---
 
@@ -156,7 +160,7 @@ FED3-data/
 
 ## 📓 Pipeline Notebook Guide
 
-The `pipeline_empty.ipynb` is organized into **15 sequential steps** across two main sections:
+The `pipeline.ipynb` is organized into **15 sequential steps** across two main sections:
 
 ### 🔧 Setup & Quality Control (Steps 1-3)
 
