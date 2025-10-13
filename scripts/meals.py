@@ -78,7 +78,7 @@ def analyze_meals(
     time_threshold: int = 60,
     pellet_threshold: int = 2,
     model_type: str = 'cnn',
-    accuracy_threshold: float = 80.0,
+    accuracy_threshold: float = 50.0,
 ):
     """Detect meals in a session and classify them using the trained model.
 
@@ -115,7 +115,7 @@ def analyze_meals(
         else:
             if pellet_cnt >= pellet_threshold:
                 meal_events = data.loc[meal_start_index:index]
-                if calculate_accuracy(meal_events) > 50:
+                if calculate_accuracy(meal_events) > accuracy_threshold:
                     accuracies = extract_meal_acc_each(meal_events)
                     meal_lengths.append(len(accuracies))
                     meals_with_acc.append([meal_start_time, pad_meal(accuracies)])
@@ -254,7 +254,7 @@ def extract_meal_acc_each(events: pd.DataFrame):
     return acc
 
 
-def find_meals_paper(data:pd.DataFrame, time_threshold=60, pellet_threshold=2, in_meal_ratio=False):
+def find_meals_paper(data:pd.DataFrame, time_threshold=60, pellet_threshold=2, in_meal_ratio=False, accuracy_threshold=50.0):
     """Identify meals using the heuristic described in the FED3 publication."""
     df = data[data['Event'] == 'Pellet'].copy()
     df['retrieval_timestamp'] = df['Time'] + pd.to_timedelta(df['collect_time'], unit='m')
@@ -285,7 +285,7 @@ def find_meals_paper(data:pd.DataFrame, time_threshold=60, pellet_threshold=2, i
         else:
             # Close previous burst and decide whether it’s an accepted meal
             burst_events = data.loc[meal_start_idx : idx - 1]  # inclusive slice
-            if pellet_cnt >= pellet_threshold and calculate_accuracy(burst_events) > 50:
+            if pellet_cnt >= pellet_threshold and calculate_accuracy(burst_events) > accuracy_threshold:
                 meals.append([meal_start_time, meal_end_time])
                 meal_acc.append(calculate_accuracy(burst_events))
                 pellets_in_meals += pellet_cnt
@@ -296,7 +296,7 @@ def find_meals_paper(data:pd.DataFrame, time_threshold=60, pellet_threshold=2, i
             pellet_cnt = 1
 
     burst_events = data.loc[meal_start_idx:]
-    if pellet_cnt >= pellet_threshold and calculate_accuracy(burst_events) > 50:
+    if pellet_cnt >= pellet_threshold and calculate_accuracy(burst_events) > accuracy_threshold:
         meals.append([meal_start_time, meal_end_time])
         meal_acc.append(calculate_accuracy(burst_events))
         pellets_in_meals += pellet_cnt
@@ -380,10 +380,13 @@ def active_meal(meals: list) -> float:
     return round(cnt/len(meals), 4) 
 
 
-def process_meal_data(session: SessionData, export_root: str | os.PathLike | None = None, prefix: str | None = None):
+def process_meal_data(session: SessionData, export_root: str | os.PathLike | None = None,
+                      prefix: str | None = None,
+                      accuracy_threshold: float = 50.0):
     """Compile per-session meal metrics and optionally export diagnostic plots."""
     data = session.raw.copy()
-    meal, _, in_meal_ratio = find_meals_paper(data, time_threshold=60, pellet_threshold=2, in_meal_ratio=True)
+    meal, _, in_meal_ratio = find_meals_paper(data, time_threshold=60, pellet_threshold=2, 
+                                              in_meal_ratio=True, accuracy_threshold=accuracy_threshold)
     meals_with_acc, good_mask, first_meal_time = analyze_meals(data, 60, 2, 'cnn')
     meal_1 = (meal[0][0] - data['Time'][0]).total_seconds() / 3600 if meal else 0
     meal_1_good = (

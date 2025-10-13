@@ -45,7 +45,7 @@ def index2meal(data_div: defaultdict, data:list):
         meal_by_category[key] = data[val]
     return meal_by_category
 
-def extract_meal_sequences(session_list, time_threshold=60, pellet_threshold=2, counts=(3, 4, 5)):
+def extract_meal_sequences(session_list, time_threshold=60, pellet_threshold=2, counts=(3, 4, 5), accuracy_threshold=50.0):
     sequences = {cnt: [] for cnt in counts}
     session_ratios = []
     for session in session_list:
@@ -53,6 +53,7 @@ def extract_meal_sequences(session_list, time_threshold=60, pellet_threshold=2, 
             session.raw.copy(),
             time_threshold=time_threshold,
             pellet_threshold=pellet_threshold,
+            accuracy_threshold=accuracy_threshold,
             model_type='cnn',
         )
         total = len(good_mask)
