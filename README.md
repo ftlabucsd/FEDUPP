@@ -8,7 +8,12 @@ This is the official implementation of the paper "The development of FEDUPP: Fee
 
 ## TL;DR
 
-You directly goes to `pipeline.ipynb` to start with the full FEDUPP with explanation for each step with your data, or replicate our data.
+You can directly install the conda environment by 
+```bash
+pip install -r requirement.txt
+```
+
+and then go to `pipeline.ipynb` to start with the full FEDUPP with explanation for each step with your data, or replicate our data.
 
 ---
 
