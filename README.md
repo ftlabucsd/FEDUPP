@@ -71,6 +71,7 @@ git clone https://github.com/ftlabucsd/FEDUPP
 cd FEDUPP
 
 # Install dependencies (requires Python ≥3.10)
+conda create -n fedupp python=3.10
 pip install -r requirements.txt
 ```
 
