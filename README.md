@@ -12,18 +12,27 @@ This is the official implementation of the paper "The development of FEDUPP: Fee
 
 ### 1. Installation
 
-
+Please clone the repository and goes to the project directory first:
 
 ```bash
 # Clone the repository
 git clone https://github.com/ftlabucsd/FEDUPP
 cd FEDUPP
+```
 
+If you know how to deal with conda environment, please follow the typical conda environment installation commands in terminal below:
+
+```bash
 # Install dependencies (requires Python ≥3.10)
 conda create -n fedupp python=3.10
 conda activate fedupp
 pip install -r requirements.txt
 ```
+
+If you are not so familiar with conda environement, but have one, please directly use this environment and then move to `pipeline.ipynb` and the first cell there will check if your environment works for our project and we provide the package installation commands in the notebook.
+
+**Notice:** If you only want to replicate our analysis and results, you can stop here and directly go to `pipeline.ipynb` and run all cells after you create the environment.
+
 
 ### 2. Data Preparation
 
@@ -67,6 +76,12 @@ The notebook will:
 3. Generate FR1 and Reversal Learning analyses
 4. Save figures to `figures/FR1/` and `figures/REV/`
 5. Print statistical test results
+
+---
+
+## 🧠 Detailed Introduction and Documentations
+
+For detailed workflows of the notebook and descriptions of functions FEDUPP includes, please [Read more details here](Overview.md)
 
 ---
 
