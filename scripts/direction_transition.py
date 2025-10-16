@@ -291,17 +291,25 @@ def plot_transition_stats(
     bars = None
     bars = ax.bar(block_idx, success_rate, color=bar_palette, alpha=0.6)
 
-    first_good = data_stats.get('First_Good_Meal_Time', pd.Series([''] * len(block_idx)))
-    block_time = data_stats.get('Block_Time', pd.Series([np.nan] * len(block_idx)))
+    first_good = data_stats['First_Good_Meal_Time'].tolist()
+    block_time = data_stats['Block_Time'].tolist()
 
     for bar, meal_time, total_time in zip(bars, first_good, block_time):
         center_x = bar.get_x() + bar.get_width() / 2
         label_text = str(meal_time)
-        total_text = f"{total_time}" if pd.notna(total_time) else ""
+        total_text = f"{total_time}" if not np.isnan(total_time) else ""
         ax.text(center_x, bar.get_height() + 2.4, label_text, ha='center', va='bottom', fontsize=10)
         if total_text:
             ax.text(center_x, bar.get_height() + 0.6, total_text, ha='center', va='bottom', fontsize=10, color='#555555')
 
+    plt.annotate('First Accurate Meal Time (min) \n Block Length', 
+            xy=(bars[0].get_x()+0.4, bars[0].get_height() + 4.2), 
+            xytext=(-90, 20),
+            textcoords='offset points',
+            arrowprops=dict(arrowstyle='->', lw=2),
+            fontsize=16,
+            color='blue')
+    
     inactive_blocks = find_inactive_blocks(blocks, reverse=inactive_reverse)
     for block_index in inactive_blocks:
         ax.axvspan(block_index - 0.5, block_index + 0.5, facecolor='gray', alpha=0.25)
