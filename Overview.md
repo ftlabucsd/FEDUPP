@@ -25,6 +25,9 @@ FEDUPP is a complete Python-based analysis toolkit designed for neuroscience res
 
 ## 📊 Behavioral Paradigms
 
+### FED3 Code
+We open-sourced our C++ code for programming FED3 device [here](./scripts/ClassicFED3_WithReversalTask_copy_20251001154805.ino) in FR1 and Reversal Sessions. 
+
 ### FR1 (Fixed-Ratio 1)
 Every correct nose poke immediately delivers one pellet. Measures basic operant learning acquisition.
 
@@ -78,14 +81,15 @@ FED3-data/
 │       ├── meals/
 │       └── ...
 │       
-└── scripts/                   # Python modules (imported by notebooks)
+└── scripts/                   # backbone scripts (imported by notebooks)
     ├── preprocessing.py
     ├── accuracy.py
     ├── meals.py
     ├── direction_transition.py
     ├── utils.py
     ├── meal_classifiers.py
-    └── unsupervised_helpers.py
+    ├── unsupervised_helpers.py
+    └── ClassicFED3_WithReversalTask_copy_20251001154805.ino  # FED3 device programming code
 ```
 
 ---
