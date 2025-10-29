@@ -39,7 +39,7 @@ python -m ipykernel install --user --name fedupp --display-name "Python (fedupp)
 jupyter lab
 ```
 
-**Notice:** If you only want to replicate our analysis and results, you can stop here and directly go to `pipeline.ipynb` and run all cells after you create the environment. **Go to the steps below only if you want to run your own data. **
+**Notice:** If you only want to replicate our analysis and results, you can stop here and directly go to `pipeline.ipynb` and run all cells after you create the environment. **Go to the steps below only if you want to run your own data.**
 
 
 ### 2. Data Preparation
