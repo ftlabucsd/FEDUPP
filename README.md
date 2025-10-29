@@ -20,10 +20,10 @@ git clone https://github.com/ftlabucsd/FEDUPP
 cd FEDUPP
 ```
 
-If you know how to deal with conda environment, please follow the typical conda environment installation commands in terminal below:
+If you know how to deal with a conda environment, please follow the typical conda environment installation commands in the terminal below:
 
 ```bash
-# Install dependencies (requires Python ≥3.10)
+# Create conda environment and install dependencies (requires Python ≥3.10)
 conda create -n fedupp python=3.10
 conda activate fedupp
 pip install -r requirements.txt
@@ -31,14 +31,22 @@ pip install -r requirements.txt
 
 If you are not so familiar with conda environement, but have one, please directly use this environment and then move to `pipeline.ipynb` and the first cell there will check if your environment works for our project and we provide the package installation commands in the notebook.
 
-**Notice:** If you only want to replicate our analysis and results, you can stop here and directly go to `pipeline.ipynb` and run all cells after you create the environment.
+You can use the following commands in the terminal to install, run the Jupyter environment, and visit [http://localhost:8888/lab](http://localhost:8888/lab) (if you do not use other IDEs):
+
+```bash
+pip install jupyterlab ipykernel
+python -m ipykernel install --user --name fedupp --display-name "Python (fedupp)"
+jupyter lab
+```
+
+**Notice:** If you only want to replicate our analysis and results, you can stop here and directly go to `pipeline.ipynb` and run all cells after you create the environment. **Go to the steps below only if you want to run your own data. ****
 
 
 ### 2. Data Preparation
 
 **A. Organize Your Data**
 
-Place your FED3 CSV files in `sample_data/` with this structure:
+Delete old files/sub-folders inside `sample_data/` and place your FED3 CSV files in it with this structure:
 
 ```
 sample_data/
@@ -70,7 +78,7 @@ Create or modify `group_map.json` to assign mice id to experimental groups, for 
 
 Inside this project, open `pipeline.ipynb` in Jupyter Lab or VS Code or other IDEs and run cells sequentially:
 
-The notebook will:
+The notebook will **automatically**:
 1. Load and validate your data
 2. Perform quality control checks
 3. Generate FR1 and Reversal Learning analyses
@@ -79,7 +87,7 @@ The notebook will:
 
 ---
 
-## 🧠 Detailed Introduction and Documentations
+## 🧠 Detailed Introduction and Documentation
 
 For detailed workflows of the notebook and descriptions of functions FEDUPP includes, please [Read more details here](Overview.md)
 
