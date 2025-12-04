@@ -7,12 +7,18 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import matplotlib.patches as mpatches
 import numpy as np
-from scripts.accuracy import find_inactive_index, calculate_accuracy
+from scripts.accuracy import (
+    find_inactive_index,
+    calculate_accuracy,
+)
 from scripts.meal_classifiers import predict, RNNClassifier, CNNClassifier
 import torch
 from scripts.preprocessing import SessionData
 _MEAL_MODEL_CACHE: dict[str, torch.nn.Module] = {}
-_MEAL_MODEL_DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+_MEAL_MODEL_DEVICE = torch.device('cuda' if torch.cuda.is_available() else 
+                                  'mps' if torch.backends.mps.is_available() else
+                                  'cpu')
+print(f"Using device: {_MEAL_MODEL_DEVICE}")
 _BASE_DIR = Path(__file__).resolve().parent.parent
 _MEAL_CHECKPOINTS = {
     'cnn': _BASE_DIR / 'data' / 'CNN_from_CASK.pth',
@@ -79,6 +85,7 @@ def analyze_meals(
     pellet_threshold: int = 2,
     model_type: str = 'cnn',
     accuracy_threshold: float = 50.0,
+    method: str = 'paper',
 ):
     """Detect meals in a session and classify them using the trained model.
 
@@ -88,47 +95,26 @@ def analyze_meals(
     * first_good_time is the timestamp of the first predicted good meal (or None).
     """
 
-    df = data[data['Event'] == 'Pellet'].copy()
-    if df.empty:
-        return [], np.zeros(0, dtype=bool), None
-
-    df['retrieval_timestamp'] = df['Time'] + pd.to_timedelta(df['collect_time'], unit='m')
+    meals, _ = find_meals_paper(
+        data,
+        time_threshold=time_threshold,
+        pellet_threshold=pellet_threshold,
+        in_meal_ratio=False,
+        accuracy_threshold=accuracy_threshold,
+        method=method,
+    )
 
     meals_with_acc: list[list] = []
     meal_lengths: list[int] = []
 
-    meal_start_time = None
-    meal_start_index = None
-    pellet_cnt = 1
-
-    for index, row in df.iterrows():
-        current_time = row['retrieval_timestamp']
-
-        if meal_start_time is None:
-            meal_start_time = current_time
-            meal_start_index = index
-            pellet_cnt = 1
-            continue
-
-        if (current_time - meal_start_time).total_seconds() <= time_threshold:
-            pellet_cnt += 1
-        else:
-            if pellet_cnt >= pellet_threshold:
-                meal_events = data.loc[meal_start_index:index]
-                if calculate_accuracy(meal_events) > accuracy_threshold:
-                    accuracies = extract_meal_acc_each(meal_events)
-                    meal_lengths.append(len(accuracies))
-                    meals_with_acc.append([meal_start_time, pad_meal(accuracies)])
-
-            meal_start_time = current_time
-            meal_start_index = index
-            pellet_cnt = 1
-
-    if meal_start_time is not None and pellet_cnt >= pellet_threshold:
-        meal_events = data.loc[meal_start_index:]
-        accuracies = extract_meal_acc_each(meal_events)
-        meal_lengths.append(len(accuracies))
-        meals_with_acc.append([meal_start_time, pad_meal(accuracies)])
+    for start_time, end_time in meals:
+        # Extract events for this meal using the start/end timestamps
+        meal_events = data[(data['Time'] >= start_time) & (data['Time'] <= end_time)]
+        
+        if not meal_events.empty:
+            accuracies = extract_meal_acc_each(meal_events)
+            meal_lengths.append(len(accuracies))
+            meals_with_acc.append([start_time, pad_meal(accuracies)])
 
     if not meals_with_acc:
         return [], np.zeros(0, dtype=bool), None
@@ -183,11 +169,13 @@ def pellet_flip(data: pd.DataFrame) -> pd.DataFrame:
     return grouped_data
 
 
-def average_pellet(group: pd.DataFrame) -> float:
+def average_pellet(data: pd.DataFrame) -> float:
     """Calculate the average number of pellets consumed per 24 hours."""
-    total_hr = (group['Interval_Start'].max()-group['Interval_Start'].min()).total_seconds() / 3600
-    total_pellet = group['Pellet_Count'].sum()
-    return round(24*total_pellet / total_hr, 2)
+    total_pellets = len(data[data['Event'] == 'Pellet'])
+    duration = experiment_duration(data)
+    if duration == 0:
+        return 0.0
+    return round(total_pellets / duration, 2)
 
 
 def graph_pellet_frequency(grouped_data: pd.DataFrame, bhv, num, export_path=None, show: bool = False):
@@ -228,13 +216,14 @@ def graph_pellet_frequency(grouped_data: pd.DataFrame, bhv, num, export_path=Non
     plt.close(fig)
 
 
-def find_first_accurate_meal(data:pd.DataFrame, time_threshold, pellet_threshold, model_type='cnn'):
+def find_first_accurate_meal(data:pd.DataFrame, time_threshold, pellet_threshold, model_type='cnn', method='paper'):
     """Identify the first model-classified good meal within a session."""
     meals_with_acc, good_mask, first_good_time = analyze_meals(
         data,
         time_threshold=time_threshold,
         pellet_threshold=pellet_threshold,
         model_type=model_type,
+        method=method,
     )
     return meals_with_acc, first_good_time
 
@@ -254,10 +243,46 @@ def extract_meal_acc_each(events: pd.DataFrame):
     return acc
 
 
-def find_meals_paper(data:pd.DataFrame, time_threshold=60, pellet_threshold=2, in_meal_ratio=False, accuracy_threshold=50.0):
-    """Identify meals using the heuristic described in the FED3 publication."""
+def find_meals_paper(data:pd.DataFrame, time_threshold=60, pellet_threshold=2, in_meal_ratio=False, accuracy_threshold=50.0, method='paper'):
+    """Identify meals using either the paper heuristic or interpellet interval method.
+    
+    Parameters
+    ----------
+    data : pd.DataFrame
+        Session data containing pellet events
+    time_threshold : int
+        Time threshold in seconds for meal grouping
+    pellet_threshold : int
+        Minimum number of pellets required for a valid meal
+    in_meal_ratio : bool
+        If True, return the ratio of pellets within meals to total pellets
+    accuracy_threshold : float
+        Minimum accuracy percentage for a meal to be accepted
+    method : str
+        Meal detection method: 'paper' (default) or 'ipi' (interpellet interval)
+        - 'paper': Fixed duration method - checks if meal duration is within threshold
+        - 'ipi': New method - groups based on interpellet intervals between consecutive pellets
+    
+    Returns
+    -------
+    tuple
+        (meals, meal_acc) or
+        (meals, meal_acc, meal_ratio) if
+        ``in_meal_ratio`` is True. ``meals`` is a list of [start_time, end_time]
+        pairs.
+    """
+    if method == 'ipi':
+        return _find_meals_ipi(data, 60, 1, in_meal_ratio, 0.0)
+    elif method == 'paper':
+        return _find_meals_paper_original(data, time_threshold, pellet_threshold, in_meal_ratio, accuracy_threshold)
+    else:
+        raise ValueError(f"Unknown method '{method}'. Use 'paper' or 'ipi'.")
+
+
+def _find_meals_paper_original(data:pd.DataFrame, time_threshold=60, pellet_threshold=2, in_meal_ratio=False, accuracy_threshold=50.0):
+    """Original paper implementation: checks if pellet is within threshold of meal start."""
     df = data[data['Event'] == 'Pellet'].copy()
-    df['retrieval_timestamp'] = df['Time'] + pd.to_timedelta(df['collect_time'], unit='m')
+    # df['retrieval_timestamp'] = df['Time'] + pd.to_timedelta(df['collect_time'], unit='m')
 
     total_pellets = len(df)            # denominator for the optional ratio
     pellets_in_meals = 0               # numerator we will accumulate
@@ -269,7 +294,7 @@ def find_meals_paper(data:pd.DataFrame, time_threshold=60, pellet_threshold=2, i
     pellet_cnt = 0
 
     for idx, row in df.iterrows():
-        current_time = row['retrieval_timestamp']
+        current_time = row['Time']
 
         # First pellet (or first after closing a meal) → open new meal window
         if meal_start_time is None:
@@ -278,17 +303,19 @@ def find_meals_paper(data:pd.DataFrame, time_threshold=60, pellet_threshold=2, i
             pellet_cnt = 1
             continue
 
-        # Same meal if retrieved within threshold of previous pellet
-        if (current_time - meal_end_time).total_seconds() <= time_threshold:
+        # Same meal if retrieved within threshold of meal start
+        if (current_time - meal_start_time).total_seconds() <= time_threshold:
             meal_end_time = current_time
             pellet_cnt += 1
         else:
-            # Close previous burst and decide whether it’s an accepted meal
+            # Close previous burst and decide whether it's an accepted meal
             burst_events = data.loc[meal_start_idx : idx - 1]  # inclusive slice
-            if pellet_cnt >= pellet_threshold and calculate_accuracy(burst_events) > accuracy_threshold:
-                meals.append([meal_start_time, meal_end_time])
-                meal_acc.append(calculate_accuracy(burst_events))
-                pellets_in_meals += pellet_cnt
+            if pellet_cnt >= pellet_threshold:
+                acc_value = calculate_accuracy(burst_events)
+                if acc_value > accuracy_threshold:
+                    meals.append([meal_start_time, meal_end_time])
+                    meal_acc.append(acc_value)
+                    pellets_in_meals += pellet_cnt
 
             # Start a new burst
             meal_start_time = meal_end_time = current_time
@@ -296,13 +323,85 @@ def find_meals_paper(data:pd.DataFrame, time_threshold=60, pellet_threshold=2, i
             pellet_cnt = 1
 
     burst_events = data.loc[meal_start_idx:]
-    if pellet_cnt >= pellet_threshold and calculate_accuracy(burst_events) > accuracy_threshold:
-        meals.append([meal_start_time, meal_end_time])
-        meal_acc.append(calculate_accuracy(burst_events))
-        pellets_in_meals += pellet_cnt
+    if pellet_cnt >= pellet_threshold:
+        acc_value = calculate_accuracy(burst_events)
+        if acc_value > accuracy_threshold:
+            meals.append([meal_start_time, meal_end_time])
+            meal_acc.append(acc_value)
+            pellets_in_meals += pellet_cnt
 
     if in_meal_ratio:
         meal_ratio = pellets_in_meals / total_pellets if total_pellets else 0
+        return meals, meal_acc, meal_ratio
+    return meals, meal_acc
+
+
+def _find_meals_ipi(data:pd.DataFrame, time_threshold=60, pellet_threshold=2, in_meal_ratio=False, accuracy_threshold=50.0):
+    """New interpellet interval (IPI) implementation: groups based on time between consecutive pellets.
+    
+    This method assigns pellets to meals based on the interpellet interval (IPI).
+    A new meal starts whenever the time between consecutive pellets meets or exceeds the threshold.
+    """
+    df = data[data['Event'] == 'Pellet'].copy()
+    if df.empty:
+        return ([], [], 0.0) if in_meal_ratio else ([], [])
+    
+    # df['retrieval_timestamp'] = df['Time'] + pd.to_timedelta(df['collect_time'], unit='m')
+    # df = df.sort_values('retrieval_timestamp').reset_index(drop=True)
+    df = df.sort_values('Time').reset_index(drop=True)
+    
+    total_pellets = len(df)
+    pellets_in_meals = 0
+    
+    # Calculate interpellet intervals (time since last pellet in minutes)
+    df['ipi_minutes'] = df['Time'].diff().dt.total_seconds() / 60
+    
+    # Convert threshold from seconds to minutes for comparison
+    intermeal_interval = time_threshold / 60
+    
+    # Identify the start of a new run: first pellet or gaps >= threshold
+    new_run_mask = df['ipi_minutes'].isna() | (df['ipi_minutes'] >= intermeal_interval)
+    df['run_id'] = new_run_mask.cumsum()
+    df['meal_label'] = np.nan
+    
+    # Group by run_id and process each candidate meal
+    meals, meal_acc = [], []
+    next_label = 1
+    
+    for _, meal_group in df.groupby('run_id', sort=True):
+        pellet_count = len(meal_group)
+        
+        # Check if meal meets pellet threshold
+        if pellet_count < pellet_threshold:
+            continue
+        
+        # Get time boundaries
+        start_time = meal_group.iloc[0]['Time']
+        end_time = meal_group.iloc[-1]['Time']
+
+        # Get original data indices for this meal to calculate accuracy
+        first_pellet_time = meal_group.iloc[0]['Time']
+        last_pellet_time = meal_group.iloc[-1]['Time']
+
+        # Get all events between first and last pellet of this meal
+        meal_events = data[
+            (data['Time'] >= first_pellet_time) & 
+            (data['Time'] <= last_pellet_time)
+        ]
+
+        # Check accuracy threshold
+        accuracy = calculate_accuracy(meal_events)
+        if accuracy <= accuracy_threshold:
+            continue
+
+        meals.append([start_time, end_time])
+        meal_acc.append(accuracy)
+        pellets_in_meals += pellet_count
+        df.loc[meal_group.index, 'meal_label'] = next_label
+        next_label += 1
+    
+    if in_meal_ratio:
+        meal_ratio = pellets_in_meals / total_pellets if total_pellets else 0.0
         return meals, meal_acc, meal_ratio
     return meals, meal_acc
 
@@ -362,11 +461,12 @@ def graphing_cum_count(data: pd.DataFrame, meal: list, bhv, num, flip=False, exp
 
 def experiment_duration(data: pd.DataFrame):
     """Return the total duration of the session in days."""
-    data['Time'] = pd.to_datetime(data['Time'])
-    duration = data.tail(1)['Time'].values[0] - data.head(1)['Time'].values[0]
-    duration_seconds = duration / np.timedelta64(1, 's')
-    duration = duration_seconds / (60 * 60 * 24)
-    return duration
+    times = pd.to_datetime(data['Time'])
+    if times.empty:
+        return 0.0
+    duration = times.max() - times.min()
+    duration_seconds = duration.total_seconds()
+    return duration_seconds / (60 * 60 * 24)
 
 
 def active_meal(meals: list) -> float:
@@ -381,13 +481,20 @@ def active_meal(meals: list) -> float:
 
 
 def process_meal_data(session: SessionData, export_root: str | os.PathLike | None = None,
-                      prefix: str | None = None,
-                      accuracy_threshold: float = 50.0):
+                      prefix: str | None = None, accuracy_threshold: float = 50.0,
+                      method: str = 'paper'):
     """Compile per-session meal metrics and optionally export diagnostic plots."""
     data = session.raw.copy()
-    meal, _, in_meal_ratio = find_meals_paper(data, time_threshold=60, pellet_threshold=2, 
-                                              in_meal_ratio=True, accuracy_threshold=accuracy_threshold)
-    meals_with_acc, good_mask, first_meal_time = analyze_meals(data, 60, 2, 'cnn')
+
+    meal, _, in_meal_ratio = find_meals_paper(
+        data,
+        time_threshold=60,
+        pellet_threshold=3,
+        in_meal_ratio=True,
+        method=method,
+        accuracy_threshold=accuracy_threshold,
+    )
+    meals_with_acc, good_mask, first_meal_time = analyze_meals(data, 60, 2, 'cnn', method=method)
     meal_1 = (meal[0][0] - data['Time'][0]).total_seconds() / 3600 if meal else 0
     meal_1_good = (
         (first_meal_time - data['Time'][0]).total_seconds() / 3600
@@ -430,7 +537,7 @@ def process_meal_data(session: SessionData, export_root: str | os.PathLike | Non
     )
     
     return {
-        'avg_pellet': average_pellet(group),
+        'avg_pellet': average_pellet(data),
         'inactive_meals': active_meal(meal),
         'fir_meal': meal_1,
         'fir_good_meal': meal_1_good,

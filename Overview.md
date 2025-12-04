@@ -271,7 +271,7 @@ plot_cumulative_accuracy([fr1_dfs], group_labels=['Control'], bin_size_sec=5)
 | Function | Purpose |
 |----------|---------|
 | `process_meal_data(session, export_root, prefix)` | **Main meal analysis function**: detects meals, classifies quality, computes 7+ metrics, generates plots |
-| `find_meals_paper(data, time_threshold, pellet_threshold)` | Detects meal boundaries using time-based clustering |
+| `find_meals_paper(data, time_threshold, pellet_threshold, method='paper')` | Detects meal boundaries using time-based clustering. Use `method='paper'` (default) for original implementation or `method='ipi'` for interpellet interval-based grouping used in original FED3 paper |
 | `predict_meal_quality(batch_meals, model_type)` | Runs LSTM/CNN classifier on meal sequences to predict good/bad |
 | `find_first_accurate_meal(data, time_threshold, pellet_threshold)` | Finds first ML-classified "good" meal in session |
 | `analyze_meals(data, meals, time_threshold, pellet_threshold)` | Batch-processes meals: computes stats, applies ML model |

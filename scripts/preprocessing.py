@@ -161,7 +161,7 @@ def load_session_csv(csv_path: Path) -> pd.DataFrame:
         }
     )
     df["Time"] = pd.to_datetime(df["Time"], errors="coerce")
-    df = df.dropna(subset=["Time"]).reset_index(drop=True)
+    df = df.dropna(subset=["Time"]).sort_values("Time", kind="stable").reset_index(drop=True)
 
     df["collect_time"] = df.get("collect_time", 0).apply(convert_to_numeric)
     max_value = get_max_numeric(df["collect_time"].copy())
@@ -170,9 +170,7 @@ def load_session_csv(csv_path: Path) -> pd.DataFrame:
 
     for poke_col in [
             "Left_Poke_Count", "Right_Poke_Count",
-            "Left_Poke_Count_Adj", "Right_Poke_Count_Adj",
-            "Pellet_Count", "Pellet_Count_Adj",
-            "Pellet_Count.1", "Pellet_Count.3", "Pellet_Count.4"]:
+            "Pellet_Count"]:
         if poke_col in df.columns:
             df[poke_col] = pd.to_numeric(df[poke_col], errors="coerce").fillna(0)
 
@@ -237,6 +235,13 @@ def build_session_catalog(
                     continue
 
                 session_type = infer_session_type(df) or "UNKNOWN"
+                
+                # Apply truncation based on session type
+                if session_type == "FR1":
+                    df = df[df["Time_passed"] <= timedelta(days=1)].copy()
+                elif session_type == "REV":
+                    df = df[df["Time_passed"] <= timedelta(days=3)].copy()
+
                 session_id = f"{mouse_id}_{csv_path.stem}"
                 key = SessionKey(
                     session_id=session_id,

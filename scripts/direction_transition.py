@@ -109,7 +109,7 @@ def remove_pellet(block: pd.DataFrame) -> pd.DataFrame:
     return block[block['Event'] != 'Pellet']
 
 
-def get_transition_info(blocks: list[pd.DataFrame], meal_config: list, reverse: bool) -> pd.DataFrame:
+def get_transition_info(blocks: list[pd.DataFrame], meal_config: list, reverse: bool, method: str = 'paper') -> pd.DataFrame:
     """Calculate block-level transition, meal, and activity statistics.
 
     Args:
@@ -136,10 +136,10 @@ def get_transition_info(blocks: list[pd.DataFrame], meal_config: list, reverse: 
 
         times = block['Time'].tolist()
         block_time = round((times[-1] - times[0]).total_seconds() / 60, 2)
-        meals,_ = find_meals_paper(block, meal_config[0], meal_config[1])
+        meals, *_ = find_meals_paper(block, meal_config[0], meal_config[1], method=method)
         time = round((meals[0][0] - times[0]).total_seconds() / 60, 2) if len(meals) > 0 else 'no meal'
 
-        _, first_meal_time = find_first_accurate_meal(block, 60, 2, 'cnn')
+        _, first_meal_time = find_first_accurate_meal(block, 60, 2, 'cnn', method=method)
         if first_meal_time is None or first_meal_time > times[-1]:
             meal_1_good = block_time
         else:
@@ -200,7 +200,7 @@ def first_meal_stats(data_stats: pd.DataFrame, ignore_inactive: bool = False) ->
         time_list = time_list[active_idx]
         total_list = total_list[active_idx]
         good_meal_list = good_meal_list[active_idx]
-        
+
     avg_ratio = np.mean(good_meal_list/total_list)
     avg_time = np.mean(time_list)
     avg_good_time = np.median(good_meal_list)
@@ -678,6 +678,7 @@ def find_meal_pellet_counts(
     data: pd.DataFrame,
     time_threshold: float = 60,
     pellet_threshold: int = 2,
+    method: str = 'paper',
 ) -> list[int]:
     """Return pellet counts for each detected meal within a block subset.
 
@@ -686,34 +687,26 @@ def find_meal_pellet_counts(
         time_threshold (float): Maximum seconds between pellets to remain in the
             same meal.
         pellet_threshold (int): Minimum pellet count required for a meal.
+        method (str): Meal detection method ('paper' or 'ipi').
 
     Returns:
         list[int]: Pellet counts for every qualifying meal.
     """
-    df = data.loc[data['Event'] == 'Pellet'].copy()
-    df['retrieval_timestamp'] = df['Time'] + pd.to_timedelta(df['collect_time'], unit='m')
+    meals, _ = find_meals_paper(
+        data,
+        time_threshold=time_threshold,
+        pellet_threshold=pellet_threshold,
+        accuracy_threshold=-1.0,
+        method=method,
+    )
 
-    meals = []
-    pellet_cnt = 0
-    meal_start_time = None
+    counts = []
+    for start, end in meals:
+        subset = data[(data['Time'] >= start) & (data['Time'] <= end)]
+        cnt = len(subset[subset['Event'] == 'Pellet'])
+        counts.append(cnt)
 
-    for _, row in df.iterrows():
-        t = row['retrieval_timestamp']
-        if meal_start_time is None:
-            meal_start_time = t
-            pellet_cnt = 1
-        elif (t - meal_start_time).total_seconds() <= time_threshold:
-            pellet_cnt += 1
-        else:
-            if pellet_cnt >= pellet_threshold:
-                meals.append(pellet_cnt)
-            meal_start_time = t
-            pellet_cnt = 1
-
-    if pellet_cnt >= pellet_threshold:
-        meals.append(pellet_cnt)
-
-    return meals
+    return counts
 
 
 def pellet_ratio_for_block(
@@ -721,6 +714,7 @@ def pellet_ratio_for_block(
     proportion: float,
     time_threshold: float = 60,
     pellet_threshold: int = 2,
+    method: str = 'paper',
 ) -> float:
     """Measure how many pellets fall inside meals for the start of a block.
 
@@ -729,6 +723,7 @@ def pellet_ratio_for_block(
         proportion (float): Fraction of the block to analyse.
         time_threshold (float): Seconds allowed between pellets within a meal.
         pellet_threshold (int): Minimum pellet count to define a meal.
+        method (str): Meal detection method.
 
     Returns:
         float: Ratio of pellets that belong to meals, or ``np.nan`` when no
@@ -744,7 +739,8 @@ def pellet_ratio_for_block(
     meal_counts = find_meal_pellet_counts(
         sub,
         time_threshold=time_threshold,
-        pellet_threshold=pellet_threshold
+        pellet_threshold=pellet_threshold,
+        method=method,
     )
     pellets_in_meals = sum(meal_counts)
     return pellets_in_meals / total_pellets
@@ -755,6 +751,7 @@ def plot_pellet_ratio_trend(
     group_labels: list[str] | None = None,
     time_threshold: float = 60,
     pellet_threshold: int = 2,
+    method: str = 'paper',
     export_path: str | os.PathLike | None = None,
 ):
     """Visualise pellet-in-meal ratios for each group with violin plots.
@@ -766,6 +763,7 @@ def plot_pellet_ratio_trend(
         time_threshold (float): Seconds allowed between pellet retrievals within
             a meal.
         pellet_threshold (int): Minimum pellets to count a meal.
+        method (str): Meal detection method.
         export_path (str | os.PathLike | None): Optional destination to save the
             figure.
 
@@ -788,6 +786,7 @@ def plot_pellet_ratio_trend(
                     proportion=1.0,
                     time_threshold=time_threshold,
                     pellet_threshold=pellet_threshold,
+                    method=method,
                 )
                 if not np.isnan(ratio):
                     block_ratios.append(ratio)
@@ -816,7 +815,7 @@ def block_retrieval_summary(blocks: list[pd.DataFrame], n_stds: int = 3) -> tupl
     
     Returns:
         tuple: Contains:
-            - block_means (list): Mean retrieval time for each block (in minutes).
+            - block_means (list): Mean retrieval time for each block (in seconds).
             - pred (float): Predicted retrieval time at the end (linear extrapolation).
             - slope (float): Slope of the linear fit across blocks.
     """
@@ -876,7 +875,7 @@ def plot_retrieval_time_by_block(
     ax.plot(block_indices + 1, fit_line, color='#ff7f0e', linestyle='--', linewidth=2, label=f'Best fit (slope={slope:.2f})')
 
     ax.set_xlabel('Block index', fontsize=12)
-    ax.set_ylabel('Mean retrieval time (minutes)', fontsize=12)
+    ax.set_ylabel('Mean retrieval time (seconds)', fontsize=12)
     title_parts = ['Retrieval time per block']
     if group_label:
         title_parts.append(f"Group {group_label}")

@@ -10,7 +10,8 @@ import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader, Dataset
 
-device = 'cuda' if torch.cuda.is_available() else 'cpu'
+# Detect best available device including MPS for Mac
+device = torch.device('cuda' if torch.cuda.is_available() else 'mps' if torch.backends.mps.is_available() else 'cpu')
 
 class TimeSeriesDataset(Dataset):
     """A custom PyTorch Dataset for time-series data."""
@@ -51,8 +52,8 @@ class RNNClassifier(nn.Module):
     def forward(self, x):
         # x: [batch_size, seq_len]
         x = x.unsqueeze(-1)  # Now x is [batch_size, seq_len, 1]
-        h0 = torch.zeros(self.num_layers, x.size(0), self.hidden_size, device=device)
-        c0 = torch.zeros(self.num_layers, x.size(0), self.hidden_size, device=device)
+        h0 = torch.zeros(self.num_layers, x.size(0), self.hidden_size, device=x.device)
+        c0 = torch.zeros(self.num_layers, x.size(0), self.hidden_size, device=x.device)
         out, _ = self.lstm(x, (h0, c0))
         out = out[:, -1, :]
         out = self.fc(out)
@@ -228,8 +229,18 @@ def predict(model:nn.Module, input):
     Returns:
         np.ndarray: The predicted class labels.
     """
-    if type(input) != torch.Tensor: input = torch.Tensor(input)
-    input = input.to(device)
+    if not isinstance(input, torch.Tensor):
+        input = torch.tensor(input, dtype=torch.float32)
+    else:
+        input = input.float()
+        
+    # Ensure input is on the same device as the model
+    try:
+        model_device = next(model.parameters()).device
+    except StopIteration:
+        model_device = device
+        
+    input = input.to(model_device)
 
     model.eval()
     with torch.no_grad():

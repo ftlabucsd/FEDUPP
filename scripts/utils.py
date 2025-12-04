@@ -23,6 +23,124 @@ def perform_T_test(ctrl:list, exp:list, test_side='two-sided', alpha=0.05, paire
     print("P Value is ", p_value)
     
 
+# def graph_group_stats(
+#     group_data: list,
+#     stats_name: str,
+#     unit: str,
+#     group_names: list | None = None,
+#     violin_width: float = 0.25,
+#     dpi: int = 150,
+#     verbose: bool = True,
+#     export_path: str | None = None,
+#     remove_outlier_stds: float = -1, # -1 means no outlier removal
+# ):
+#     """Visualise summary statistics for one or more groups.
+
+#     Creates violin plots with inset boxplots and jittered scatter points for each
+#     group, optionally exporting the figure. Supports between 1 and 5 groups.
+
+#     Args:
+#         group_data (list[list[float]]): Sequence of observations per group.
+#         stats_name (str): Display name of the statistic (e.g., "Accuracy").
+#         unit (str): Unit label to append to the y-axis (e.g., "%").
+#         group_names (list[str], optional): Names for each group. Defaults to
+#             generated numeric labels when omitted.
+#         violin_width (float, optional): Width of each violin. Defaults to 0.25.
+#         dpi (int, optional): Figure DPI. Defaults to 150.
+#         verbose (bool, optional): When True, print summary statistics. Defaults to True.
+#         export_path (str, optional): When provided, save the figure to this path.
+#         remove_outlier_stds (float, optional): The number of standard deviations to use for outlier removal. Defaults to 2.5.
+#     """
+#     if not group_data:
+#         raise ValueError("group_data must contain at least one group.")
+
+#     n_groups = len(group_data)
+#     if group_names is None:
+#         group_names = [f"Group {idx+1}" for idx in range(n_groups)]
+#     if len(group_names) != n_groups:
+#         raise ValueError("group_names length must match group_data length.")
+
+#     prepared = []
+#     for idx, values in enumerate(group_data):
+#         # remove values exceeding certain number of std from the mean
+#         if remove_outlier_stds > 0:
+#             mean = np.mean(values)
+#             std = np.std(values)
+#             values = [value for value in values if value < mean + remove_outlier_stds * std and value > mean - remove_outlier_stds * std]
+#         if len(values) == 0:
+#             raise ValueError(f"Group '{group_names[idx]}' has no observations.")
+#         prepared.append(np.asarray(values, dtype=float))
+
+#     if verbose:
+#         for name, values in zip(group_names, prepared):
+#             mean_val = float(np.mean(values))
+#             se_val = float(np.std(values, ddof=0) / np.sqrt(len(values)))
+#             print(f"{name} Size: {len(values)} \t Average: {mean_val:.3f} \t SE: {se_val:.3f}")
+
+#     fig_width = max(6, 2 + 1.6 * n_groups)
+#     fig, ax = plt.subplots(dpi=dpi)
+#     fig.set_size_inches(fig_width, 6)
+
+#     x_positions = np.arange(n_groups)
+
+#     parts = ax.violinplot(
+#         prepared,
+#         positions=x_positions,
+#         widths=violin_width,
+#         showmeans=False,
+#         showmedians=False,
+#         showextrema=False,
+#     )
+#     for i, violin in enumerate(parts['bodies']):
+#         color = palette[i % len(palette)]
+#         violin.set_facecolor(color)
+#         violin.set_edgecolor('black')
+#         violin.set_alpha(0.65)
+
+#     ax.boxplot(
+#         prepared,
+#         positions=x_positions,
+#         widths=violin_width * 0.6,
+#         showfliers=False,
+#         patch_artist=True,
+#         boxprops=dict(facecolor='white', edgecolor='black'),
+#         medianprops=dict(color='black'),
+#         whiskerprops=dict(color='black'),
+#         capprops=dict(color='black'),
+#     )
+
+#     jitter_strength = violin_width / 6
+#     for i, (x, values) in enumerate(zip(x_positions, prepared)):
+#         jitter = np.random.uniform(-jitter_strength, jitter_strength, size=len(values))
+#         ax.scatter(
+#             np.repeat(x, len(values)) + jitter,
+#             values,
+#             color=palette[i % len(palette)],
+#             edgecolor='black',
+#             linewidth=0.4,
+#             alpha=0.85,
+#             zorder=3,
+#         )
+
+#     legend_handles = [
+#         mpatches.Patch(color=palette[i % len(palette)], alpha=0.65, label=f"{name} (n={len(values)})")
+#         for i, (name, values) in enumerate(zip(group_names, prepared))
+#     ]
+#     ax.legend(handles=legend_handles, fontsize=12)
+
+#     ax.set_xlabel('Groups', fontsize=14)
+#     ax.set_ylabel(f"{stats_name} ({unit})", fontsize=14)
+#     ax.set_title(f"{stats_name} Distribution", fontsize=20)
+#     ax.set_xticks(x_positions)
+#     ax.set_xticklabels(group_names, rotation=0)
+#     ax.set_xlim(-0.5, n_groups - 0.5)
+#     ax.grid(axis='y', linestyle='--', alpha=0.3)
+
+#     if export_path:
+#         plt.savefig(export_path, bbox_inches='tight')
+#     plt.show()
+
+
 def graph_group_stats(
     group_data: list,
     stats_name: str,
@@ -34,10 +152,11 @@ def graph_group_stats(
     export_path: str | None = None,
     remove_outlier_stds: float = -1, # -1 means no outlier removal
 ):
-    """Visualise summary statistics for one or more groups.
+    """Visualise summary statistics for one or more groups in two subplots.
 
     Creates violin plots with inset boxplots and jittered scatter points for each
-    group, optionally exporting the figure. Supports between 1 and 5 groups.
+    group, optionally exporting the figure. Groups 'ctrl' and 'cask' are shown in 
+    the left subplot, and all remaining groups are shown in the right subplot.
 
     Args:
         group_data (list[list[float]]): Sequence of observations per group.
@@ -49,7 +168,7 @@ def graph_group_stats(
         dpi (int, optional): Figure DPI. Defaults to 150.
         verbose (bool, optional): When True, print summary statistics. Defaults to True.
         export_path (str, optional): When provided, save the figure to this path.
-        remove_outlier_stds (float, optional): The number of standard deviations to use for outlier removal. Defaults to 2.5.
+        remove_outlier_stds (float, optional): The number of standard deviations to use for outlier removal. Defaults to -1 (no removal).
     """
     if not group_data:
         raise ValueError("group_data must contain at least one group.")
@@ -60,6 +179,7 @@ def graph_group_stats(
     if len(group_names) != n_groups:
         raise ValueError("group_names length must match group_data length.")
 
+    # Prepare data and remove outliers
     prepared = []
     for idx, values in enumerate(group_data):
         # remove values exceeding certain number of std from the mean
@@ -77,65 +197,151 @@ def graph_group_stats(
             se_val = float(np.std(values, ddof=0) / np.sqrt(len(values)))
             print(f"{name} Size: {len(values)} \t Average: {mean_val:.3f} \t SE: {se_val:.3f}")
 
-    fig_width = max(6, 2 + 1.6 * n_groups)
-    fig, ax = plt.subplots(dpi=dpi)
+    # Separate groups into two categories
+    left_groups = []  # ctrl and cask
+    left_names = []
+    left_colors = []
+    left_data = []
+    
+    right_groups = []  # remaining groups
+    right_names = []
+    right_colors = []
+    right_data = []
+    
+    for idx, (name, values) in enumerate(zip(group_names, prepared)):
+        color = palette[idx % len(palette)]
+        if name.lower() in ['ctrl', 'cask']:
+            left_groups.append(idx)
+            left_names.append(name)
+            left_colors.append(color)
+            left_data.append(values)
+        else:
+            right_groups.append(idx)
+            right_names.append(name)
+            right_colors.append(color)
+            right_data.append(values)
+    
+    # Calculate shared y-axis limits based on all data
+    all_values = np.concatenate(prepared)
+    y_min = float(np.min(all_values))
+    y_max = float(np.max(all_values))
+    y_range = y_max - y_min
+    
+    # Add padding (10% on each side)
+    padding = y_range * 0.1
+    y_floor = y_min - padding
+    y_ceil = y_max + padding
+    
+    # Calculate nice tick interval
+    # Aim for approximately 5-8 major ticks
+    rough_interval = y_range / 6
+    # Round to a nice number
+    magnitude = 10 ** np.floor(np.log10(rough_interval))
+    normalized = rough_interval / magnitude
+    if normalized < 1.5:
+        nice_interval = magnitude
+    elif normalized < 3:
+        nice_interval = 2 * magnitude
+    elif normalized < 7:
+        nice_interval = 5 * magnitude
+    else:
+        nice_interval = 10 * magnitude
+    
+    # Shared hyperparameters for consistency
+    shared_violin_width = violin_width
+    shared_box_width = violin_width * 0.6
+    shared_jitter_strength = violin_width / 6
+    shared_alpha_violin = 0.65
+    shared_alpha_scatter = 0.85
+    shared_scatter_linewidth = 0.4
+    
+    # Create figure with two subplots
+    fig, (ax_left, ax_right) = plt.subplots(1, 2, dpi=dpi)
+    fig_width = max(12, 6 + 1.6 * n_groups)
     fig.set_size_inches(fig_width, 6)
-
-    x_positions = np.arange(n_groups)
-
-    parts = ax.violinplot(
-        prepared,
-        positions=x_positions,
-        widths=violin_width,
-        showmeans=False,
-        showmedians=False,
-        showextrema=False,
-    )
-    for i, violin in enumerate(parts['bodies']):
-        color = palette[i % len(palette)]
-        violin.set_facecolor(color)
-        violin.set_edgecolor('black')
-        violin.set_alpha(0.65)
-
-    ax.boxplot(
-        prepared,
-        positions=x_positions,
-        widths=violin_width * 0.6,
-        showfliers=False,
-        patch_artist=True,
-        boxprops=dict(facecolor='white', edgecolor='black'),
-        medianprops=dict(color='black'),
-        whiskerprops=dict(color='black'),
-        capprops=dict(color='black'),
-    )
-
-    jitter_strength = violin_width / 6
-    for i, (x, values) in enumerate(zip(x_positions, prepared)):
-        jitter = np.random.uniform(-jitter_strength, jitter_strength, size=len(values))
-        ax.scatter(
-            np.repeat(x, len(values)) + jitter,
-            values,
-            color=palette[i % len(palette)],
-            edgecolor='black',
-            linewidth=0.4,
-            alpha=0.85,
-            zorder=3,
+    
+    # Helper function to plot on a specific axis
+    def plot_on_axis(ax, data, names, colors, title_suffix):
+        if len(data) == 0:
+            ax.set_visible(False)
+            return
+        
+        n_groups_subplot = len(data)
+        x_positions = np.arange(n_groups_subplot)
+        
+        # Violin plot (using shared hyperparameters)
+        parts = ax.violinplot(
+            data,
+            positions=x_positions,
+            widths=shared_violin_width,
+            showmeans=False,
+            showmedians=False,
+            showextrema=False,
         )
-
-    legend_handles = [
-        mpatches.Patch(color=palette[i % len(palette)], alpha=0.65, label=f"{name} (n={len(values)})")
-        for i, (name, values) in enumerate(zip(group_names, prepared))
-    ]
-    ax.legend(handles=legend_handles, fontsize=12)
-
-    ax.set_xlabel('Groups', fontsize=14)
-    ax.set_ylabel(f"{stats_name} ({unit})", fontsize=14)
-    ax.set_title(f"{stats_name} Distribution", fontsize=20)
-    ax.set_xticks(x_positions)
-    ax.set_xticklabels(group_names, rotation=0)
-    ax.set_xlim(-0.5, n_groups - 0.5)
-    ax.grid(axis='y', linestyle='--', alpha=0.3)
-
+        for i, violin in enumerate(parts['bodies']):
+            violin.set_facecolor(colors[i])
+            violin.set_edgecolor('black')
+            violin.set_alpha(shared_alpha_violin)
+        
+        # Boxplot (using shared hyperparameters)
+        ax.boxplot(
+            data,
+            positions=x_positions,
+            widths=shared_box_width,
+            showfliers=False,
+            patch_artist=True,
+            boxprops=dict(facecolor='white', edgecolor='black'),
+            medianprops=dict(color='black'),
+            whiskerprops=dict(color='black'),
+            capprops=dict(color='black'),
+        )
+        
+        # Scatter points with jitter (using shared hyperparameters)
+        for i, (x, values) in enumerate(zip(x_positions, data)):
+            jitter = np.random.uniform(-shared_jitter_strength, shared_jitter_strength, size=len(values))
+            ax.scatter(
+                np.repeat(x, len(values)) + jitter,
+                values,
+                color=colors[i],
+                edgecolor='black',
+                linewidth=shared_scatter_linewidth,
+                alpha=shared_alpha_scatter,
+                zorder=3,
+            )
+        
+        # Legend (using shared hyperparameters)
+        legend_handles = [
+            mpatches.Patch(color=colors[i], alpha=shared_alpha_violin, label=f"{name} (n={len(values)})")
+            for i, (name, values) in enumerate(zip(names, data))
+        ]
+        ax.legend(handles=legend_handles, fontsize=12)
+        
+        # Labels and formatting
+        ax.set_xlabel('Groups', fontsize=14)
+        ax.set_ylabel(f"{stats_name} ({unit})", fontsize=14)
+        ax.set_title(f"{stats_name} Distribution - {title_suffix}", fontsize=16)
+        ax.set_xticks(x_positions)
+        ax.set_xticklabels(names, rotation=0)
+        ax.set_xlim(-0.5, n_groups_subplot - 0.5)
+        
+        # Apply shared y-axis limits and ticks
+        ax.set_ylim(y_floor, y_ceil)
+        y_ticks = np.arange(
+            np.ceil(y_floor / nice_interval) * nice_interval,
+            y_ceil,
+            nice_interval
+        )
+        ax.set_yticks(y_ticks)
+        ax.grid(axis='y', linestyle='--', alpha=0.3)
+    
+    # Plot left subplot (ctrl and cask)
+    plot_on_axis(ax_left, left_data, left_names, left_colors, "Control Groups")
+    
+    # Plot right subplot (remaining groups)
+    plot_on_axis(ax_right, right_data, right_names, right_colors, "Other Groups")
+    
+    plt.tight_layout()
+    
     if export_path:
         plt.savefig(export_path, bbox_inches='tight')
     plt.show()
@@ -215,3 +421,197 @@ def collect_metric(metric_name: str, mapping: dict) -> dict:
         group: [entry[metric_name] for entry in metrics]
         for group, metrics in mapping.items()
     }
+
+
+def calculate_interpellet_intervals_by_position(group_sessions: dict, method: str = 'ipi') -> dict:
+    """Calculate inter-pellet intervals organized by pellet position within meals.
+    
+    Args:
+        group_sessions (dict): Dictionary mapping group names to lists of SessionData objects.
+        method (str): Meal detection method ('ipi' or 'paper'). Defaults to 'ipi'.
+    
+    Returns:
+        dict: Nested dictionary where:
+            - First level keys are pellet positions (2, 3, 4, ...)
+            - Second level keys are group names
+            - Values are lists of time intervals in seconds
+    
+    Example:
+        {
+            2: {'ctrl': [10.5, 12.3, ...], 'exp': [8.2, 9.1, ...]},
+            3: {'ctrl': [11.2, 13.5, ...], 'exp': [9.5, 10.8, ...]},
+            ...
+        }
+    """
+    import pandas as pd
+    from scripts.meals import find_meals_paper
+    
+    # Initialize data structure: pellet_position -> group -> list of intervals
+    intervals_by_position = {}
+    
+    for group, sessions in group_sessions.items():
+        for session in sessions:
+            data = session.raw.copy()
+            
+            # Detect meals using the specified method
+            meals, _ = find_meals_paper(
+                data, 
+                time_threshold=60, 
+                pellet_threshold=2,
+                in_meal_ratio=False,
+                method=method
+            )
+            
+            if not meals:
+                continue
+            
+            # Get pellet events with retrieval timestamps
+            df_pellets = data[data['Event'] == 'Pellet'].copy()
+            # df_pellets['retrieval_timestamp'] = df_pellets['Time'] + pd.to_timedelta(
+            #     df_pellets['collect_time'], unit='m'
+            # )
+            
+            # For each meal, calculate inter-pellet intervals
+            for meal_start, meal_end in meals:
+                # Find pellets within this meal
+                meal_pellets = df_pellets[
+                    (df_pellets['Time'] >= meal_start) &
+                    (df_pellets['Time'] <= meal_end)
+                ].sort_values('Time')
+                
+                if len(meal_pellets) < 2:
+                    continue
+                
+                # Calculate intervals between consecutive pellets
+                timestamps = meal_pellets['Time'].values
+                for i in range(1, len(timestamps)):
+                    # Pellet position (2 = interval from 1st to 2nd pellet)
+                    pellet_position = i + 1
+                    
+                    # Time interval in seconds
+                    interval_seconds = (
+                        pd.Timestamp(timestamps[i]) - pd.Timestamp(timestamps[i-1])
+                    ).total_seconds()
+                    
+                    # Initialize nested structure if needed
+                    if pellet_position not in intervals_by_position:
+                        intervals_by_position[pellet_position] = {}
+                    if group not in intervals_by_position[pellet_position]:
+                        intervals_by_position[pellet_position][group] = []
+                    
+                    # Store the interval
+                    intervals_by_position[pellet_position][group].append(interval_seconds)
+    
+    return intervals_by_position
+
+
+def plot_interpellet_intervals_by_group_separate(
+    intervals_by_position: dict,
+    group_name: str,
+    pellet_positions: list | None = None,
+    export_path: str | None = None,
+    dpi: int = 150,
+):
+    """Plot inter-pellet intervals as violin plots for each pellet position for a specific group.
+    
+    Args:
+        intervals_by_position (dict): Output from calculate_interpellet_intervals_by_position.
+        group_name (str): Name of the group to plot.
+        pellet_positions (list, optional): Which pellet positions to plot. If None, plots all.
+        export_path (str, optional): Path to save the figure.
+        dpi (int): Figure DPI.
+    """
+    import matplotlib.pyplot as plt
+    import matplotlib.patches as mpatches
+    
+    if pellet_positions is None:
+        pellet_positions = sorted(intervals_by_position.keys())
+    
+    # Create figure
+    n_positions = len(pellet_positions)
+    fig_width = max(12, 2 + 1.2 * n_positions)
+    fig, ax = plt.subplots(dpi=dpi, figsize=(fig_width, 6))
+    
+    # Prepare data for each pellet position for this specific group
+    positions_data = []
+    positions_labels = []
+    positions_counts = []
+    
+    for pos in pellet_positions:
+        if pos not in intervals_by_position:
+            continue
+        
+        # Get data for this group only
+        if group_name in intervals_by_position[pos]:
+            group_data = intervals_by_position[pos][group_name]
+            if group_data:
+                positions_data.append(np.array(group_data))
+                positions_labels.append(str(pos))
+                positions_counts.append(len(group_data))
+    
+    if not positions_data:
+        print("No data remaining after filtering.")
+        return
+    
+    x_positions = np.arange(len(positions_data))
+    
+    # Violin plot
+    violin_width = 0.4
+    parts = ax.violinplot(
+        positions_data,
+        positions=x_positions,
+        widths=violin_width,
+        showmeans=False,
+        showmedians=False,
+        showextrema=False,
+    )
+    for violin in parts['bodies']:
+        violin.set_facecolor(palette[0])
+        violin.set_edgecolor('black')
+        violin.set_alpha(0.65)
+    
+    # Boxplot overlay
+    ax.boxplot(
+        positions_data,
+        positions=x_positions,
+        widths=violin_width * 0.6,
+        showfliers=False,
+        patch_artist=True,
+        boxprops=dict(facecolor='white', edgecolor='black'),
+        medianprops=dict(color='black'),
+        whiskerprops=dict(color='black'),
+        capprops=dict(color='black'),
+    )
+    
+    # Add N labels above each violin (removed scatter points for clarity)
+    y_max = max(np.max(data) for data in positions_data)
+    y_min = min(np.min(data) for data in positions_data)
+    y_range = y_max - y_min
+    
+    # Position N labels with sufficient spacing from the data
+    label_y_position = y_max + (y_range * 0.15)
+    
+    for i, (x, count) in enumerate(zip(x_positions, positions_counts)):
+        ax.text(
+            x, label_y_position, f'N = {count}',
+            ha='center', va='bottom', fontsize=10
+        )
+    
+    # Adjust y-axis limits to accommodate labels without overlapping title
+    ax.set_ylim(y_min - y_range * 0.05, y_max + y_range * 0.35)
+    
+    # Labels and formatting
+    ax.set_xlabel('Pellet Number', fontsize=14)
+    ax.set_ylabel('Time Interval Between Pellets [Sec]', fontsize=14)
+    ax.set_title(f'Inter-Pellet Interval by Pellet Position - {group_name}', fontsize=16)
+    ax.set_xticks(x_positions)
+    ax.set_xticklabels(positions_labels)
+    ax.set_xlim(-0.5, len(positions_data) - 0.5)
+    ax.grid(axis='y', linestyle='--', alpha=0.3)
+    
+    plt.tight_layout()
+    
+    if export_path:
+        plt.savefig(export_path, bbox_inches='tight')
+    plt.show()
+    plt.close(fig)
