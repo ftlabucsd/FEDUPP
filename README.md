@@ -178,15 +178,18 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 🔄 Changelog
 
-### v2.0 (January 2025)
+### v3.0 (November 2025)
+- ⏱️ Inter-Pellet Interval (IPI) analysis for feeding rhythm
+- 💾 Full data export to Excel for further analysis
+- 🔍 Meal accuracy vs dispense time correlation analysis
+
+### v2.0 (August 2025)
 - ✨ Complete pipeline reorganization with modular scripts
 - 📖 Comprehensive inline documentation in notebooks
 - 🔧 Moved all functions to `scripts/` for reusability
 - 🎨 Improved visualization consistency (SVG outputs)
 - 🧠 Added ML-based meal quality classification
 - 📊 Enhanced reversal learning analysis (block transitions, retrieval times)
-- ⏱️ Inter-Pellet Interval (IPI) analysis for feeding rhythm
-- 💾 Full data export to Excel for further analysis
 - 🧪 Automated quality control checks
 - 📈 Statistical testing built into workflow
 
