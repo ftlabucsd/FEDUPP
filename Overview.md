@@ -428,6 +428,17 @@ find_k_by_elbow(three_pellet_meals)  # Displays elbow plot
 
 ---
 
+### `advanced_analysis.py` - Specialized Analyses (New in v3.0)
+
+| Function | Purpose |
+|----------|---------|
+| `plot_fr1_meal_accuracy_distribution(...)` | Visualizes high vs. low accuracy meal frequency over time |
+| `plot_reversal_block_accuracy_distribution(...)` | Analyzes meal accuracy in REV blocks (Match vs Mismatch with FR1 side) |
+| `calculate_dispense_delays(csv_path)` | Estimates mechanical dispense delay (pellet drop - trigger poke) |
+| `plot_meal_dispense_time_correlation(...)` | Correlates meal accuracy with average dispense/retrieval time |
+
+---
+
 ## 📊 Output Files & Figures
 
 Running the complete pipeline generates organized visualizations:
@@ -473,6 +484,13 @@ retrieval/
 meals/
 ├── control_M10_reversal_frequency.svg   # Per-session meal diagnostics
 └── ...
+```
+
+### Inter-Pellet Interval Output (`figures/FR1/interpellet_intervals/` & `REV/...`)
+```
+fr1_ipi_control_pellets_2_12.svg  # FR1 feeding rhythm for Control group
+rev_ipi_control_pellets_2_12.svg  # Reversal feeding rhythm for Control group
+...
 ```
 
 All figures are publication-ready SVG format with:
