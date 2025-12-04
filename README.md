@@ -77,14 +77,38 @@ Create or modify `group_map.json` to assign mice id to experimental groups, for 
 
 ### 3. Run the Analysis Pipeline
 
-Inside this project, open `pipeline.ipynb` in Jupyter Lab or VS Code or other IDEs and run cells sequentially:
+Inside this project, open `pipeline.ipynb` in Jupyter Lab or VS Code or other IDEs.
 
-The notebook will **automatically**:
-1. Load and validate your data
-2. Perform quality control checks
-3. Generate FR1 and Reversal Learning analyses
-4. Save figures to `figures/FR1/` and `figures/REV/`
-5. Print statistical test results
+**Configuration:**
+In **Step 2** of the notebook, you can configure the `MEAL_METHOD` variable:
+- `'ipi'`:  Uses original FED3 paper's method to define a meal
+- `'paper'`: (Default) Uses the method described in the our paper.
+
+**Pipeline Steps:**
+Run the cells sequentially. The workflow is divided into four main parts:
+
+1. **Setup & Quality Control**:
+   - Loads data and configures paths.
+   - Checks dispenser performance (motor turns) and filters problematic sessions.
+
+2. **Part A: FR1 Analysis**:
+   - Computes learning metrics (time to 80% accuracy).
+   - Analyzes meal patterns (pellets/hour, first meal latency).
+   - Classifies meals using ML models (Good vs. Bad meals).
+   - Visualizes meal accuracy distributions.
+
+3. **Part B: Reversal Learning Analysis**:
+   - Analyzes block transitions and learning scores/results.
+   - Evaluates retrieval times and motor performance.
+   - Correlations between meal accuracy and dispense time.
+
+4. **Part C: Inter-Pellet Interval (IPI) Analysis**:
+   - Calculates intervals between consecutive pellets (Positions 2-12).
+   - Generates violin plots to visualize feeding rhythms per group.
+
+5. **Part D: Data Export**:
+   - **Automatically exports ALL analysis data** to a comprehensive Excel file (`figures/<method>/<method>_analysis_data_export.xlsx`).
+   - Contains separate sheets for every metric and plot generated.
 
 ---
 
@@ -161,6 +185,8 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - 🎨 Improved visualization consistency (SVG outputs)
 - 🧠 Added ML-based meal quality classification
 - 📊 Enhanced reversal learning analysis (block transitions, retrieval times)
+- ⏱️ Inter-Pellet Interval (IPI) analysis for feeding rhythm
+- 💾 Full data export to Excel for further analysis
 - 🧪 Automated quality control checks
 - 📈 Statistical testing built into workflow
 
