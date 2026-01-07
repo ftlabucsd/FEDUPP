@@ -82,13 +82,14 @@ FED3-data/
 │       └── ...
 │       
 └── scripts/                   # backbone scripts (imported by notebooks)
-    ├── preprocessing.py
-    ├── accuracy.py
-    ├── meals.py
-    ├── direction_transition.py
-    ├── utils.py
-    ├── meal_classifiers.py
-    ├── unsupervised_helpers.py
+    ├── preprocessing.py       # Data loading & quality control
+    ├── accuracy.py            # Learning curve analysis
+    ├── meals.py               # Feeding pattern analysis & ML classification
+    ├── direction_transition.py # Reversal learning & block analysis
+    ├── utils.py               # Statistics & visualization helpers
+    ├── meal_classifiers.py    # Neural network models (LSTM/CNN)
+    ├── unsupervised_helpers.py # Clustering & data prep for model training
+    ├── advanced_analysis.py   # Specialized analyses (FR1 influence, dispense timing)
     └── ClassicFED3_WithReversalTask_copy_20251001154805.ino  # FED3 device programming code
 ```
 
@@ -96,7 +97,7 @@ FED3-data/
 
 ## 📓 Pipeline Notebook Guide
 
-The `pipeline.ipynb` is organized into **15 sequential steps** across two main sections:
+The `pipeline.ipynb` is organized into **19+ sequential steps** across four main sections:
 
 ### 🔧 Setup & Quality Control (Steps 1-3)
 
@@ -106,14 +107,16 @@ The `pipeline.ipynb` is organized into **15 sequential steps** across two main s
 | **2** | Load session catalog and group assignments | `SESSIONS`, `GROUPINGS` dictionaries |
 | **3** | Check dispenser motor performance | Remove sessions with >20% mechanical errors |
 
-### 📈 Part A: FR1 Analysis (Steps 4-7)
+### 📈 Part A: FR1 Analysis (Steps 4-7.5)
 
 | Step | Description | Key Outputs |
 |------|-------------|-------------|
 | **4** | Compute learning metrics | `fr1_overall_accuracy`, `fr1_learning_milestone` |
 | **5** | Visualize FR1 performance | Accuracy & milestone plots + t-tests |
 | **6** | Analyze meal patterns | Pellet rates, meal timing, quality metrics |
+| **6.5** | Print low-accuracy meal statistics | Console output: meals <50% accuracy ratio |
 | **7** | Visualize meal metrics | 5 meal-related figures + statistics |
+| **7.5** | Analyze FR1 meal accuracy distribution | Stacked histogram of high/low accuracy meals over time |
 
 **FR1 Metrics Computed:**
 - ✓ Overall ending accuracy
@@ -123,19 +126,22 @@ The `pipeline.ipynb` is organized into **15 sequential steps** across two main s
 - ✓ First good meal latency (ML-classified)
 - ✓ In-meal pellet ratio (organized vs scattered eating)
 - ✓ Good meal proportion
+- ✓ Low-accuracy meal ratio (meals <50% / total meals)
 
-### 🔄 Part B: Reversal Learning Analysis (Steps 8-15)
+### 🔄 Part B: Reversal Learning Analysis (Steps 8-15.6)
 
 | Step | Description | Key Outputs |
 |------|-------------|-------------|
-| **8** | Setup reversal parameters | Filter REV sessions, set day limits |
+| **8** | Setup reversal parameters & pre-compute blocks/meals | `rev_session_analyses` with blocks + meals |
 | **9** | Compute block transitions | Success rates, transition patterns, per-mouse plots |
 | **10** | Visualize transition metrics | 4 group-level figures + t-tests |
 | **11** | Compute learning scores | Early (75%) vs late (25%) block accuracy |
 | **12** | Visualize learning dynamics | Score trends, result distributions, pellet ratios |
-| **13** | Analyze retrieval times | Mean, projected, and slope metrics per block |
-| **14** | Visualize retrieval metrics | 3 retrieval figures + statistics |
+| **13** | Reversal block accuracy distribution | Match vs Mismatch FR1 active poke analysis |
+| **14** | Compute retrieval time metrics | Mean, projected, and slope metrics per block |
 | **15** | Analyze reversal meal patterns | 6 meal metrics during cognitive challenge |
+| **15.5** | Calculate average meal size | Pellets per meal for reversal sessions |
+| **15.6** | Meal accuracy vs dispense time correlation | Scatter plot with regression analysis |
 
 **Reversal Metrics Computed:**
 - ✓ Number of blocks per session
@@ -145,6 +151,22 @@ The `pipeline.ipynb` is organized into **15 sequential steps** across two main s
 - ✓ Learning result (late performance, 75-100%)
 - ✓ Pellet-in-meal ratio trends
 - ✓ Retrieval time dynamics (mean, slope, projection)
+- ✓ Low-accuracy meal ratio
+- ✓ Average meal size (pellets per meal)
+- ✓ Meal accuracy vs dispense time correlation
+
+### 📊 Part C: Inter-Pellet Interval Analysis (Steps 16-17)
+
+| Step | Description | Key Outputs |
+|------|-------------|-------------|
+| **16** | Calculate inter-pellet intervals by position | `ipi_data_fr1`, `ipi_data_rev` |
+| **17** | Visualize inter-pellet intervals | Per-group violin plots for pellet positions 2-12 |
+
+### 📤 Part D: Data Export (Step 19)
+
+| Step | Description | Key Outputs |
+|------|-------------|-------------|
+| **19** | Export all plotting data to Excel | Multi-sheet Excel file with all metrics |
 
 ---
 
@@ -278,11 +300,12 @@ plot_cumulative_accuracy([fr1_dfs], group_labels=['Control'], bin_size_sec=5)
 | `predict_meal_quality(batch_meals, model_type)` | Runs LSTM/CNN classifier on meal sequences to predict good/bad |
 | `find_first_accurate_meal(data, time_threshold, pellet_threshold)` | Finds first ML-classified "good" meal in session |
 | `analyze_meals(data, meals, time_threshold, pellet_threshold)` | Batch-processes meals: computes stats, applies ML model |
+| `calculate_low_accuracy_meal_ratio(data, ...)` | **Calculates ratio of meals <50% accuracy** (time/pellet constrained only, no accuracy filter) |
 | `average_pellet(group)` | Calculates pellets per day |
-| `pellet_flip(data)` | Adjusts poke counts during reversal blocks |
+| `pellet_flip(data)` | Aggregates pellet events into 10-minute bins |
 | `active_meal(meals)` | Computes proportion of meals during active periods |
 | `collect_good_meal_ratio(quality_map)` | Aggregates good/bad meal proportions across sessions |
-| `graph_pellet_frequency(grouped_data, ...)` | Plots inter-pellet interval histogram |
+| `graph_pellet_frequency(grouped_data, ...)` | Plots 10-minute pellet count histogram |
 | `graphing_cum_count(data, meal, ...)` | Plots cumulative pellet curve with meal periods highlighted |
 
 **Block-Based Meal Detection (Reversal Sessions):**
@@ -306,14 +329,35 @@ analysis = analyze_meals_by_blocks(blocks, method='ipi')
 - `in_meal_ratio`: Fraction of pellets inside meals
 - `total_meals`: Number of meals detected
 - `good_mask`: Boolean array of meal quality predictions
+- `meal_count`: Meals per day
+- `meals_with_acc`: List of [start_time, padded_accuracy_sequence] for each meal
+
+**Metrics Returned by `calculate_low_accuracy_meal_ratio`:**
+- `total_meals`: Total meals (constrained by time/pellet only, no accuracy filter)
+- `low_accuracy_meals`: Number of meals with accuracy < cutoff
+- `high_accuracy_meals`: Number of meals with accuracy ≥ cutoff
+- `low_accuracy_ratio`: Fraction of low-accuracy meals
+- `meal_accuracies`: List of all meal accuracy values
 
 **Usage Example:**
 ```python
-from scripts.meals import process_meal_data
+from scripts.meals import process_meal_data, calculate_low_accuracy_meal_ratio
 
+# Main meal analysis
 metrics = process_meal_data(session, export_root='figures/FR1/meals/')
 print(f"Average pellets/day: {metrics['avg_pellet']}")
 print(f"Good meal proportion: {sum(metrics['good_mask']) / metrics['total_meals']}")
+
+# Calculate low-accuracy meal statistics (no accuracy filter applied)
+stats = calculate_low_accuracy_meal_ratio(
+    session.raw.copy(),
+    time_threshold=60,
+    pellet_threshold=2,
+    accuracy_cutoff=50.0,
+    method='paper',
+)
+print(f"Total meals (time/pellet only): {stats['total_meals']}")
+print(f"Low accuracy meals (<50%): {stats['low_accuracy_meals']} ({stats['low_accuracy_ratio']*100:.1f}%)")
 ```
 
 ---
@@ -471,14 +515,53 @@ find_k_by_elbow(three_pellet_meals)  # Displays elbow plot
 
 ---
 
-### `advanced_analysis.py` - Specialized Analyses (New in v3.0)
+### `advanced_analysis.py` - Specialized Analyses
+
+This module provides advanced visualization and correlation analyses for deeper behavioral insights.
 
 | Function | Purpose |
 |----------|---------|
-| `plot_fr1_meal_accuracy_distribution(...)` | Visualizes high vs. low accuracy meal frequency over time |
-| `plot_reversal_block_accuracy_distribution(...)` | Analyzes meal accuracy in REV blocks (Match vs Mismatch with FR1 side) |
-| `calculate_dispense_delays(csv_path)` | Estimates mechanical dispense delay (pellet drop - trigger poke) |
-| `plot_meal_dispense_time_correlation(...)` | Correlates meal accuracy with average dispense/retrieval time |
+| `plot_fr1_meal_accuracy_distribution(fr1_group_sessions, bin_size_hours, export_path)` | **FR1 meal accuracy over time**: Stacked histogram showing frequency of high (≥50%) vs low (<50%) accuracy meals binned by hours from session start |
+| `plot_reversal_block_accuracy_distribution(fr1_group_sessions, rev_group_sessions, export_root)` | **FR1 influence on reversal**: Compares meal accuracy distribution within blocks that match vs mismatch the FR1 active poke side. Also plots meal size distributions |
+| `calculate_dispense_delays(csv_path, max_retrieval_gap, max_dispense_delay)` | **Mechanical timing analysis**: Estimates dispense delay (correct poke → pellet drop) by subtracting retrieval time from pellet timestamp |
+| `plot_meal_dispense_time_correlation(rev_group_sessions, export_root)` | **Accuracy vs hardware**: Scatter plot with regression showing relationship between meal accuracy and average dispensing delay |
+
+**Usage Example:**
+```python
+from scripts.advanced_analysis import (
+    plot_fr1_meal_accuracy_distribution,
+    plot_reversal_block_accuracy_distribution,
+    plot_meal_dispense_time_correlation,
+)
+
+# FR1: Show meal accuracy distribution over 24 hours
+plot_fr1_meal_accuracy_distribution(
+    fr1_group_sessions,
+    bin_size_hours=1,
+    export_path='figures/FR1/fr1_meal_accuracy_distribution.svg'
+)
+
+# Reversal: Analyze FR1 influence on block performance
+plot_reversal_block_accuracy_distribution(
+    fr1_group_sessions,
+    rev_group_sessions,
+    export_root='figures/REV'
+)
+
+# Reversal: Correlate meal accuracy with mechanical delays
+plot_meal_dispense_time_correlation(
+    rev_group_sessions,
+    export_root='figures/REV'
+)
+```
+
+**Key Concepts:**
+
+- **Match vs Mismatch blocks**: In reversal, blocks where the active poke matches the FR1 training side ("Match") vs blocks with the opposite side ("Mismatch"). This reveals transfer effects from initial learning.
+
+- **Dispense delay**: Time between the correct active poke and when the pellet actually drops. Calculated as: `Pellet_Time - Retrieval_Time - Trigger_Poke_Time`. High delays may indicate mechanical issues.
+
+- **Block progress**: Meals are positioned by their relative timing within a block (0-100%), allowing comparison of early vs late block feeding patterns.
 
 ---
 
@@ -488,24 +571,31 @@ Running the complete pipeline generates organized visualizations:
 
 ### FR1 Output (`figures/FR1/`)
 ```
-cumulative_accuracy.svg           # Learning curves with SEM bands
-overall_accuracy.svg              # Final accuracy distribution
-learning_milestone_time.svg       # Start time to maintaining 80% accuracy for 2 hours
-avg_pellets.svg                   # Pellet consumption rate
-first_meal_time.svg               # Initial meal latency
-first_good_meal_time.svg          # First quality meal latency
-in_meal_ratio.svg                 # Organized vs scattered eating
-good_meal_ratio.svg               # Proportion of quality meals
+fr1_cumulative_accuracy.svg           # Learning curves with SEM bands
+fr1_overall_accuracy.svg              # Final accuracy distribution
+fr1_learning_milestone_time.svg       # Start time to maintaining 80% accuracy for 2 hours
+fr1_avg_pellets.svg                   # Pellet consumption rate
+fr1_first_meal_time.svg               # Initial meal latency
+fr1_first_good_meal_time.svg          # First quality meal latency
+fr1_in_meal_ratio.svg                 # Organized vs scattered eating
+fr1_good_meal_ratio.svg               # Proportion of quality meals
+fr1_meal_accuracy_distribution.svg    # Stacked histogram: high vs low accuracy meals over time
 
 meals/
-├── control_M1_fr1_frequency.svg  # Per-session meal diagnostics
-├── control_M1_fr1_cumulative.svg
+├── control_M1_fr1_pellet_frequency.svg  # Per-session pellet frequency
+├── control_M1_fr1_cumulative_sum.svg    # Per-session cumulative pellets
+└── ...
+
+interpellet_intervals/
+├── fr1_ipi_control_pellets_2_12.svg  # FR1 feeding rhythm for Control group
+├── fr1_ipi_cask_pellets_2_12.svg     # FR1 feeding rhythm for Cask group
 └── ...
 ```
 
 ### Reversal Output (`figures/REV/`)
 ```
 rev_learning_score_overall.svg        # Early adaptation curves
+rev_learning_score.svg                # Learning score distribution
 rev_learning_result.svg               # Final performance distribution
 rev_pellet_ratio_overall.svg          # In-meal ratio trends
 rev_number_of_blocks.svg              # Block count per session
@@ -515,6 +605,13 @@ rev_meal_accuracy.svg                 # Meal quality during reversals
 rev_retrieval_mean.svg                # Average retrieval times
 rev_retrieval_projection.svg          # Projected final retrieval
 rev_retrieval_slope.svg               # Retrieval time trends
+rev_avg_pellet.svg                    # Average pellets per day
+rev_good_meal_ratio.svg               # Good meal proportion
+rev_inactive_meals.svg                # Inactive meal fraction
+rev_in_meal_ratio.svg                 # In-meal pellet ratio
+rev_block_acc_dist_*.svg              # Block accuracy distribution (Match vs Mismatch FR1)
+rev_block_meal_size_dist_*.svg        # Meal size distribution per block type
+rev_acc_vs_dispense_delay_*.svg       # Meal accuracy vs dispensing delay correlation
 
 transition/
 ├── control_M10_reversal_transition.svg  # Per-mouse block analysis
@@ -525,16 +622,21 @@ retrieval/
 └── ...
 
 meals/
-├── control_M10_reversal_frequency.svg   # Per-session meal diagnostics
+├── control_M10_reversal_pellet_frequency.svg   # Per-session pellet frequency
+├── control_M10_reversal_cumulative_sum.svg     # Per-session cumulative pellets
+└── ...
+
+interpellet_intervals/
+├── rev_ipi_control_pellets_2_12.svg  # Reversal feeding rhythm for Control group
+├── rev_ipi_cask_pellets_2_12.svg     # Reversal feeding rhythm for Cask group
 └── ...
 ```
 
-### Inter-Pellet Interval Output (`figures/FR1/interpellet_intervals/` & `REV/...`)
+### Data Export Output (`figures/[method]/`)
 ```
-fr1_ipi_control_pellets_2_12.svg  # FR1 feeding rhythm for Control group
-rev_ipi_control_pellets_2_12.svg  # Reversal feeding rhythm for Control group
-...
+[method]_analysis_data_export.xlsx    # Multi-sheet Excel with all plotting data
 ```
+Each sheet contains raw values used to generate corresponding plots, organized by group.
 
 All figures are publication-ready SVG format with:
 - Clear axis labels and units
