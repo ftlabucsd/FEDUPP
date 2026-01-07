@@ -13,7 +13,12 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 import numpy as np
 
-from scripts.meals import find_meals_paper, find_first_accurate_meal
+from scripts.meals import (
+    find_meals_paper,
+    find_first_accurate_meal,
+    find_meals_by_blocks,
+    analyze_meals_by_blocks,
+)
 
 
 def split_data_to_blocks(data_dropped: pd.DataFrame, day: int = 3) -> list[pd.DataFrame]:
@@ -109,7 +114,14 @@ def remove_pellet(block: pd.DataFrame) -> pd.DataFrame:
     return block[block['Event'] != 'Pellet']
 
 
-def get_transition_info(blocks: list[pd.DataFrame], meal_config: list, reverse: bool, method: str = 'paper') -> pd.DataFrame:
+def get_transition_info(
+    blocks: list[pd.DataFrame],
+    meal_config: list,
+    reverse: bool,
+    method: str = 'paper',
+    block_meal_info: list | None = None,
+    first_good_times: list | None = None,
+) -> pd.DataFrame:
     """Calculate block-level transition, meal, and activity statistics.
 
     Args:
@@ -120,6 +132,13 @@ def get_transition_info(blocks: list[pd.DataFrame], meal_config: list, reverse: 
         reverse (bool): When True, treat traditionally inactive blocks as
             active. This keeps plot shading consistent across FR1 and REV
             sessions.
+        method (str): Meal detection method ('paper' or 'ipi').
+        block_meal_info (list, optional): Pre-computed per-block meal info from
+            ``find_meals_by_blocks``. If provided, reuses this data instead of
+            recomputing meals for each block.
+        first_good_times (list, optional): Pre-computed first good meal times for
+            each block. If provided with block_meal_info, avoids recomputing
+            ML-based meal quality.
 
     Returns:
         pd.DataFrame: One row per block summarising transition percentages,
@@ -127,19 +146,39 @@ def get_transition_info(blocks: list[pd.DataFrame], meal_config: list, reverse: 
     """
     new_add = []
     inactives = find_inactive_blocks(blocks, reverse=reverse)
+    
+    # If no pre-computed meal info, compute it now using block-based detection
+    if block_meal_info is None:
+        _, _, block_meal_info = find_meals_by_blocks(
+            blocks,
+            time_threshold=meal_config[0],
+            pellet_threshold=meal_config[1],
+            method=method,
+        )
 
     for i, block in enumerate(blocks):
         no_pellet = remove_pellet(block)
         size = len(no_pellet)
+        if size == 0:
+            continue
+            
         transitions = count_transitions(no_pellet)
         active_poke = block.iloc[0]['Active_Poke']
 
         times = block['Time'].tolist()
         block_time = round((times[-1] - times[0]).total_seconds() / 60, 2)
-        meals, *_ = find_meals_paper(block, meal_config[0], meal_config[1], method=method)
-        time = round((meals[0][0] - times[0]).total_seconds() / 60, 2) if len(meals) > 0 else 'no meal'
-
-        _, first_meal_time = find_first_accurate_meal(block, 60, 2, 'cnn', method=method)
+        
+        # Use pre-computed block meals if available
+        block_meals = block_meal_info[i]['meals'] if i < len(block_meal_info) else []
+        time = round((block_meals[0][0] - times[0]).total_seconds() / 60, 2) if len(block_meals) > 0 else 'no meal'
+        
+        # Use pre-computed first good meal time if available
+        if first_good_times is not None and i < len(first_good_times):
+            first_meal_time = first_good_times[i]
+        else:
+            # Fallback: compute for this block
+            _, first_meal_time = find_first_accurate_meal(block, 60, 2, 'cnn', method=method)
+        
         if first_meal_time is None or first_meal_time > times[-1]:
             meal_1_good = block_time
         else:
@@ -174,6 +213,92 @@ def get_transition_info(blocks: list[pd.DataFrame], meal_config: list, reverse: 
         'Block_Time', 'Incorrect_Pokes', 'Active', 'Pellet_Rate'])
 
     return data_stats
+
+
+def compute_session_analysis(
+    data: pd.DataFrame,
+    day_limit: int = 3,
+    meal_config: tuple = (60, 2),
+    method: str = 'paper',
+    accuracy_threshold: float = 50.0,
+) -> dict:
+    """Compute blocks and meals together for a session to avoid redundant computation.
+    
+    This is the recommended entry point for reversal session analysis. It computes
+    blocks once and detects meals within each block, ensuring no cross-block meals
+    and avoiding multiple recomputation of meals.
+    
+    Args:
+        data (pd.DataFrame): Raw session data with 'Time', 'Event', 'Active_Poke' columns.
+        day_limit (int): Only include events within this many days from session start.
+        meal_config (tuple): (time_threshold, pellet_threshold) for meal detection.
+        method (str): Meal detection method ('paper' or 'ipi').
+        accuracy_threshold (float): Minimum accuracy for meal acceptance.
+    
+    Returns:
+        dict: Comprehensive session analysis results:
+            - 'blocks': List of block DataFrames.
+            - 'meal_analysis': Result from analyze_meals_by_blocks containing:
+                - 'session_meals', 'session_meal_acc', 'block_meal_info'
+                - 'meals_with_acc', 'good_mask', 'first_good_time'
+                - 'in_meal_ratio', 'total_meals'
+            - 'first_good_times_per_block': List of first good meal timestamps per block.
+    """
+    blocks = split_data_to_blocks(data, day=day_limit)
+    
+    if not blocks:
+        return {
+            'blocks': [],
+            'meal_analysis': {
+                'session_meals': [],
+                'session_meal_acc': [],
+                'block_meal_info': [],
+                'meals_with_acc': [],
+                'good_mask': np.zeros(0, dtype=bool),
+                'first_good_time': None,
+                'in_meal_ratio': 0.0,
+                'total_meals': 0,
+            },
+            'first_good_times_per_block': [],
+        }
+    
+    # Analyze meals by blocks (computes meals once for all blocks)
+    meal_analysis = analyze_meals_by_blocks(
+        blocks=blocks,
+        time_threshold=meal_config[0],
+        pellet_threshold=meal_config[1],
+        model_type='cnn',
+        accuracy_threshold=accuracy_threshold,
+        method=method,
+    )
+    
+    # Compute first good meal time per block for transition stats
+    first_good_times_per_block = []
+    block_meal_info = meal_analysis['block_meal_info']
+    meals_with_acc = meal_analysis['meals_with_acc']
+    good_mask = meal_analysis['good_mask']
+    
+    # Build a mapping of meal start times to their good_mask index
+    meal_start_to_idx = {}
+    for idx, (start_time, _) in enumerate(meals_with_acc):
+        meal_start_to_idx[start_time] = idx
+    
+    for block_info in block_meal_info:
+        block_meals = block_info['meals']
+        first_good = None
+        for meal_start, meal_end in block_meals:
+            if meal_start in meal_start_to_idx:
+                meal_idx = meal_start_to_idx[meal_start]
+                if good_mask[meal_idx]:
+                    first_good = pd.to_datetime(meal_start)
+                    break
+        first_good_times_per_block.append(first_good)
+    
+    return {
+        'blocks': blocks,
+        'meal_analysis': meal_analysis,
+        'first_good_times_per_block': first_good_times_per_block,
+    }
 
 
 def first_meal_stats(data_stats: pd.DataFrame, ignore_inactive: bool = False) -> tuple[float, float, float]:
@@ -696,7 +821,7 @@ def find_meal_pellet_counts(
         data,
         time_threshold=time_threshold,
         pellet_threshold=pellet_threshold,
-        accuracy_threshold=-1.0,
+        accuracy_threshold=50.0,
         method=method,
     )
 
@@ -891,3 +1016,155 @@ def plot_retrieval_time_by_block(
         plt.show()
     else:
         plt.close(fig)
+
+
+def plot_cumulative_pellet_ratio_trend(
+    blocks_by_group: dict,
+    group_labels: list[str] | None = None,
+    time_threshold: float = 60,
+    pellet_threshold: int = 2,
+    method: str = 'paper',
+    n_bins: int = 19,
+    export_path: str | os.PathLike | None = None,
+):
+    """Plot cumulative pellet-in-meal ratio trend across block proportions with subplots.
+
+    This function creates a figure with two subplots:
+    - Left subplot: Groups like 'cask' and 'ctrl'
+    - Right subplot: Group like 'female'
+    
+    Each curve shows how the pellet-in-meal ratio evolves as more of each block
+    is considered (from 5% to 100% of block events).
+
+    Args:
+        blocks_by_group (dict): Dictionary mapping group names to lists of subject
+            blocks. Each value is a list where every element is the list of blocks
+            for one subject, e.g., {'cask': [[blocks_m1], [blocks_m2], ...], ...}
+        group_labels (list[str] | None): Optional explicit labels for the legend.
+            If None, uses group names from blocks_by_group keys.
+        time_threshold (float): Maximum seconds between pellets to remain in the
+            same meal (default 60).
+        pellet_threshold (int): Minimum pellet count required for a meal (default 2).
+        method (str): Meal detection method ('paper' or 'ipi').
+        n_bins (int): Number of proportions (between 5% and 100%) to sample.
+        export_path (str | os.PathLike | None): Optional path to save the figure.
+
+    Returns:
+        None
+    """
+    if group_labels is None:
+        group_labels = list(blocks_by_group.keys())
+    
+    proportions = np.linspace(0.05, 1.0, n_bins)
+    
+    # Define color palette for groups
+    color_map = {
+        'cask': '#1f77b4',    # blue
+        'ctrl': '#ff7f0e',    # orange
+        'female': '#2ca02c',  # green
+    }
+    default_colors = ['#d62728', '#9467bd', '#8c564b', '#e377c2']
+    
+    # Separate groups into two categories
+    # Left subplot: cask, ctrl (or any groups not 'female')
+    # Right subplot: female
+    left_groups = [g for g in group_labels if g.lower() != 'female']
+    right_groups = [g for g in group_labels if g.lower() == 'female']
+    
+    # Create figure with two subplots
+    fig, axes = plt.subplots(1, 2, figsize=(14, 6), sharey=True)
+    ax_left, ax_right = axes
+    
+    def plot_group_trend(ax, groups, title_suffix):
+        """Helper to plot trends for a set of groups on one axis."""
+        color_idx = 0
+        for group in groups:
+            if group not in blocks_by_group:
+                continue
+            blocks_list = blocks_by_group[group]
+            if not blocks_list:
+                continue
+            
+            # Get color
+            color = color_map.get(group.lower())
+            if color is None:
+                color = default_colors[color_idx % len(default_colors)]
+                color_idx += 1
+            
+            group_means = []
+            group_sems = []
+            
+            for prop in proportions:
+                mouse_ratios = []
+                for sample_blocks in blocks_list:
+                    block_ratios = []
+                    for block_df in sample_blocks:
+                        ratio = pellet_ratio_for_block(
+                            block_df,
+                            proportion=prop,
+                            time_threshold=time_threshold,
+                            pellet_threshold=pellet_threshold,
+                            method=method,
+                        )
+                        if not np.isnan(ratio):
+                            block_ratios.append(ratio)
+                    
+                    if block_ratios:
+                        mouse_avg_ratio = np.mean(block_ratios)
+                        mouse_ratios.append(mouse_avg_ratio)
+                
+                if mouse_ratios:
+                    mean_ratio = float(np.mean(mouse_ratios))
+                    sem_ratio = float(np.std(mouse_ratios, ddof=0) / np.sqrt(len(mouse_ratios)))
+                else:
+                    mean_ratio = np.nan
+                    sem_ratio = np.nan
+                
+                group_means.append(mean_ratio)
+                group_sems.append(sem_ratio)
+            
+            group_means_arr = np.asarray(group_means)
+            group_sems_arr = np.asarray(group_sems)
+            
+            # Plot line with error band
+            n_subjects = len(blocks_list)
+            ax.plot(
+                proportions * 100, 
+                group_means_arr, 
+                color=color, 
+                linewidth=2, 
+                label=f'{group} (n={n_subjects})'
+            )
+            ax.fill_between(
+                proportions * 100,
+                group_means_arr - group_sems_arr,
+                group_means_arr + group_sems_arr,
+                color=color,
+                alpha=0.2,
+            )
+        
+        ax.set_xlabel('Block Proportion (%)', fontsize=12)
+        ax.set_xlim(5, 100)
+        ax.set_ylim(0, 1)
+        ax.grid(True, alpha=0.3)
+        ax.legend(loc='lower right')
+        ax.set_title(f'Pellet-in-Meal Ratio Trend ({title_suffix})', fontsize=14)
+    
+    # Plot left subplot (cask, ctrl)
+    if left_groups:
+        plot_group_trend(ax_left, left_groups, 'cask & ctrl')
+        ax_left.set_ylabel('Pellet-in-Meal Ratio', fontsize=12)
+    else:
+        ax_left.set_visible(False)
+    
+    # Plot right subplot (female)
+    if right_groups:
+        plot_group_trend(ax_right, right_groups, 'female')
+    else:
+        ax_right.set_visible(False)
+    
+    plt.tight_layout()
+    
+    if export_path:
+        plt.savefig(export_path, bbox_inches='tight', dpi=300)
+    plt.show()

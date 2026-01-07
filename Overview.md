@@ -270,20 +270,36 @@ plot_cumulative_accuracy([fr1_dfs], group_labels=['Control'], bin_size_sec=5)
 
 | Function | Purpose |
 |----------|---------|
-| `process_meal_data(session, export_root, prefix)` | **Main meal analysis function**: detects meals, classifies quality, computes 7+ metrics, generates plots |
-| `find_meals_paper(data, time_threshold, pellet_threshold, method='paper')` | Detects meal boundaries using time-based clustering. Use `method='paper'` (default) for original implementation or `method='ipi'` for interpellet interval-based grouping used in original FED3 paper |
+| `process_meal_data(session, export_root, prefix)` | **Main meal analysis function for FR1**: detects meals, classifies quality, computes 7+ metrics, generates plots |
+| `process_meal_data_with_blocks(session, blocks, ...)` | **Block-aware meal analysis**: uses pre-computed blocks to ensure no cross-block meals |
+| `find_meals_paper(data, time_threshold, pellet_threshold, method='paper')` | Detects meal boundaries using time-based clustering. Use `method='paper'` (default) or `method='ipi'` |
+| `find_meals_by_blocks(blocks, ...)` | **Detects meals within each block separately**, ensuring meal boundaries respect block boundaries |
+| `analyze_meals_by_blocks(blocks, ...)` | Combines block-based meal detection with ML quality classification |
 | `predict_meal_quality(batch_meals, model_type)` | Runs LSTM/CNN classifier on meal sequences to predict good/bad |
 | `find_first_accurate_meal(data, time_threshold, pellet_threshold)` | Finds first ML-classified "good" meal in session |
 | `analyze_meals(data, meals, time_threshold, pellet_threshold)` | Batch-processes meals: computes stats, applies ML model |
-| `average_pellet(group)` | Calculates pellets per hour |
+| `average_pellet(group)` | Calculates pellets per day |
 | `pellet_flip(data)` | Adjusts poke counts during reversal blocks |
 | `active_meal(meals)` | Computes proportion of meals during active periods |
 | `collect_good_meal_ratio(quality_map)` | Aggregates good/bad meal proportions across sessions |
 | `graph_pellet_frequency(grouped_data, ...)` | Plots inter-pellet interval histogram |
 | `graphing_cum_count(data, meal, ...)` | Plots cumulative pellet curve with meal periods highlighted |
 
+**Block-Based Meal Detection (Reversal Sessions):**
+For reversal sessions, meals are detected within each block separately to ensure no cross-block meals. This guarantees consistency between transition analysis and meal metrics.
+
+```python
+from scripts.meals import find_meals_by_blocks, analyze_meals_by_blocks
+
+# Detect meals within blocks (no cross-block meals)
+session_meals, meal_acc, block_meal_info = find_meals_by_blocks(blocks)
+
+# Or use the full analysis function
+analysis = analyze_meals_by_blocks(blocks, method='ipi')
+```
+
 **Meal Metrics Returned by `process_meal_data`:**
-- `avg_pellet`: Pellets per hour
+- `avg_pellet`: Pellets per day
 - `fir_meal`: First meal time (hours)
 - `fir_good_meal`: First good meal time (hours)
 - `inactive_meals`: Proportion of meals during inactive periods
@@ -296,7 +312,7 @@ plot_cumulative_accuracy([fr1_dfs], group_labels=['Control'], bin_size_sec=5)
 from scripts.meals import process_meal_data
 
 metrics = process_meal_data(session, export_root='figures/FR1/meals/')
-print(f"Average pellets/hour: {metrics['avg_pellet']}")
+print(f"Average pellets/day: {metrics['avg_pellet']}")
 print(f"Good meal proportion: {sum(metrics['good_mask']) / metrics['total_meals']}")
 ```
 
@@ -307,7 +323,8 @@ print(f"Good meal proportion: {sum(metrics['good_mask']) / metrics['total_meals'
 | Function | Purpose |
 |----------|---------|
 | `split_data_to_blocks(data, day)` | **Splits reversal session into blocks** when active poke switches |
-| `get_transition_info(blocks, meal_config, reverse)` | **Computes per-block stats**: transitions, success rate, meal timing |
+| `compute_session_analysis(data, day_limit, meal_config, method)` | **Main entry point**: computes blocks and meals together, returns all data for reuse |
+| `get_transition_info(blocks, meal_config, reverse, block_meal_info, first_good_times)` | **Computes per-block stats**: transitions, success rate, meal timing. Optionally uses pre-computed meal data |
 | `learning_score(blocks, block_prop, action_prop)` | **Early adaptation metric**: accuracy in first X% of each block |
 | `learning_result(blocks, action_prop)` | **Late performance metric**: accuracy in last X% across all blocks |
 | `first_meal_stats(data_stats, ignore_inactive)` | Extracts first meal ratio and timing from block stats |
@@ -319,6 +336,32 @@ print(f"Good meal proportion: {sum(metrics['good_mask']) / metrics['total_meals'
 | `count_transitions(sub_frame)` | Counts L→L, L→R, R→L, R→R poke transitions |
 | `find_inactive_blocks(blocks, reverse)` | Identifies blocks with minimal activity |
 | `block_accuracy_by_proportion(blocks, proportion)` | Gets accuracy at specific percentage through each block |
+
+**Efficient Reversal Analysis with `compute_session_analysis`:**
+This is the recommended entry point for reversal session analysis. It computes blocks once and detects meals within each block, ensuring no cross-block meals and avoiding multiple recomputation of meals.
+
+```python
+from scripts.direction_transition import compute_session_analysis, get_transition_info
+
+# Compute everything at once
+analysis = compute_session_analysis(
+    data=session.raw.copy(),
+    day_limit=3,
+    meal_config=(60, 2),
+    method='ipi',
+)
+
+blocks = analysis['blocks']
+meal_analysis = analysis['meal_analysis']
+block_meal_info = meal_analysis['block_meal_info']
+
+# Use pre-computed data for transition stats (no recomputation)
+stats = get_transition_info(
+    blocks, [60, 2], reverse=False,
+    block_meal_info=block_meal_info,
+    first_good_times=analysis['first_good_times_per_block'],
+)
+```
 
 **Block Transition Patterns:**
 - `L→L`: Repeated left pokes (perseveration)

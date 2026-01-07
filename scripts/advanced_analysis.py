@@ -84,6 +84,9 @@ def plot_reversal_block_accuracy_distribution(
     Task 2: Analyze influence of FR1 experience on Reversal block performance.
     Plots distribution of meal accuracies within blocks (Match vs Mismatch FR1 active poke).
     
+    Uses block-based meal detection: meals are detected within each block separately,
+    ensuring no cross-block meals and consistent alignment with block boundaries.
+    
     Args:
         fr1_group_sessions: Dictionary of group -> list of SessionData (FR1)
         rev_group_sessions: Dictionary of group -> list of SessionData (REV)
@@ -92,6 +95,7 @@ def plot_reversal_block_accuracy_distribution(
             stay consistent with the rest of the reversal analyses.
     """
     from scripts.preprocessing import SessionData
+    from scripts.meals import find_meals_by_blocks
     
     groups = list(rev_group_sessions.keys())
     
@@ -117,108 +121,142 @@ def plot_reversal_block_accuracy_distribution(
         # Structure: List of relative positions (0-100) for High and Low acc meals
         data_match = {'High': [], 'Low': []}
         data_mismatch = {'High': [], 'Low': []}
+        # Track meal counts per block across all sessions in this group
+        per_block_meal_counts: list[int] = []
+        # Track pellet counts per meal separately for matching and mismatching blocks
+        meal_pellets_match: list[int] = []
+        meal_pellets_mismatch: list[int] = []
         
         for session in rev_sessions:
             mouse_id = session.key.mouse_id
             fr1_poke = get_fr1_active_poke(mouse_id, fr1_sessions)
             
             if not fr1_poke:
-                continue # Skip if no FR1 data
+                continue  # Skip if no FR1 data
             
-            # 1. Limit to requested day window and detect meals
+            # 1. Limit to requested day window
             raw_data = session.raw.copy()
             if 'Time_passed' in raw_data.columns and day_limit is not None:
                 window_mask = raw_data['Time_passed'] < timedelta(days=day_limit)
                 raw_data = raw_data[window_mask].copy()
-            all_meals, all_meal_accs = find_meals_paper(
-                raw_data,
-                accuracy_threshold=-1.0,
-                method='paper',
-            )
             
-            if not all_meals:
-                continue
-
-            # 2. Get blocks
+            # 2. Split data into blocks
             blocks = split_data_to_blocks(raw_data, day=day_limit)
-
-            # 3. Pre-calculate block boundaries using start of next block as the effective end
-            block_windows = []
-            for b_idx, block in enumerate(blocks):
+            
+            # Drop the final block to avoid partially observed end-of-session blocks
+            if len(blocks) > 1:
+                blocks = blocks[:-1]
+            
+            # 3. Detect meals within each block separately using find_meals_by_blocks
+            # This ensures no cross-block meals
+            _, _, block_meal_info = find_meals_by_blocks(
+                blocks,
+                time_threshold=60,
+                pellet_threshold=2,
+                method='paper',
+                accuracy_threshold=-1.0,  # Include all meals regardless of accuracy
+            )
+            # Record meal counts for summary statistics
+            for info in block_meal_info:
+                per_block_meal_counts.append(len(info.get('meals', [])))
+            
+            # 4. Compute block boundaries with a small tail padding to avoid
+            # compressing the final meal to ~100% when the active poke switches
+            block_boundaries = []
+            PAD_SECONDS = 60  # pad tail by one meal window
+            for block_idx, block in enumerate(blocks):
                 if block.empty:
                     continue
-                window_start = block['Time'].iloc[0]
-                window_end = block['Time'].iloc[-1]
-                duration = (window_end - window_start).total_seconds()
-                if duration <= 0:
-                    continue
-                block_windows.append({
-                    'start': window_start,
-                    'end': window_end,
+                
+                # Block start: first event time in this block
+                block_start = block['Time'].iloc[0]
+                
+                # Base block end: start of next block (transition point) when available
+                # otherwise last event time of this block.
+                if block_idx < len(blocks) - 1 and not blocks[block_idx + 1].empty:
+                    next_start = blocks[block_idx + 1]['Time'].iloc[0]
+                    block_end = next_start
+                    gap_to_next = (next_start - block['Time'].iloc[-1]).total_seconds()
+                    # If the transition is immediate (very small gap), add a short padding
+                    # so that the last meal midpoint is not forced to 100%.
+                    if gap_to_next < PAD_SECONDS:
+                        block_end = block_end + timedelta(seconds=PAD_SECONDS - gap_to_next)
+                else:
+                    block_end = block['Time'].iloc[-1] + timedelta(seconds=PAD_SECONDS)
+                
+                block_boundaries.append({
+                    'idx': block_idx,
+                    'start': block_start,
+                    'end': block_end,
+                    'duration': (block_end - block_start).total_seconds(),
                     'active_poke': block['Active_Poke'].iloc[0],
-                    'duration': duration,
-                    'index': b_idx + 1,
                 })
             
-            if not block_windows:
-                continue
-            
-            # 4. Assign each meal to a block
-            for (m_start, m_end), acc in zip(all_meals, all_meal_accs):
-                meal_duration = (m_end - m_start).total_seconds()
-                if meal_duration <= 0:
+            # 5. Process each block and its meals
+            for boundary in block_boundaries:
+                block_idx = boundary['idx']
+                block_start = boundary['start']
+                block_end = boundary['end']
+                block_duration = boundary['duration']
+                
+                if block_duration <= 0:
                     continue
                 
-                # Prefer assigning by midpoint so each meal is counted once.
-                meal_mid = m_start + (m_end - m_start) / 2
-                assigned_block = next(
-                    (window for window in block_windows if window['start'] <= meal_mid <= window['end']),
-                    None,
-                )
-                
-                if assigned_block is None:
-                    # Fallback to overlap ratio when midpoint lands in a gap
-                    best_block = None
-                    best_overlap = 0.0
-                    for window in block_windows:
-                        overlap_start = max(window['start'], m_start)
-                        overlap_end = min(window['end'], m_end)
-                        overlap = (overlap_end - overlap_start).total_seconds()
-                        if overlap <= 0:
-                            continue
-                        overlap_ratio = overlap / meal_duration
-                        if overlap_ratio > best_overlap:
-                            best_overlap = overlap_ratio
-                            best_block = window
-                    if best_block is None or best_overlap < 0.5:
-                        warnings.warn(
-                            f"Skipped meal spanning multiple blocks for mouse {mouse_id}; "
-                            "unable to find >=50% overlap with any block."
-                        )
-                        continue
-                    assigned_block = best_block
-                
-                duration = assigned_block['duration']
-                if duration <= 0:
-                    continue
-                
-                overlap_start = max(assigned_block['start'], m_start)
-                overlap_end = min(assigned_block['end'], m_end)
-                if overlap_end <= overlap_start:
-                    continue
-                overlap_mid = overlap_start + (overlap_end - overlap_start) / 2
-                
-                # Determine match
-                is_match = (assigned_block['active_poke'] == fr1_poke)
+                block_active_poke = boundary['active_poke']
+                is_match = (block_active_poke == fr1_poke)
                 target_dict = data_match if is_match else data_mismatch
-
-                rel_pos = ((overlap_mid - assigned_block['start']).total_seconds() / duration) * 100
-                rel_pos = np.clip(rel_pos, 0.0, 100.0)
-
-                if acc >= 50.0:
-                    target_dict['High'].append(rel_pos)
-                else:
-                    target_dict['Low'].append(rel_pos)
+                
+                # Get meals for this block from pre-computed block_meal_info
+                if block_idx >= len(block_meal_info):
+                    continue
+                    
+                block_meals = block_meal_info[block_idx]['meals']
+                block_accs = block_meal_info[block_idx]['meal_acc']
+                
+                # Get the block data for counting pellets per meal
+                block_data = blocks[block_idx]
+                pellet_events = block_data[block_data['Event'] == 'Pellet']
+                
+                # Process each meal in this block
+                for (m_start, m_end), acc in zip(block_meals, block_accs):
+                    # Count pellets in this meal
+                    meal_pellet_mask = (
+                        (pellet_events['Time'] >= m_start) &
+                        (pellet_events['Time'] <= m_end)
+                    )
+                    pellet_count = meal_pellet_mask.sum()
+                    
+                    # Track pellet count for matching vs mismatching blocks
+                    if is_match:
+                        meal_pellets_match.append(pellet_count)
+                    else:
+                        meal_pellets_mismatch.append(pellet_count)
+                    
+                    # Calculate meal midpoint position within block
+                    rel_pos = ((m_start - block_start).total_seconds() / block_duration) * 100
+                    
+                    if acc >= 50.0:
+                        target_dict['High'].append(rel_pos)
+                    else:
+                        target_dict['Low'].append(rel_pos)
+        
+        # Print separate statistics for pellets per meal in matching vs mismatching blocks
+        if meal_pellets_match:
+            mean_match = float(np.mean(meal_pellets_match))
+            median_match = float(np.median(meal_pellets_match))
+            print(
+                f"[Group {group}] Matching blocks - pellets per meal: "
+                f"mean={mean_match:.2f}, median={median_match:.2f}, "
+                f"n_meals={len(meal_pellets_match)}"
+            )
+        if meal_pellets_mismatch:
+            mean_mismatch = float(np.mean(meal_pellets_mismatch))
+            median_mismatch = float(np.median(meal_pellets_mismatch))
+            print(
+                f"[Group {group}] Mismatching blocks - pellets per meal: "
+                f"mean={mean_mismatch:.2f}, median={median_mismatch:.2f}, "
+                f"n_meals={len(meal_pellets_mismatch)}"
+            )
         
         # Plotting for this group
         fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(16, 6), sharey=True)
@@ -248,6 +286,77 @@ def plot_reversal_block_accuracy_distribution(
             path = f"{export_root}/rev_block_acc_dist_{group}.svg"
             plt.savefig(path, bbox_inches='tight')
         plt.show()
+        
+        # Plot meal size (pellets per meal) distribution for matching vs mismatching blocks
+        if meal_pellets_match or meal_pellets_mismatch:
+            fig2, (ax3, ax4) = plt.subplots(1, 2, figsize=(16, 6), sharey=True)
+            
+            # Determine bin edges based on the combined data range
+            # Use -0.5 offset so integer values are centered in each bin
+            all_pellet_counts = meal_pellets_match + meal_pellets_mismatch
+            if all_pellet_counts:
+                max_count = max(all_pellet_counts)
+                # Create bins centered on integers: -0.5, 0.5, 1.5, ..., max+0.5
+                pellet_bins = np.arange(-0.5, max_count + 1.5, 1)
+            else:
+                pellet_bins = np.arange(-0.5, 11.5, 1)
+            
+            # Color scheme matching the main plot style
+            match_color = '#3274A1'  # Blue
+            mismatch_color = '#E1812C'  # Orange
+            
+            # Set x-tick positions at integer values (centered on bars)
+            if all_pellet_counts:
+                tick_positions = np.arange(0, max_count + 1, 1)
+            else:
+                tick_positions = np.arange(0, 11, 1)
+            
+            # Plot Matching blocks - pellets per meal distribution
+            if meal_pellets_match:
+                ax3.hist(meal_pellets_match, bins=pellet_bins, color=match_color,
+                         alpha=0.7, edgecolor='black', linewidth=0.8)
+                mean_match = np.mean(meal_pellets_match)
+                median_match = np.median(meal_pellets_match)
+                ax3.axvline(mean_match, color='#d62728', linestyle='--', linewidth=2,
+                            label=f'Mean: {mean_match:.2f}')
+                ax3.axvline(median_match, color='#2ca02c', linestyle=':', linewidth=2,
+                            label=f'Median: {median_match:.1f}')
+                ax3.legend(loc='upper right', fontsize=10)
+            ax3.set_title(f'Group {group}: Matching FR1 Active Poke\nMeal Size Distribution',
+                          fontsize=12, fontweight='bold')
+            ax3.set_xlabel('Number of Pellets per Meal', fontsize=11)
+            ax3.set_ylabel('Frequency (Number of Meals)', fontsize=11)
+            ax3.set_xlim(-0.5, max_count + 0.5 if all_pellet_counts else 10.5)
+            ax3.set_xticks(tick_positions)
+            ax3.grid(axis='y', alpha=0.3)
+            ax3.spines['top'].set_visible(False)
+            ax3.spines['right'].set_visible(False)
+            
+            # Plot Mismatching blocks - pellets per meal distribution
+            if meal_pellets_mismatch:
+                ax4.hist(meal_pellets_mismatch, bins=pellet_bins, color=mismatch_color,
+                         alpha=0.7, edgecolor='black', linewidth=0.8)
+                mean_mismatch = np.mean(meal_pellets_mismatch)
+                median_mismatch = np.median(meal_pellets_mismatch)
+                ax4.axvline(mean_mismatch, color='#d62728', linestyle='--', linewidth=2,
+                            label=f'Mean: {mean_mismatch:.2f}')
+                ax4.axvline(median_mismatch, color='#2ca02c', linestyle=':', linewidth=2,
+                            label=f'Median: {median_mismatch:.1f}')
+                ax4.legend(loc='upper right', fontsize=10)
+            ax4.set_title(f'Group {group}: Mismatching FR1 Active Poke\nMeal Size Distribution',
+                          fontsize=12, fontweight='bold')
+            ax4.set_xlabel('Number of Pellets per Meal', fontsize=11)
+            ax4.set_xlim(-0.5, max_count + 0.5 if all_pellet_counts else 10.5)
+            ax4.set_xticks(tick_positions)
+            ax4.grid(axis='y', alpha=0.3)
+            ax4.spines['top'].set_visible(False)
+            ax4.spines['right'].set_visible(False)
+            
+            plt.tight_layout()
+            if export_root:
+                path = f"{export_root}/rev_block_meal_size_dist_{group}.svg"
+                plt.savefig(path, bbox_inches='tight')
+            plt.show()
         
 def calculate_dispense_delays(
     csv_path,

@@ -98,6 +98,7 @@ Run the cells sequentially. The workflow is divided into four main parts:
    - Visualizes meal accuracy distributions.
 
 3. **Part B: Reversal Learning Analysis**:
+   - Computes blocks and meals together (no cross-block meals).
    - Analyzes block transitions and learning scores/results.
    - Evaluates retrieval times and motor performance.
    - Correlations between meal accuracy and dispense time.

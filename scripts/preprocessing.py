@@ -236,13 +236,20 @@ def build_session_catalog(
 
                 session_type = infer_session_type(df) or "UNKNOWN"
                 
+                session_id = f"{mouse_id}_{csv_path.stem}"
+
+                # Manually exclude sessions with insufficient blocks (<15 in Reversal)
+                if session_id in ("M68_reversal", "M70_reversal"):
+                    continue
+
                 # Apply truncation based on session type
                 if session_type == "FR1":
                     df = df[df["Time_passed"] <= timedelta(days=1)].copy()
                 elif session_type == "REV":
+                    if df["Time_passed"].iloc[-1] < timedelta(hours=48):
+                        continue
                     df = df[df["Time_passed"] <= timedelta(days=3)].copy()
 
-                session_id = f"{mouse_id}_{csv_path.stem}"
                 key = SessionKey(
                     session_id=session_id,
                     mouse_id=mouse_id,
