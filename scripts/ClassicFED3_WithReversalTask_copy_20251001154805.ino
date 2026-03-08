@@ -8,8 +8,8 @@
   // 1 FR1
   // 2 FR3
   // 3 FR5
-  // 4 Progressive Ratio
-  // 5 Extinction
+  // 4 Reversal Task
+  // 5 Reversal Task (reversed)
   // 6 Light tracking FR1 task
   // 7 FR1 (reversed)
   // 8 PR (reversed)
