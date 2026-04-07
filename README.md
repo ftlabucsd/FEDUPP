@@ -1,37 +1,43 @@
-# FEDUPP - FED3 Users Processing Package
+# FEDUPP — FED3 Users Processing Package
 
-This is the official implementation of the paper "The development of FEDUPP: Feeding Experimentation Device Users Processing Package to Assess Learning and Cognitive Flexibility".
+Official implementation for the paper *"The development of FEDUPP: Feeding Experimentation Device Users Processing Package to Assess Learning and Cognitive Flexibility"*.
 
- [![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/) &nbsp; [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE) &nbsp; [![Paper Link](https://img.shields.io/badge/bioarxiv-paper-red.svg)](https://www.biorxiv.org/content/10.1101/2025.08.14.670424v1)
+[![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/) &nbsp; [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE) &nbsp; [![Paper Link](https://img.shields.io/badge/bioarxiv-paper-red.svg)](https://www.biorxiv.org/content/10.1101/2025.08.14.670424v1)
 
-> **A comprehensive, reusable analysis pipeline for FED3 behavioral data to assess learning acquisition, cognitive flexibility, and feeding patterns in mice.**
+> A reusable analysis pipeline for FED3 behavioral data — learning acquisition, cognitive flexibility, and feeding patterns in mice.
+
+---
+
+## Table of Contents
+
+- [Quick Start](#-quick-start)
+- [Pipeline Overview](#-pipeline-overview)
+- [Detailed Documentation](Overview.md)
+- [Citation](#-citation)
+- [Contributing](#-contributing)
+- [Contact & Support](#-contact--support)
+- [License](#-license)
+- [Changelog](#-changelog)
 
 ---
 
 ## 🚀 Quick Start
 
-### 1. Installation
-
-Please clone the repository and goes to the project directory first:
+### 1. Clone & Install
 
 ```bash
-# Clone the repository
 git clone https://github.com/ftlabucsd/FEDUPP
 cd FEDUPP
-```
 
-If you know how to deal with a conda environment, please follow the typical conda environment installation commands in the terminal below:
-
-```bash
-# Create conda environment and install dependencies (requires Python ≥3.10)
+# Recommended: create an isolated environment
 conda create -n fedupp python=3.10
 conda activate fedupp
 pip install -r requirements.txt
 ```
 
-If you are not so familiar with conda environement, but have one, please directly use this environment and then move to `pipeline.ipynb` and the first cell there will check if your environment works for our project and we provide the package installation commands in the notebook.
+If you prefer to use an existing environment, open `pipeline.ipynb` — the first cell checks for missing or mismatched packages and offers a one-line fix.
 
-You can use the following commands in the terminal to install, run the Jupyter environment, and visit [http://localhost:8888/lab](http://localhost:8888/lab) (if you do not use other IDEs):
+To launch Jupyter:
 
 ```bash
 pip install jupyterlab ipykernel
@@ -39,15 +45,12 @@ python -m ipykernel install --user --name fedupp --display-name "Python (fedupp)
 jupyter lab
 ```
 
-**Notice:** If you only want to replicate our analysis and results, you can stop here and directly go to `pipeline.ipynb` and run all cells after you create the environment.  
-**Go to the steps below only if you want to run your own data.**
+> **Replication only?** Stop here and run all cells in `pipeline.ipynb`.
+> Continue below only if you want to analyze **your own data**.
 
+### 2. Prepare Your Data
 
-### 2. Data Preparation
-
-**A. Organize Your Data**
-
-Delete old files/sub-folders inside `sample_data/` and place your FED3 CSV files in it with this structure:
+**A. Organize FED3 CSV files** — one subfolder per mouse inside `sample_data/`:
 
 ```
 sample_data/
@@ -56,66 +59,44 @@ sample_data/
 │   └── reversal.csv
 ├── M2/
 │   └── fr1.csv
-├── M3/
-│   ├── fr1.csv
-│   └── reversal.csv
 └── ...
 ```
-> Note: you do not have to specify the behavioral session type (e.g. FR1 or reversal) in csv filenames. Our algorithm will automatically determine its session. The names is for illustration only, but you *DO* have to put csv files for one mouse in one folder.
 
-**B. Define Group Membership**
+> Filenames do not need to encode the session type; the pipeline auto-detects FR1 vs. Reversal.
 
-Create or modify `group_map.json` to assign mice id to experimental groups, for example like below (the ID you enter here must match the subfolder name, like "M1", "M2" above, but the group name can be customized as desired):
+**B. Define group membership** in `group_map.json` (subfolder names must match):
 
 ```json
 {
   "control": ["M1", "M2", "M3"],
-  "experimental": ["M10", "M11", "M12"],
-  "validation": ["M20", "M21", "M22"]
+  "experimental": ["M10", "M11", "M12"]
 }
 ```
 
-### 3. Run the Analysis Pipeline
+### 3. Run the Pipeline
 
-Inside this project, open `pipeline.ipynb` in Jupyter Lab or VS Code or other IDEs.
+Open `pipeline.ipynb` and run cells sequentially. In **Step 2**, set `MEAL_METHOD`:
 
-**Configuration:**
-In **Step 2** of the notebook, you can configure the `MEAL_METHOD` variable:
-- `'ipi'`:  Uses original FED3 paper's method to define a meal
-- `'paper'`: (Default) Uses the method described in the our paper.
-
-**Pipeline Steps:**
-Run the cells sequentially. The workflow is divided into four main parts:
-
-1. **Setup & Quality Control**:
-   - Loads data and configures paths.
-   - Checks dispenser performance (motor turns) and filters problematic sessions.
-
-2. **Part A: FR1 Analysis**:
-   - Computes learning metrics (time to 80% accuracy).
-   - Analyzes meal patterns (pellets/hour, first meal latency).
-   - Classifies meals using ML models (Good vs. Bad meals).
-   - Visualizes meal accuracy distributions.
-
-3. **Part B: Reversal Learning Analysis**:
-   - Computes blocks and meals together (no cross-block meals).
-   - Analyzes block transitions and learning scores/results.
-   - Evaluates retrieval times and motor performance.
-   - Correlations between meal accuracy and dispense time.
-
-4. **Part C: Inter-Pellet Interval (IPI) Analysis**:
-   - Calculates intervals between consecutive pellets (Positions 2-12).
-   - Generates violin plots to visualize feeding rhythms per group.
-
-5. **Part D: Data Export**:
-   - **Automatically exports ALL analysis data** to a comprehensive Excel file (`figures/<method>/<method>_analysis_data_export.xlsx`).
-   - Contains separate sheets for every metric and plot generated.
+| Value | Description |
+|-------|-------------|
+| `'paper'` (default) | Method described in our paper |
+| `'ipi'` | Original FED3 paper method |
 
 ---
 
-## 🧠 Detailed Introduction and Documentation
+## 📋 Pipeline Overview
 
-For detailed workflows of the notebook and descriptions of functions FEDUPP includes, please [Read more details here](Overview.md)
+The notebook is organized into **24 steps** across four parts:
+
+| Part | Steps | Scope |
+|------|-------|-------|
+| **Setup** | 1–3 | Import libraries, load data, quality-control dispenser hardware |
+| **A — FR1** | 4–8 | Learning curves, meal patterns, ML meal classification, accuracy distributions |
+| **B — Reversal** | 9–21 | Block transitions, WSLS strategies, learning scores, retrieval times, cross-feature correlations, combined meal summaries |
+| **C — IPI** | 22–23 | Inter-pellet interval analysis by pellet position |
+| **D — Export** | 24 | All metrics → multi-sheet Excel file |
+
+For a detailed walkthrough of every step and script module, see **[Overview.md](Overview.md)**.
 
 ---
 
@@ -138,81 +119,52 @@ If you use FEDUPP in your research, please cite:
 
 ## 🤝 Contributing
 
-We welcome contributions! To contribute:
-
-1. **Fork the repository**
-2. **Create a feature branch**: `git checkout -b feature/amazing-feature`
-3. **Make your changes**:
-   - Add new metrics to appropriate script module
-   - Update notebook with usage examples
-   - Add docstrings to let users quickly know the input and expected output
-4. **Test thoroughly** with sample data
-5. **Submit a pull request** with clear description
-
-### Development Guidelines
-- Follow PEP 8 style guidelines
-- Add type hints to function signatures
-- Document all public functions with docstrings
-- Test on Python 3.10+ environments
-- Keep notebooks cell-by-cell executable
+1. Fork the repository
+2. Create a feature branch: `git checkout -b feature/amazing-feature`
+3. Follow [PEP 8](https://peps.python.org/pep-0008/), add type hints and docstrings
+4. Test on Python 3.10+ with sample data
+5. Submit a pull request with a clear description
 
 ---
 
 ## 📧 Contact & Support
 
-**Maintainer**: [FT Lab](https://www.teleselab.com/) <br>
-**Report Issues**: [GitHub Issues](https://github.com/your-username/FED3-data/issues)  
+**Maintainer**: [FT Lab](https://www.teleselab.com/)
+**Issues**: [GitHub Issues](https://github.com/ftlabucsd/FEDUPP/issues)
 
-For bug reports, include:
-- Error message / traceback
-- Sample data or file that triggers the error (if possible)
+For bug reports, include the error traceback and (if possible) the data file that triggers it.
 
 ---
 
 ## 📜 License
 
-© 2025 FT Lab
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+© 2025 FT Lab — [MIT License](LICENSE)
 
 ---
 
 ## 🔄 Changelog
 
 ### v3.0 (November 2025)
-- ⏱️ Inter-Pellet Interval (IPI) analysis for feeding rhythm
-- 💾 Full data export to Excel for further analysis
-- 🔍 Meal accuracy vs dispense time correlation analysis
+- Inter-Pellet Interval (IPI) analysis for feeding rhythm
+- Full data export to Excel
+- Meal accuracy vs. dispense time correlation
 
 ### v2.0 (August 2025)
-- ✨ Complete pipeline reorganization with modular scripts
-- 📖 Comprehensive inline documentation in notebooks
-- 🔧 Moved all functions to `scripts/` for reusability
-- 🎨 Improved visualization consistency (SVG outputs)
-- 🧠 Added ML-based meal quality classification
-- 📊 Enhanced reversal learning analysis (block transitions, retrieval times)
-- 🧪 Automated quality control checks
-- 📈 Statistical testing built into workflow
+- Complete pipeline reorganization with modular scripts
+- ML-based meal quality classification (LSTM/CNN)
+- Enhanced reversal learning analysis (block transitions, retrieval times)
+- Automated quality-control checks and built-in statistical testing
 
 ### v1.0 (2024)
 - Initial release with CASK experiment analysis
-- Basic FR1 and reversal learning support
 
 ---
 
 ## 🙏 Acknowledgments
 
 - **FED3 Device**: [Kravitz Lab Open Source Hardware](https://github.com/KravitzLabDevices/FED3)
-- **Community Contributors**: Thanks to all researchers who provided feedback and suggestions
+- **Community Contributors**: Thanks to all researchers who provided feedback
 
 ---
 
-## 📚 Additional Resources
-
-- [FED3 Hardware Documentation](https://github.com/KravitzLabDevices/FED3)
-- [FED3 User Guide](https://github.com/KravitzLabDevices/FED3/wiki)
-
----
-
-**⭐ If this project helps your research, please give it a star on GitHub!**
-
+**⭐ If this project helps your research, please star the repository!**

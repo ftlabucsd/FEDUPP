@@ -859,6 +859,7 @@ def analyze_meals_by_blocks(
 def process_meal_data_with_blocks(
     session: SessionData,
     blocks: list[pd.DataFrame] | None = None,
+    meal_analysis: dict | None = None,
     export_root: str | os.PathLike | None = None,
     prefix: str | None = None,
     accuracy_threshold: float = 50.0,
@@ -897,15 +898,17 @@ def process_meal_data_with_blocks(
     if blocks is None:
         blocks = [data]
     
-    # Use block-based meal analysis
-    analysis = analyze_meals_by_blocks(
-        blocks=blocks,
-        time_threshold=60,
-        pellet_threshold=2,
-        model_type='cnn',
-        accuracy_threshold=accuracy_threshold,
-        method=method,
-    )
+    # Reuse pre-computed analysis when available to avoid redundant meal detection.
+    analysis = meal_analysis
+    if analysis is None:
+        analysis = analyze_meals_by_blocks(
+            blocks=blocks,
+            time_threshold=60,
+            pellet_threshold=2,
+            model_type='cnn',
+            accuracy_threshold=accuracy_threshold,
+            method=method,
+        )
     
     session_meals = analysis['session_meals']
     first_meal_time = analysis['first_good_time']
@@ -963,3 +966,656 @@ def process_meal_data_with_blocks(
         'meals_with_acc': analysis['meals_with_acc'],
         'block_meal_info': analysis['block_meal_info'],
     }
+
+
+def _build_meal_records(
+    data: pd.DataFrame,
+    meals: list,
+    meal_acc: list,
+    *,
+    session: SessionData,
+    session_type: str,
+    accuracy_cutoff: float,
+) -> pd.DataFrame:
+    """Build a meal-level table for one session."""
+    if data.empty or not meals:
+        return pd.DataFrame(
+            columns=[
+                'Session_Type',
+                'Group',
+                'Mouse_ID',
+                'Session_ID',
+                'Meal_Index',
+                'Meal_Start',
+                'Meal_End',
+                'Time_From_Start_Hours',
+                'Meal_Duration_Minutes',
+                'Pellet_Count',
+                'Accuracy',
+                'Accuracy_Class',
+            ]
+        )
+
+    session_start = pd.to_datetime(data['Time'].iloc[0])
+    rows: list[dict[str, str | int | float | pd.Timestamp]] = []
+
+    for meal_idx, ((meal_start, meal_end), acc_value) in enumerate(zip(meals, meal_acc), start=1):
+        meal_events = data[
+            (data['Time'] >= meal_start)
+            & (data['Time'] <= meal_end)
+        ]
+        pellet_count = int((meal_events['Event'] == 'Pellet').sum())
+        rows.append(
+            {
+                'Session_Type': session_type,
+                'Group': session.key.group,
+                'Mouse_ID': session.key.mouse_id,
+                'Session_ID': session.key.session_id,
+                'Meal_Index': meal_idx,
+                'Meal_Start': pd.to_datetime(meal_start),
+                'Meal_End': pd.to_datetime(meal_end),
+                'Time_From_Start_Hours': (
+                    (pd.to_datetime(meal_start) - session_start).total_seconds() / 3600
+                ),
+                'Meal_Duration_Minutes': (
+                    (pd.to_datetime(meal_end) - pd.to_datetime(meal_start)).total_seconds() / 60
+                ),
+                'Pellet_Count': pellet_count,
+                'Accuracy': float(acc_value),
+                'Accuracy_Class': (
+                    f'>= {accuracy_cutoff:.0f}%'
+                    if float(acc_value) >= accuracy_cutoff
+                    else f'< {accuracy_cutoff:.0f}%'
+                ),
+            }
+        )
+
+    return pd.DataFrame(rows)
+
+
+def _group_accuracy_breakdown(meal_level_df: pd.DataFrame, *, accuracy_cutoff: float) -> dict[str, dict]:
+    """Aggregate low/high accuracy meal counts for one session type."""
+    stats_by_group: dict[str, dict] = {}
+    if meal_level_df.empty:
+        return stats_by_group
+
+    for group, group_df in meal_level_df.groupby('Group', sort=False):
+        total = int(len(group_df))
+        low_acc = int((group_df['Accuracy'] < accuracy_cutoff).sum())
+        high_acc = int(total - low_acc)
+        stats_by_group[group] = {
+            'total': total,
+            'low_acc': low_acc,
+            'high_acc': high_acc,
+            'low_accuracy_ratio': (low_acc / total) if total > 0 else 0.0,
+            'high_accuracy_ratio': (high_acc / total) if total > 0 else 0.0,
+        }
+    return stats_by_group
+
+
+def _avg_meal_size_by_group(meal_level_df: pd.DataFrame) -> dict[str, list[float]]:
+    """Return per-session mean pellet counts grouped by cohort."""
+    if meal_level_df.empty:
+        return {}
+
+    out: dict[str, list[float]] = {}
+    grouped = meal_level_df.groupby(['Group', 'Session_ID'], sort=False)
+    for (group, _session_id), session_df in grouped:
+        out.setdefault(group, []).append(float(session_df['Pellet_Count'].mean()))
+    return out
+
+
+def _meal_meta_group_summary(
+    meal_level_df: pd.DataFrame,
+    session_level_df: pd.DataFrame,
+    *,
+    accuracy_cutoff: float,
+) -> pd.DataFrame:
+    """Create a compact group-level summary table for meal metadata."""
+    columns = [
+        'Session_Type',
+        'Group',
+        'n_sessions',
+        'n_meals',
+        'mean_meals_per_session',
+        'mean_pellets_per_meal',
+        'median_pellets_per_meal',
+        'pellet_count_iqr',
+        'low_accuracy_pct',
+        'high_accuracy_pct',
+    ]
+    if session_level_df.empty:
+        return pd.DataFrame(columns=columns)
+
+    rows: list[dict[str, str | int | float]] = []
+    for (session_type, group), session_group_df in session_level_df.groupby(['Session_Type', 'Group'], sort=False):
+        meal_group_df = meal_level_df[
+            (meal_level_df['Session_Type'] == session_type)
+            & (meal_level_df['Group'] == group)
+        ]
+        pellet_counts = meal_group_df['Pellet_Count'].to_numpy(dtype=float) if not meal_group_df.empty else np.array([])
+        accuracies = meal_group_df['Accuracy'].to_numpy(dtype=float) if not meal_group_df.empty else np.array([])
+        low_pct = float(np.mean(accuracies < accuracy_cutoff) * 100) if accuracies.size > 0 else np.nan
+        high_pct = float(np.mean(accuracies >= accuracy_cutoff) * 100) if accuracies.size > 0 else np.nan
+        pellet_iqr = (
+            float(np.percentile(pellet_counts, 75) - np.percentile(pellet_counts, 25))
+            if pellet_counts.size > 0
+            else np.nan
+        )
+        rows.append(
+            {
+                'Session_Type': session_type,
+                'Group': group,
+                'n_sessions': int(len(session_group_df)),
+                'n_meals': int(len(meal_group_df)),
+                'mean_meals_per_session': float(session_group_df['Total_Meals_All'].mean()),
+                'mean_pellets_per_meal': float(np.mean(pellet_counts)) if pellet_counts.size > 0 else np.nan,
+                'median_pellets_per_meal': float(np.median(pellet_counts)) if pellet_counts.size > 0 else np.nan,
+                'pellet_count_iqr': pellet_iqr,
+                'low_accuracy_pct': low_pct,
+                'high_accuracy_pct': high_pct,
+            }
+        )
+
+    return pd.DataFrame(rows, columns=columns)
+
+
+def _session_rows_to_frame(session_rows: list[dict[str, str | int | float]]) -> pd.DataFrame:
+    """Convert per-session row dicts into a standard DataFrame."""
+    return pd.DataFrame(
+        session_rows,
+        columns=['Session_Type', 'Group', 'Mouse_ID', 'Session_ID', 'Total_Meals_All'],
+    )
+
+
+def _filter_meal_meta_for_accuracy_threshold(
+    meal_level_df: pd.DataFrame,
+    session_level_df: pd.DataFrame,
+    *,
+    accuracy_cutoff: float,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Filter meal metadata to meals meeting the reporting threshold.
+
+    The returned session-level frame preserves all sessions and sets the
+    per-session meal count to zero when a session has no meals that pass the
+    threshold.
+    """
+    if meal_level_df.empty:
+        return meal_level_df.copy(), session_level_df.copy()
+
+    filtered_meal_level_df = meal_level_df[
+        meal_level_df['Accuracy'] >= accuracy_cutoff
+    ].copy()
+
+    if session_level_df.empty:
+        return filtered_meal_level_df, session_level_df.copy()
+
+    key_cols = ['Session_Type', 'Group', 'Mouse_ID', 'Session_ID']
+    filtered_counts = (
+        filtered_meal_level_df
+        .groupby(key_cols, sort=False)
+        .size()
+        .reset_index(name='Total_Meals_All')
+    )
+    filtered_session_level_df = session_level_df[key_cols].merge(
+        filtered_counts,
+        on=key_cols,
+        how='left',
+    )
+    filtered_session_level_df['Total_Meals_All'] = (
+        filtered_session_level_df['Total_Meals_All']
+        .fillna(0)
+        .astype(int)
+    )
+    return filtered_meal_level_df, filtered_session_level_df
+
+
+def build_low_accuracy_summary_table(
+    accuracy_stats_by_type: dict[str, dict[str, dict]],
+) -> pd.DataFrame:
+    """Create a tidy low/high-accuracy summary table for display."""
+    rows: list[dict[str, str | int | float]] = []
+    for session_type, stats_by_group in accuracy_stats_by_type.items():
+        total_all = 0
+        low_all = 0
+        high_all = 0
+        for group, stats in stats_by_group.items():
+            total = int(stats.get('total', 0))
+            low_acc = int(stats.get('low_acc', 0))
+            high_acc = int(stats.get('high_acc', 0))
+            total_all += total
+            low_all += low_acc
+            high_all += high_acc
+            rows.append(
+                {
+                    'Session_Type': session_type,
+                    'Group': group,
+                    'Total_Meals': total,
+                    'Low_Accuracy_Meals': low_acc,
+                    'High_Accuracy_Meals': high_acc,
+                    'Low_Accuracy_Pct': float(stats.get('low_accuracy_ratio', 0.0) * 100),
+                    'High_Accuracy_Pct': float(stats.get('high_accuracy_ratio', 0.0) * 100),
+                }
+            )
+
+        if total_all > 0:
+            rows.append(
+                {
+                    'Session_Type': session_type,
+                    'Group': 'Global',
+                    'Total_Meals': total_all,
+                    'Low_Accuracy_Meals': low_all,
+                    'High_Accuracy_Meals': high_all,
+                    'Low_Accuracy_Pct': (low_all / total_all) * 100,
+                    'High_Accuracy_Pct': (high_all / total_all) * 100,
+                }
+            )
+
+    return pd.DataFrame(
+        rows,
+        columns=[
+            'Session_Type',
+            'Group',
+            'Total_Meals',
+            'Low_Accuracy_Meals',
+            'High_Accuracy_Meals',
+            'Low_Accuracy_Pct',
+            'High_Accuracy_Pct',
+        ],
+    )
+
+
+def build_avg_meal_size_summary_table(
+    avg_meal_size_by_type: dict[str, dict[str, list[float]]],
+) -> pd.DataFrame:
+    """Create a tidy table of per-group average meal-size summaries."""
+    rows: list[dict[str, str | int | float]] = []
+    for session_type, avg_size_map in avg_meal_size_by_type.items():
+        for group, values in avg_size_map.items():
+            arr = np.asarray(values, dtype=float)
+            arr = arr[np.isfinite(arr)]
+            rows.append(
+                {
+                    'Session_Type': session_type,
+                    'Group': group,
+                    'n_sessions': int(arr.size),
+                    'Mean_Pellets_Per_Meal': float(np.mean(arr)) if arr.size > 0 else np.nan,
+                    'SD_Pellets_Per_Meal': float(np.std(arr)) if arr.size > 0 else np.nan,
+                    'Median_Pellets_Per_Meal': float(np.median(arr)) if arr.size > 0 else np.nan,
+                }
+            )
+
+    return pd.DataFrame(
+        rows,
+        columns=[
+            'Session_Type',
+            'Group',
+            'n_sessions',
+            'Mean_Pellets_Per_Meal',
+            'SD_Pellets_Per_Meal',
+            'Median_Pellets_Per_Meal',
+        ],
+    )
+
+
+def build_meal_histogram_bin_table(meal_level_df: pd.DataFrame) -> pd.DataFrame:
+    """Summarize meal counts into wide histogram bins by session type and group.
+
+    Returns one row per ``Session_Type`` / ``Group`` and one column per pellet
+    count bin, e.g. ``2_pellet_meals``.
+    """
+    key_cols = ['Session_Type', 'Group']
+    if meal_level_df.empty:
+        return pd.DataFrame(columns=key_cols)
+
+    working_df = meal_level_df[key_cols + ['Pellet_Count']].copy()
+    working_df['Pellet_Count'] = pd.to_numeric(working_df['Pellet_Count'], errors='coerce')
+    working_df = working_df.dropna(subset=['Pellet_Count'])
+    if working_df.empty:
+        return pd.DataFrame(columns=key_cols)
+
+    working_df['Pellet_Count'] = working_df['Pellet_Count'].astype(int)
+    counts_df = (
+        working_df
+        .groupby(key_cols + ['Pellet_Count'], sort=True)
+        .size()
+        .unstack(fill_value=0)
+        .reset_index()
+    )
+
+    pellet_cols = [col for col in counts_df.columns if isinstance(col, (int, np.integer))]
+    rename_map = {
+        pellet_count: f"{int(pellet_count)}_pellet_meals"
+        for pellet_count in pellet_cols
+    }
+    counts_df = counts_df.rename(columns=rename_map)
+
+    ordered_bin_cols = [rename_map[pellet_count] for pellet_count in sorted(pellet_cols)]
+    return counts_df[key_cols + ordered_bin_cols]
+
+
+def collect_meal_meta(
+    *,
+    session_type: str,
+    group_sessions: dict[str, list[SessionData]] | None = None,
+    session_analyses: dict[str, list[dict]] | None = None,
+    export_root: str | os.PathLike | None = None,
+    prefix_map: dict[str, str] | None = None,
+    time_threshold: int = 60,
+    pellet_threshold: int = 2,
+    accuracy_cutoff: float = 50.0,
+    method: str = 'paper',
+) -> dict:
+    """Collect meal metadata for one paradigm without recomputing later in the notebook."""
+    session_type = str(session_type).upper()
+    if session_type not in {'FR1', 'REV'}:
+        raise ValueError("session_type must be 'FR1' or 'REV'.")
+
+    metrics_by_group: dict[str, list[dict]] = {}
+    meal_level_frames: list[pd.DataFrame] = []
+    session_rows: list[dict[str, str | int | float]] = []
+
+    if session_type == 'FR1':
+        if group_sessions is None:
+            raise ValueError("group_sessions is required for FR1 meal metadata.")
+        metrics_by_group = {group: [] for group in group_sessions}
+        for group, sessions in group_sessions.items():
+            run_prefix = prefix_map.get(group, group.lower()) if prefix_map else group.lower()
+            for session in sessions:
+                metrics = process_meal_data_with_blocks(
+                    session,
+                    blocks=[session.raw.copy()],
+                    export_root=export_root,
+                    prefix=run_prefix,
+                    accuracy_threshold=accuracy_cutoff,
+                    method=method,
+                )
+                metrics_by_group[group].append(metrics)
+
+                all_meals, all_meal_acc, _ = find_meals_by_blocks(
+                    [session.raw.copy()],
+                    time_threshold=time_threshold,
+                    pellet_threshold=pellet_threshold,
+                    method=method,
+                    accuracy_threshold=-1.0,
+                )
+                meal_level_frames.append(
+                    _build_meal_records(
+                        session.raw.copy(),
+                        all_meals,
+                        all_meal_acc,
+                        session=session,
+                        session_type=session_type,
+                        accuracy_cutoff=accuracy_cutoff,
+                    )
+                )
+                session_rows.append(
+                    {
+                        'Session_Type': session_type,
+                        'Group': group,
+                        'Mouse_ID': session.key.mouse_id,
+                        'Session_ID': session.key.session_id,
+                        'Total_Meals_All': int(len(all_meals)),
+                    }
+                )
+    else:
+        if session_analyses is None:
+            raise ValueError("session_analyses is required for REV meal metadata.")
+        metrics_by_group = {group: [] for group in session_analyses}
+        for group, analyses in session_analyses.items():
+            run_prefix = prefix_map.get(group, group.lower()) if prefix_map else group.lower()
+            for analysis in analyses:
+                session = analysis['session']
+                blocks = analysis.get('blocks', [])
+                if not blocks:
+                    continue
+
+                metrics = process_meal_data_with_blocks(
+                    session,
+                    blocks=blocks,
+                    meal_analysis=analysis.get('meal_analysis'),
+                    export_root=export_root,
+                    prefix=run_prefix,
+                    accuracy_threshold=accuracy_cutoff,
+                    method=method,
+                )
+                metrics_by_group[group].append(metrics)
+
+                limited_data = pd.concat(blocks, ignore_index=True)
+                all_meals, all_meal_acc, _ = find_meals_by_blocks(
+                    blocks,
+                    time_threshold=time_threshold,
+                    pellet_threshold=pellet_threshold,
+                    method=method,
+                    accuracy_threshold=-1.0,
+                )
+                meal_level_frames.append(
+                    _build_meal_records(
+                        limited_data,
+                        all_meals,
+                        all_meal_acc,
+                        session=session,
+                        session_type=session_type,
+                        accuracy_cutoff=accuracy_cutoff,
+                    )
+                )
+                session_rows.append(
+                    {
+                        'Session_Type': session_type,
+                        'Group': group,
+                        'Mouse_ID': session.key.mouse_id,
+                        'Session_ID': session.key.session_id,
+                        'Total_Meals_All': int(len(all_meals)),
+                    }
+                )
+
+    meal_level_df = pd.concat(meal_level_frames, ignore_index=True) if meal_level_frames else pd.DataFrame()
+    session_level_df = _session_rows_to_frame(session_rows)
+    quality_map = {
+        group: [
+            {
+                'good_mask': metrics.get('good_mask'),
+                'total_meals': metrics.get('total_meals'),
+            }
+            for metrics in metrics_list
+        ]
+        for group, metrics_list in metrics_by_group.items()
+    }
+    accuracy_stats = _group_accuracy_breakdown(meal_level_df, accuracy_cutoff=accuracy_cutoff)
+    avg_meal_size = _avg_meal_size_by_group(meal_level_df)
+
+    return {
+        'session_type': session_type,
+        'metrics_by_group': metrics_by_group,
+        'quality_map': quality_map,
+        'good_meal_ratio': collect_good_meal_ratio(quality_map),
+        'meal_level': meal_level_df,
+        'session_level': session_level_df,
+        'accuracy_stats': accuracy_stats,
+        'avg_meal_size': avg_meal_size,
+    }
+
+
+def combine_meal_meta(
+    meal_meta_items: list[dict],
+    *,
+    accuracy_cutoff: float = 50.0,
+) -> dict:
+    """Combine cached per-paradigm meal metadata into shared tables.
+
+    Reviewer-facing histogram and meal-size summary tables are based on meals
+    that meet the reporting cutoff (>= ``accuracy_cutoff``), while the
+    low/high-accuracy breakdown remains based on all meals.
+    """
+    meal_level_frames = []
+    session_level_frames = []
+    accuracy_stats_by_type: dict[str, dict[str, dict]] = {}
+    avg_meal_size_by_type: dict[str, dict[str, list[float]]] = {}
+
+    for item in meal_meta_items:
+        if not item:
+            continue
+        session_type = item.get('session_type')
+        if session_type is None:
+            continue
+        meal_level_frames.append(item.get('meal_level', pd.DataFrame()))
+        session_level_frames.append(item.get('session_level', pd.DataFrame()))
+        accuracy_stats_by_type[session_type] = item.get('accuracy_stats', {})
+        avg_meal_size_by_type[session_type] = item.get('avg_meal_size', {})
+
+    meal_level_df = pd.concat(meal_level_frames, ignore_index=True) if meal_level_frames else pd.DataFrame()
+    session_level_df = pd.concat(session_level_frames, ignore_index=True) if session_level_frames else pd.DataFrame()
+    filtered_meal_level_df, filtered_session_level_df = _filter_meal_meta_for_accuracy_threshold(
+        meal_level_df,
+        session_level_df,
+        accuracy_cutoff=accuracy_cutoff,
+    )
+    group_summary_df = _meal_meta_group_summary(
+        filtered_meal_level_df,
+        filtered_session_level_df,
+        accuracy_cutoff=accuracy_cutoff,
+    )
+    filtered_avg_meal_size_by_type = {
+        session_type: _avg_meal_size_by_group(
+            filtered_meal_level_df[filtered_meal_level_df['Session_Type'] == session_type]
+        )
+        for session_type in accuracy_stats_by_type
+    }
+
+    return {
+        'meal_level': filtered_meal_level_df,
+        'session_level': filtered_session_level_df,
+        'meal_level_all': meal_level_df,
+        'session_level_all': session_level_df,
+        'group_summary': group_summary_df,
+        'low_accuracy_summary': build_low_accuracy_summary_table(accuracy_stats_by_type),
+        'avg_meal_size_summary': build_avg_meal_size_summary_table(filtered_avg_meal_size_by_type),
+        'accuracy_stats_by_type': accuracy_stats_by_type,
+        'avg_meal_size_by_type': filtered_avg_meal_size_by_type,
+    }
+
+
+def build_meal_meta_summary(
+    *,
+    fr1_group_sessions: dict[str, list[SessionData]] | None = None,
+    rev_session_analyses: dict[str, list[dict]] | None = None,
+    fr1_export_root: str | os.PathLike | None = None,
+    rev_export_root: str | os.PathLike | None = None,
+    prefix_map: dict[str, str] | None = None,
+    time_threshold: int = 60,
+    pellet_threshold: int = 2,
+    accuracy_cutoff: float = 50.0,
+    method: str = 'paper',
+) -> dict:
+    """Build combined FR1/Reversal meal metadata tables and per-session metrics."""
+    meal_meta_items: list[dict] = []
+    session_metrics_by_type: dict[str, dict[str, list[dict]]] = {}
+
+    if fr1_group_sessions is not None:
+        fr1_meta = collect_meal_meta(
+            session_type='FR1',
+            group_sessions=fr1_group_sessions,
+            export_root=fr1_export_root,
+            prefix_map=prefix_map,
+            time_threshold=time_threshold,
+            pellet_threshold=pellet_threshold,
+            accuracy_cutoff=accuracy_cutoff,
+            method=method,
+        )
+        meal_meta_items.append(fr1_meta)
+        session_metrics_by_type['FR1'] = fr1_meta['metrics_by_group']
+
+    if rev_session_analyses is not None:
+        rev_meta = collect_meal_meta(
+            session_type='REV',
+            session_analyses=rev_session_analyses,
+            export_root=rev_export_root,
+            prefix_map=prefix_map,
+            time_threshold=time_threshold,
+            pellet_threshold=pellet_threshold,
+            accuracy_cutoff=accuracy_cutoff,
+            method=method,
+        )
+        meal_meta_items.append(rev_meta)
+        session_metrics_by_type['REV'] = rev_meta['metrics_by_group']
+
+    combined = combine_meal_meta(meal_meta_items, accuracy_cutoff=accuracy_cutoff)
+    combined['session_metrics_by_type'] = session_metrics_by_type
+    return combined
+
+
+def plot_meal_meta_summary(
+    meal_level_df: pd.DataFrame,
+    *,
+    export_path: str | os.PathLike | None = None,
+    show: bool = True,
+) -> None:
+    """Plot FR1/Reversal meal-length distributions as histograms only."""
+    if meal_level_df.empty:
+        return
+
+    session_types = [
+        session_type
+        for session_type in ['FR1', 'REV']
+        if session_type in meal_level_df['Session_Type'].astype(str).unique()
+    ]
+    if not session_types:
+        return
+
+    fig, axes = plt.subplots(
+        len(session_types),
+        1,
+        figsize=(12, 4.8 * len(session_types)),
+        sharex=False,
+    )
+    if len(session_types) == 1:
+        axes = np.array([axes])
+
+    for row_idx, session_type in enumerate(session_types):
+        ax_hist = axes[row_idx]
+
+        plot_df = meal_level_df[meal_level_df['Session_Type'] == session_type].copy()
+        if plot_df.empty:
+            ax_hist.set_visible(False)
+            continue
+
+        max_pellet_count = int(plot_df['Pellet_Count'].max())
+        bin_edges = np.arange(1.5, max_pellet_count + 1.6, 1.0)
+        sns.histplot(
+            data=plot_df,
+            x='Pellet_Count',
+            hue='Group',
+            bins=bin_edges,
+            multiple='dodge',
+            element='bars',
+            fill=True,
+            stat='count',
+            common_norm=False,
+            edgecolor='black',
+            linewidth=1.0,
+            alpha=0.8,
+            shrink=0.95,
+            ax=ax_hist,
+        )
+        ax_hist.set_xlabel('Meal length / pellet count')
+        ax_hist.set_ylabel('Meal count')
+        ax_hist.set_title(f'{session_type}: meal length distribution')
+        ax_hist.set_xticks(np.arange(2, max_pellet_count + 1))
+        ax_hist.grid(axis='y', alpha=0.25)
+        legend = ax_hist.get_legend()
+        if legend is not None:
+            legend.set_title('Group')
+
+    fig.suptitle(
+        'Meal meta summary: meal length distributions',
+        y=0.995,
+        fontsize=14,
+    )
+    fig.tight_layout(rect=[0, 0, 1, 0.98])
+
+    if export_path:
+        fig.savefig(export_path, bbox_inches='tight')
+    if show:
+        plt.show()
+    else:
+        plt.close(fig)
