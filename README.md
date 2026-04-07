@@ -1,6 +1,6 @@
 # FEDUPP — FED3 Users Processing Package
 
-Official implementation for the paper *"The development of FEDUPP: Feeding Experimentation Device Users Processing Package to Assess Learning and Cognitive Flexibility"*.
+Official implementation for the paper *"The development of FEDUPP: Feeding Experimentation Device Users Processing Package to Assess Learning and Cognitive Flexibility"* from Nature Translational Psychiatry.
 
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/downloads/) &nbsp; [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE) &nbsp; [![Paper Link](https://img.shields.io/badge/bioarxiv-paper-red.svg)](https://www.biorxiv.org/content/10.1101/2025.08.14.670424v1)
 
