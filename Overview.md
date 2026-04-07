@@ -58,7 +58,7 @@ FEDUPP is a Python toolkit for neuroscience researchers working with **FED3 (Fee
 
 ### FED3 Device Code
 
-We open-sourced our C++ code for the FED3 device [here](./scripts/ClassicFED3_WithReversalTask_copy_20251001154805.ino), covering both FR1 and Reversal sessions.
+We open-sourced our C++ code for the FED3 device [here](./scripts/ClassicFED3_WithReversalTask.ino), covering both FR1 and Reversal sessions.
 
 ### FR1 (Fixed-Ratio 1)
 
