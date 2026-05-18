@@ -79,6 +79,16 @@ def parse_args() -> argparse.Namespace:
         metavar="DEPOSITION_ID",
         help="Publish an existing draft deposition by ID without creating or uploading files.",
     )
+    parser.add_argument(
+        "--upload-existing",
+        metavar="DEPOSITION_ID",
+        help="Upload the archive to an existing draft deposition by ID.",
+    )
+    parser.add_argument(
+        "--update-existing",
+        metavar="DEPOSITION_ID",
+        help="Update metadata on an existing draft deposition by ID without uploading files.",
+    )
     return parser.parse_args()
 
 
@@ -171,7 +181,7 @@ def upload_archive(bucket_url: str, archive_path: Path, token: str) -> dict[str,
     parsed = urlparse(target)
     headers = {
         "Authorization": f"Bearer {token}",
-        "Content-Type": "application/zip",
+        "Content-Type": "application/octet-stream",
         "Content-Length": str(archive_path.stat().st_size),
     }
 
@@ -207,6 +217,21 @@ def main() -> int:
         return 0
 
     metadata_payload = load_metadata(args.metadata, args.version)
+
+    if args.update_existing:
+        if not token:
+            raise SystemExit(f"Set {args.token_env} to a Zenodo access token first.")
+        base_url = args.base_url.rstrip("/")
+        updated = api_request(
+            "PUT",
+            f"{base_url}/api/deposit/depositions/{args.update_existing}",
+            token,
+            metadata_payload,
+        )
+        print(f"Updated draft: {updated.get('id', args.update_existing)}")
+        print(f"Draft URL: {updated.get('links', {}).get('html')}")
+        return 0
+
     require_clean_tree(args.allow_dirty)
 
     archive_path = args.archive or create_archive(archive_name(metadata_payload), args.keep_archive)
@@ -220,6 +245,19 @@ def main() -> int:
         raise SystemExit(f"Set {args.token_env} to a Zenodo access token first.")
 
     base_url = args.base_url.rstrip("/")
+    if args.upload_existing:
+        deposition = api_request(
+            "GET",
+            f"{base_url}/api/deposit/depositions/{args.upload_existing}",
+            token,
+        )
+        upload = upload_archive(deposition["links"]["bucket"], archive_path, token)
+        print(f"Uploaded: {upload.get('key', archive_path.name)}")
+        if upload.get("checksum"):
+            print(f"Zenodo checksum: {upload['checksum']}")
+        print("Existing draft updated but not published. Review it in Zenodo before publishing.")
+        return 0
+
     deposition = api_request(
         "POST",
         f"{base_url}/api/deposit/depositions",

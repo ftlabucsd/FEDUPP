@@ -52,6 +52,24 @@ python scripts/zenodo_deposit.py \
 Open the draft URL printed by the script and review the metadata, files, and
 reserved DOI.
 
+If draft creation succeeds but file upload fails, retry the upload against the
+existing draft:
+
+```bash
+python scripts/zenodo_deposit.py \
+  --base-url https://zenodo.org \
+  --keep-archive \
+  --upload-existing DEPOSITION_ID
+```
+
+If metadata changes after draft creation, update the existing draft:
+
+```bash
+python scripts/zenodo_deposit.py \
+  --base-url https://zenodo.org \
+  --update-existing DEPOSITION_ID
+```
+
 ## 5. Publish
 
 When the production draft looks correct, publish that reviewed draft by ID:

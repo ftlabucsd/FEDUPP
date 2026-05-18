@@ -36,7 +36,7 @@
         "affiliation": "Department of Psychiatry, School of Medicine, University of California, San Diego, CA, USA"
       }
     ],
-    "description": "<p>FEDUPP is an open-source analysis pipeline for Feeding Experimentation Device 3 (FED3) behavioral data. It supports fixed-ratio 1 and reversal-learning analyses, including learning curves, meal-pattern metrics, machine-learning meal classification, accuracy distributions, block-transition analyses, win-stay/lose-shift strategies, retrieval times, inter-pellet interval analyses, cross-feature correlations, and export of computed metrics.</p><p>This software archive accompanies the Translational Psychiatry article describing FEDUPP and its use for assessing learning and cognitive flexibility in home-cage behavioral experiments.</p>",
+    "description": "<p>FEDUPP is an open-source analysis pipeline for Feeding Experimentation Device 3 (FED3) behavioral data. It supports fixed-ratio 1 and reversal-learning analyses, including learning curves, meal-pattern metrics, machine-learning meal classification, accuracy distributions, block-transition analyses, win-stay/lose-shift strategies, retrieval times, inter-pellet interval analyses, cross-feature correlations, and export of computed metrics.</p><p>This software archive accompanies the Translational Psychiatry article <a href=\"https://doi.org/10.1038/s41398-026-04091-6\">The development of FEDUPP: feeding experimentation device users processing package to assess learning and cognitive flexibility</a>.</p>",
     "access_right": "open",
     "license": "mit",
     "version": "3.0.0",
@@ -53,8 +53,9 @@
     ],
     "related_identifiers": [
       {
-        "identifier": "https://doi.org/10.1038/s41398-026-04091-6",
-        "relation": "isSupplementTo",
+        "scheme": "doi",
+        "identifier": "10.1038/s41398-026-04091-6",
+        "relation": "isDocumentedBy",
         "resource_type": "publication-article"
       },
       {
