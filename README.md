@@ -104,14 +104,17 @@ For a detailed walkthrough of every step and script module, see **[Overview.md](
 
 If you use FEDUPP in your research, please cite:
 
+Yao, M., Libster, A.M., Desfor, S. et al. The development of FEDUPP: feeding experimentation device users processing package to assess learning and cognitive flexibility. Transl Psychiatry (2026). https://doi.org/10.1038/s41398-026-04091-6
+
 ```bibtex
-@article{FEDUPP,
-  author  = {Mingyang Yao and Avraham M. Libster and Shane Desfor and Freiya Malhotra and Nathalia Castorena and Patricia Montilla-Perez and Francesca Telese},
-  title   = {The development of FEDUPP: Feeding Experimentation Device Users Processing Package to Assess Learning and Cognitive Flexibility},
-  year    = {2025},
-  journal = {bioRxiv},
-  url     = {https://www.biorxiv.org/content/early/2025/08/20/2025.08.14.670424},
-  note    = {Mingyang Yao and Avraham M. Libster contributed equally.}
+@article{Yao2026FEDUPP,
+  author  = {Yao, Mingyang and Libster, Avraham M. and Desfor, Shane and Malhotra, Freiya and Castorena, Nathalia and Montilla-Perez, Patricia and Telese, Francesca},
+  title   = {The development of FEDUPP: feeding experimentation device users processing package to assess learning and cognitive flexibility},
+  journal = {Translational Psychiatry},
+  year    = {2026},
+  doi     = {10.1038/s41398-026-04091-6},
+  url     = {https://www.nature.com/articles/s41398-026-04091-6},
+  note    = {Mingyang Yao and Avraham M. Libster contributed equally. Published 16 May 2026.}
 }
 ```
 
